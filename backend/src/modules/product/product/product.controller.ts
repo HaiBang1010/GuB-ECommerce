@@ -8,8 +8,16 @@ export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
   // Optional `?category=<slug>` narrows the list to one (visible) category.
+  // Optional `?search=<query>` runs full-text + fuzzy search (combinable with
+  // `category`). An empty/whitespace search falls back to the plain list.
   @Get()
-  list(@Query('category') categorySlug?: string): Promise<Product[]> {
+  list(
+    @Query('category') categorySlug?: string,
+    @Query('search') search?: string,
+  ): Promise<Product[]> {
+    if (search !== undefined && search.trim() !== '') {
+      return this.productService.searchActive(search, categorySlug);
+    }
     return this.productService.getActiveList(categorySlug);
   }
 

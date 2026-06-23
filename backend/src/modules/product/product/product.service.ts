@@ -59,6 +59,72 @@ export class ProductService {
     return product;
   }
 
+  // Full-text + fuzzy storefront search. Accent-insensitive: the `product.gub_vn`
+  // text-search config folds accents on BOTH sides (stored tsvector + the query),
+  // so "ao thun" finds "Áo thun". A pg_trgm fallback on accent-folded names tolerates
+  // typos the tsquery misses. Ranking: ts_rank first, then trigram similarity.
+  // Raw SQL is required (Prisma cannot express tsquery / trgm operators); we select
+  // ids only, then re-fetch typed rows so the result is a clean Product[] and the
+  // tsvector column never leaks out. Category visibility (the archive cascade) is
+  // applied in-process via CategoryService, exactly like getActiveList — no
+  // cross-schema join.
+  async searchActive(
+    rawQuery: string,
+    categorySlug?: string,
+  ): Promise<Product[]> {
+    const q = rawQuery.trim();
+    if (q === '') return [];
+
+    let categoryId: string | undefined;
+    if (categorySlug !== undefined) {
+      // Throws 404 when the category (or an ancestor) is archived → no results.
+      const category = await this.categoryService.getActiveBySlug(categorySlug);
+      categoryId = category.id;
+    }
+
+    const matches = await this.prisma.$queryRaw<Array<{ id: string }>>(
+      Prisma.sql`
+        SELECT id
+        FROM product."Product"
+        WHERE "archivedAt" IS NULL
+          ${categoryId ? Prisma.sql`AND "categoryId" = ${categoryId}` : Prisma.empty}
+          AND (
+            "search_tsv" @@ websearch_to_tsquery('product.gub_vn', ${q})
+            OR product.f_unaccent("nameVi") % product.f_unaccent(${q})
+            OR product.f_unaccent("nameEn") % product.f_unaccent(${q})
+          )
+        ORDER BY
+          ts_rank("search_tsv", websearch_to_tsquery('product.gub_vn', ${q})) DESC,
+          GREATEST(
+            similarity(product.f_unaccent("nameVi"), product.f_unaccent(${q})),
+            similarity(product.f_unaccent("nameEn"), product.f_unaccent(${q}))
+          ) DESC
+        LIMIT 50
+      `,
+    );
+    if (matches.length === 0) return [];
+
+    const orderedIds = matches.map((m) => m.id);
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: orderedIds } },
+    });
+    const byId = new Map(products.map((p) => [p.id, p]));
+
+    // Narrowing by slug already guarantees a visible category; otherwise filter the
+    // whole result against the set of storefront-visible category ids.
+    const visible = categoryId
+      ? null
+      : await this.categoryService.getVisibleCategoryIds();
+
+    // Re-apply the rank order from the raw query (findMany does not preserve it).
+    return orderedIds
+      .map((id) => byId.get(id))
+      .filter(
+        (p): p is Product =>
+          p !== undefined && (visible === null || visible.has(p.categoryId)),
+      );
+  }
+
   // ---------------------------------------------------------------------------
   // Admin — sees everything, including archived rows.
   // ---------------------------------------------------------------------------

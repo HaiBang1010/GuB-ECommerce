@@ -67,9 +67,12 @@ model Product {
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
-  // Full-text search: a `search_tsv tsvector` column + GIN index is added by a
-  // raw SQL migration (Prisma cannot express generated tsvector columns).
-  // pg_trgm is used for fuzzy slug/name matching. See ARCHITECTURE.md §Search.
+  // Full-text + fuzzy search. `search_tsv` is a GENERATED tsvector column (config
+  // `product.gub_vn` = simple + unaccent) added by the hand-written migration
+  // `*_add_product_search`; pg_trgm functional indexes on f_unaccent(name) give
+  // typo/accent-insensitive fuzzy matching. Declared Unsupported so `prisma migrate
+  // dev` does not try to drop the column. Queried via $queryRaw, not the typed client.
+  searchTsv Unsupported("tsvector")? @map("search_tsv")
 
   @@index([categoryId])
   @@schema("product")

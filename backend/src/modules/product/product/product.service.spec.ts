@@ -15,6 +15,13 @@ type ProductDelegateMock = {
   update: jest.Mock;
 };
 
+type PrismaMock = {
+  product: ProductDelegateMock;
+  // searchActive runs raw SQL for tsquery/trgm; mocked here to drive orchestration
+  // (the actual matching is covered by product.search.spec.ts against a real DB).
+  $queryRaw: jest.Mock;
+};
+
 // Only the methods ProductService is allowed to call in-process.
 type CategoryServiceMock = {
   assertActive: jest.Mock;
@@ -60,7 +67,7 @@ function p2002(): Prisma.PrismaClientKnownRequestError {
 }
 
 describe('ProductService', () => {
-  let prisma: { product: ProductDelegateMock };
+  let prisma: PrismaMock;
   let categoryService: CategoryServiceMock;
   let service: ProductService;
 
@@ -75,6 +82,7 @@ describe('ProductService', () => {
         create: jest.fn(),
         update: jest.fn(),
       },
+      $queryRaw: jest.fn(),
     };
     categoryService = {
       assertActive: jest.fn().mockResolvedValue(undefined),
@@ -259,6 +267,56 @@ describe('ProductService', () => {
         NotFoundException,
       );
       expect(prisma.product.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('searchActive', () => {
+    it('returns [] for a blank query without touching the DB', async () => {
+      await expect(service.searchActive('   ')).resolves.toEqual([]);
+      expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    });
+
+    it('hides matches whose category is not visible (archive cascade)', async () => {
+      prisma.$queryRaw.mockResolvedValue([{ id: 'p1' }, { id: 'p2' }]);
+      prisma.product.findMany.mockResolvedValue([
+        makeProduct({ id: 'p1', categoryId: 'visible' }),
+        makeProduct({ id: 'p2', categoryId: 'hidden' }),
+      ]);
+      categoryService.getVisibleCategoryIds.mockResolvedValue(
+        new Set(['visible']),
+      );
+
+      const result = await service.searchActive('ao thun');
+      expect(result.map((p) => p.id)).toEqual(['p1']);
+    });
+
+    it('preserves the rank order returned by the raw query', async () => {
+      // Raw query ranks p2 above p1; findMany returns them in a different order.
+      prisma.$queryRaw.mockResolvedValue([{ id: 'p2' }, { id: 'p1' }]);
+      prisma.product.findMany.mockResolvedValue([
+        makeProduct({ id: 'p1', categoryId: 'visible' }),
+        makeProduct({ id: 'p2', categoryId: 'visible' }),
+      ]);
+      categoryService.getVisibleCategoryIds.mockResolvedValue(
+        new Set(['visible']),
+      );
+
+      const result = await service.searchActive('shirt');
+      expect(result.map((p) => p.id)).toEqual(['p2', 'p1']);
+    });
+
+    it('narrows to a category slug and skips the global visibility filter', async () => {
+      categoryService.getActiveBySlug.mockResolvedValue({ id: 'c9' });
+      prisma.$queryRaw.mockResolvedValue([{ id: 'p1' }]);
+      prisma.product.findMany.mockResolvedValue([
+        makeProduct({ id: 'p1', categoryId: 'c9' }),
+      ]);
+
+      const result = await service.searchActive('shirt', 'tops');
+      expect(result.map((p) => p.id)).toEqual(['p1']);
+      expect(categoryService.getActiveBySlug).toHaveBeenCalledWith('tops');
+      // The slug already proves the category is visible → no full-set lookup.
+      expect(categoryService.getVisibleCategoryIds).not.toHaveBeenCalled();
     });
   });
 
