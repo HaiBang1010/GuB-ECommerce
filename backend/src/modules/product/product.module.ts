@@ -8,14 +8,18 @@ import { ProductService } from './product/product.service';
 import { VariantAdminController } from './variant/variant-admin.controller';
 import { VariantController } from './variant/variant.controller';
 import { ProductVariantService } from './variant/variant.service';
+import { CollectionAdminController } from './collection/collection-admin.controller';
+import { CollectionController } from './collection/collection.controller';
+import { CollectionService } from './collection/collection.service';
 
 /**
- * Catalog module. Ships the Category, Product and ProductVariant slices;
- * ProductImage / Collection slices attach here as sibling subfolders.
+ * Catalog module. Ships the Category, Product, ProductVariant and Collection
+ * slices; the ProductImage slice attaches here as a sibling subfolder.
  *
  * Services are EXPORTED so other modules call them in-process (e.g. ProductService
- * validates categoryId via CategoryService, ProductVariantService validates
- * productId via ProductService) — never by querying the product tables directly.
+ * validates categoryId via CategoryService; ProductVariantService and
+ * CollectionService validate productId via ProductService) — never by querying
+ * the product tables directly.
  */
 @Module({
   controllers: [
@@ -25,8 +29,20 @@ import { ProductVariantService } from './variant/variant.service';
     ProductAdminController,
     VariantController,
     VariantAdminController,
+    CollectionController,
+    CollectionAdminController,
   ],
-  providers: [CategoryService, ProductService, ProductVariantService],
-  exports: [CategoryService, ProductService, ProductVariantService],
+  providers: [
+    CategoryService,
+    ProductService,
+    ProductVariantService,
+    CollectionService,
+  ],
+  exports: [
+    CategoryService,
+    ProductService,
+    ProductVariantService,
+    CollectionService,
+  ],
 })
 export class ProductModule {}
