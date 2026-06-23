@@ -1,4 +1,6 @@
 import { Global, Module } from '@nestjs/common';
+import { AddressController } from './address/address.controller';
+import { AddressService } from './address/address.service';
 import { SupabaseAuthGuard } from './auth/supabase-auth.guard';
 import { SupabaseJwtService } from './auth/supabase-jwt.service';
 import { UserService } from './user/user.service';
@@ -14,7 +16,8 @@ import { UserService } from './user/user.service';
  */
 @Global()
 @Module({
-  providers: [UserService, SupabaseJwtService, SupabaseAuthGuard],
-  exports: [UserService, SupabaseJwtService, SupabaseAuthGuard],
+  controllers: [AddressController],
+  providers: [UserService, AddressService, SupabaseJwtService, SupabaseAuthGuard],
+  exports: [UserService, AddressService, SupabaseJwtService, SupabaseAuthGuard],
 })
 export class IamModule {}
