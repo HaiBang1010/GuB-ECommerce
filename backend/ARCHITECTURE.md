@@ -31,6 +31,10 @@ src/modules/
 ```
 
 Each module folder: `*.module.ts · *.controller.ts · *.service.ts · dto/ · *.service.spec.ts`.
+A module with several entities groups them in **per-entity subfolders** with one `*.module.ts`
+aggregator — e.g. `product/category/{category.service.ts, category.controller.ts,
+category-admin.controller.ts, category.service.spec.ts, dto/}`. The aggregator **exports** each
+service so sibling modules call it in-process (never touching another module's tables).
 
 ## 3. Module dependency graph
 
@@ -142,8 +146,10 @@ minutes to keep the Render instance awake. (Keep-alive is UptimeRobot, **not** G
 
 ## 8. Security
 
-- All `/admin/*` endpoints sit behind `RoleGuard` (backend-enforced, not just hidden in the UI).
+- All `/admin/*` endpoints are backend-enforced, not just hidden in the UI.
+  - **Target:** a `RoleGuard` (Supabase JWT + `Role.ADMIN`) once the auth module exists.
+  - **Current (auth deferred):** a temporary `AdminGuard` (`common/guards/admin.guard.ts`) compares an `x-admin-secret` header against `ADMIN_API_SECRET` in constant time and **fails closed** (500 if the env var is unset). Swap it for `RoleGuard` when auth lands.
 - Cron endpoints require the `ADMIN_JOB_SECRET` header.
-- Stripe secret key, Supabase service-role key, and `DATABASE_URL` live only in backend env — never sent to the browser.
+- Stripe secret key, Supabase service-role key, `ADMIN_API_SECRET`, and `DATABASE_URL` live only in backend env — never sent to the browser.
 - Rate-limit review and chat write endpoints to mitigate spam.
 - Never log card data or secrets.
