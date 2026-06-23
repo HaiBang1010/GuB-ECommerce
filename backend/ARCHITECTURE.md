@@ -36,6 +36,24 @@ aggregator — e.g. `product/category/{category.service.ts, category.controller.
 category-admin.controller.ts, category.service.spec.ts, dto/}`. The aggregator **exports** each
 service so sibling modules call it in-process (never touching another module's tables).
 
+### 2.1 Product module — cross-slice service API
+
+The catalog slices (`category · product · variant · collection · image`) share the **same**
+`product` schema, but a slice still never queries another slice's table directly — it calls the
+owning slice's service in-process. This keeps the scalar-id boundary (root §4.3) real even
+*within* a module. The current cross-slice surface:
+
+| Caller slice | Calls | For |
+|---|---|---|
+| product (write) | `CategoryService.assertActive(id)` | validate a product's `categoryId` |
+| product (storefront) | `CategoryService.isCategoryVisible(id)` · `getVisibleCategoryIds()` | hide products under an archived category (cascade-at-read) |
+| variant · image (write/sign) | `ProductService.assertExists(id)` | validate a single `productId` |
+| collection (membership) | `ProductService.assertManyExist(ids)` | validate a batch of `productId`s before attaching |
+| collection · image (storefront) | `ProductService.getActiveByIds(ids)` · `getActiveBySlug(slug)` | resolve active + category-visible products without touching the product table |
+
+Each spec enforces the boundary structurally: the Prisma mock exposes **only the slice's own
+delegate** (e.g. the variant spec has no `product` delegate), so a stray cross-table query throws.
+
 ## 3. Module dependency graph
 
 ```
@@ -77,11 +95,27 @@ WHERE  "id" = $variantId AND "stockQty" >= $qty;
 ```
 Never read-then-write in separate statements (race window). Wrap the whole checkout in one transaction.
 
+> **Status (Phase 1):** `ProductVariant.stockQty` is a plain integer with **no concurrency control yet** — the variant slice only does ordinary reads/writes. The atomic decrement / time-boxed reservation above is **NOT implemented**; **Phase 2 (cart/checkout) must add it** before real checkout, otherwise concurrent buyers can oversell the last unit.
+
 ### 4.4 Stock release
 Triggered by: payment failure, order cancellation, or reservation expiry (cron). Re-increment `stockQty` for each line. Make it idempotent (don't double-release).
 
 ### 4.5 Auth sync
 `SupabaseJwtGuard` verifies the JWT. On first sight of a user id, **upsert** `User` (+ empty `Profile`). `User.id` equals the Supabase Auth UUID.
+
+### 4.6 Product image upload (admin)
+Images live on **Cloudinary** (free tier; delivery-time URL transforms replace any backend image
+processing). The flow is a **signed direct upload** so file bytes never pass through the
+sleep-prone backend:
+1. `POST /admin/product-images/sign` → backend HMAC-signs the upload params with `CLOUDINARY_API_SECRET` (the secret stays backend-only; the browser only ever gets a per-upload signature).
+2. The browser uploads the file **straight to Cloudinary** with the signed params.
+3. `POST /admin/product-images` → persist `{ url (secure_url), publicId, color?, position? }`; the service rejects any `url` outside the account's Cloudinary host.
+
+Resize / compress / webp happen at **delivery** via URL params (`f_auto,q_auto,w_`), not on upload
+— this is how the "image optimization" cross-cutting concern is met at $0 with no backend CPU. On
+delete: remove the Cloudinary asset by `publicId` **first**, then the row; a remote failure is
+logged but the row is still removed (no stranded rows). Images attach by `color` (`null` = generic
+/ shared); the storefront returns a color's images **plus** the generic ones.
 
 ## 5. Data model (Prisma)
 
@@ -120,7 +154,8 @@ preview feature; each model carries `@@schema("<module>")`.
 | `Order.userId → User`, `OrderItem.variantId → ProductVariant`, `Review.productId → Product`, `Payment.orderId → Order`, `Notification.userId → User`, … | **scalar id, no relation** | crosses module boundary → resolved via service calls, integrity enforced in code |
 
 ### 5.4 Notable constraints
-- `ProductVariant`: `@@unique([productId, size, color])` and unique `sku`. `stockQty` is the per-variant inventory.
+- `ProductVariant`: `@@unique([productId, size, color])` and unique `sku`. `stockQty` is the per-variant inventory — **no atomic guard yet** (see §4.3 status note).
+- `ProductImage`: unique `publicId` (Cloudinary asset id), added by migration `20260623151010_add_product_image_public_id`; the row stores both the delivery `url` and the `publicId` used to delete the remote asset. Nullable `color` ties an image to a variant color (`null` = generic).
 - `Review`: `@@unique([userId, productId])` (one review per product per user) + unique `orderItemId` (proof of purchase). The "order must be `DELIVERED`" rule is enforced in the service.
 - `Payment`: unique `idempotencyKey` (no duplicate PaymentIntent) and unique `stripePaymentIntentId`.
 - `StripeEvent.id` = the Stripe event id → webhook idempotency ledger.
@@ -150,6 +185,6 @@ minutes to keep the Render instance awake. (Keep-alive is UptimeRobot, **not** G
   - **Target:** a `RoleGuard` (Supabase JWT + `Role.ADMIN`) once the auth module exists.
   - **Current (auth deferred):** a temporary `AdminGuard` (`common/guards/admin.guard.ts`) compares an `x-admin-secret` header against `ADMIN_API_SECRET` in constant time and **fails closed** (500 if the env var is unset). Swap it for `RoleGuard` when auth lands.
 - Cron endpoints require the `ADMIN_JOB_SECRET` header.
-- Stripe secret key, Supabase service-role key, `ADMIN_API_SECRET`, and `DATABASE_URL` live only in backend env — never sent to the browser.
+- Stripe secret key, Supabase service-role key, `ADMIN_API_SECRET`, `CLOUDINARY_API_SECRET`, and `DATABASE_URL` live only in backend env — never sent to the browser. Image uploads are signed server-side so the Cloudinary secret never reaches the client (§4.6).
 - Rate-limit review and chat write endpoints to mitigate spam.
 - Never log card data or secrets.
