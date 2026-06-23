@@ -1,0 +1,20 @@
+{
+  "name": "gub",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GuB — modular monolith shoes & clothing web store (portfolio, $0 free tier)",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev:frontend": "npm run dev --workspace frontend",
+    "dev:backend": "npm run dev --workspace backend",
+    "build": "npm run --workspaces --if-present build",
+    "lint": "npm run --workspaces --if-present lint",
+    "typecheck": "npm run --workspaces --if-present typecheck"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
