@@ -4,7 +4,9 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  // rawBody: true captures the unparsed request body alongside the parsed one —
+  // the Stripe webhook needs the exact raw bytes to verify the signature.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   // The browser (Vercel) calls this API; allow cross-origin requests.
   app.enableCors();

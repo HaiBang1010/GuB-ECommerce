@@ -167,6 +167,21 @@ export class OrderService {
     return { released: expired.length };
   }
 
+  // Cross-module (in-process): mark an order PAID from the payment webhook. Runs
+  // inside the webhook's transaction. The conditional flip makes it idempotent —
+  // a duplicate succeeded event finds the order already PAID and does nothing.
+  async markPaid(tx: Prisma.TransactionClient, orderId: string): Promise<void> {
+    const flip = await tx.order.updateMany({
+      where: { id: orderId, status: OrderStatus.PENDING_PAYMENT },
+      data: { status: OrderStatus.PAID },
+    });
+    if (flip.count === 1) {
+      await tx.orderStatusHistory.create({
+        data: { orderId, status: OrderStatus.PAID },
+      });
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Internal helpers
   // ---------------------------------------------------------------------------

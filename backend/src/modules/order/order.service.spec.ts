@@ -1,5 +1,5 @@
 import { BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
-import { Address } from '@prisma/client';
+import { Address, Prisma } from '@prisma/client';
 import { OrderService } from './order.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CartService } from '../cart/cart.service';
@@ -243,6 +243,32 @@ describe('OrderService', () => {
 
       await service.cancel('u1', 'o1');
       expect(variants.releaseForOrder).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('markPaid', () => {
+    it('flips PENDING_PAYMENT to PAID and records history', async () => {
+      const tx = {
+        order: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        orderStatusHistory: { create: jest.fn() },
+      };
+      await service.markPaid(tx as unknown as Prisma.TransactionClient, 'o1');
+      expect(tx.order.updateMany).toHaveBeenCalledWith({
+        where: { id: 'o1', status: 'PENDING_PAYMENT' },
+        data: { status: 'PAID' },
+      });
+      expect(tx.orderStatusHistory.create).toHaveBeenCalledWith({
+        data: { orderId: 'o1', status: 'PAID' },
+      });
+    });
+
+    it('is a no-op when the order is not pending (count 0)', async () => {
+      const tx = {
+        order: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+        orderStatusHistory: { create: jest.fn() },
+      };
+      await service.markPaid(tx as unknown as Prisma.TransactionClient, 'o1');
+      expect(tx.orderStatusHistory.create).not.toHaveBeenCalled();
     });
   });
 
