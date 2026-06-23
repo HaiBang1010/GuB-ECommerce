@@ -41,4 +41,13 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // Jest globals (describe/it/expect/jest) for test files.
+    files: ['**/*.spec.ts'],
+    languageOptions: {
+      globals: {
+        ...globals.jest,
+      },
+    },
+  },
 );
