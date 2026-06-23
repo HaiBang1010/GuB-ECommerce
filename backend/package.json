@@ -15,7 +15,11 @@
     "prisma:generate": "prisma generate"
   },
   "jest": {
-    "moduleFileExtensions": ["js", "json", "ts"],
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
@@ -30,6 +34,7 @@
     "@prisma/client": "^5.22.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
+    "jose": "^5.10.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },
