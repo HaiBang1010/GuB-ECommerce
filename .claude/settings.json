@@ -31,6 +31,8 @@
       "Edit(./**/.env.*)",
       "Write(./.env)",
       "Write(./**/.env)",
+      "Write(./.env.example)",
+      "Edit(./.env.example)",
       "Bash(npx prisma migrate reset:*)",
       "Bash(rm -rf:*)",
       "Bash(git push --force:*)"
