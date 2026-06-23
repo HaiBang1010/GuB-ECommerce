@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -16,6 +17,19 @@ import {
 // Default window after which an unpaid order is auto-cancelled and its stock
 // released (the release-expired job; ARCHITECTURE §5.6 / §6).
 const PENDING_TTL_MINUTES = 15;
+
+// Admin fulfillment state machine. PENDING_PAYMENT/PAID and CANCELLED/REFUNDED are
+// driven by the payment + cancel flows, not the admin status route, so they have
+// no admin-initiated transitions here. DELIVERED is terminal (it unlocks reviews).
+const ADMIN_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  [OrderStatus.PENDING_PAYMENT]: [],
+  [OrderStatus.PAID]: [OrderStatus.PROCESSING],
+  [OrderStatus.PROCESSING]: [OrderStatus.SHIPPED],
+  [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED],
+  [OrderStatus.DELIVERED]: [],
+  [OrderStatus.CANCELLED]: [],
+  [OrderStatus.REFUNDED]: [],
+};
 
 export type OrderWithDetail = Prisma.OrderGetPayload<{
   include: { items: true; statusHistory: true };
@@ -165,6 +179,63 @@ export class OrderService {
       await this.cancelAndRelease(order);
     }
     return { released: expired.length };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Admin — fulfillment status management (timeline lives in statusHistory).
+  // ---------------------------------------------------------------------------
+
+  async listForAdmin(status?: OrderStatus): Promise<OrderWithDetail[]> {
+    return this.prisma.order.findMany({
+      where: status ? { status } : undefined,
+      include: { items: true, statusHistory: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getForAdmin(orderId: string): Promise<OrderWithDetail> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: true, statusHistory: true },
+    });
+    if (!order) {
+      throw new NotFoundException('Order not found.');
+    }
+    return order;
+  }
+
+  // Advance an order along the fulfillment state machine and append a timeline
+  // entry. The conditional flip guards against a concurrent change.
+  async updateStatus(
+    orderId: string,
+    next: OrderStatus,
+    note?: string,
+  ): Promise<OrderWithDetail> {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) {
+      throw new NotFoundException('Order not found.');
+    }
+    if (!ADMIN_TRANSITIONS[order.status].includes(next)) {
+      throw new BadRequestException(
+        `Cannot change an order from ${order.status} to ${next}.`,
+      );
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const flip = await tx.order.updateMany({
+        where: { id: orderId, status: order.status },
+        data: { status: next },
+      });
+      if (flip.count !== 1) {
+        throw new ConflictException('Order status changed concurrently.');
+      }
+      await tx.orderStatusHistory.create({
+        data: { orderId, status: next, note: note ?? null },
+      });
+      return tx.order.findUniqueOrThrow({
+        where: { id: orderId },
+        include: { items: true, statusHistory: true },
+      });
+    });
   }
 
   // Cross-module (in-process): mark an order PAID from the payment webhook. Runs

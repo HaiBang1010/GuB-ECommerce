@@ -246,6 +246,85 @@ describe('OrderService', () => {
     });
   });
 
+  describe('updateStatus', () => {
+    it('advances PAID -> PROCESSING and records the timeline entry', async () => {
+      prisma.order.findUnique.mockResolvedValue({ id: 'o1', status: 'PAID' });
+      const txMock = {
+        order: {
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          findUniqueOrThrow: jest
+            .fn()
+            .mockResolvedValue({ id: 'o1', status: 'PROCESSING', items: [], statusHistory: [] }),
+        },
+        orderStatusHistory: { create: jest.fn() },
+      };
+      prisma.$transaction.mockImplementation(
+        (cb: (tx: unknown) => unknown) => cb(txMock),
+      );
+
+      const result = await service.updateStatus('o1', 'PROCESSING' as never, 'packed');
+      expect(txMock.order.updateMany).toHaveBeenCalledWith({
+        where: { id: 'o1', status: 'PAID' },
+        data: { status: 'PROCESSING' },
+      });
+      expect(txMock.orderStatusHistory.create).toHaveBeenCalledWith({
+        data: { orderId: 'o1', status: 'PROCESSING', note: 'packed' },
+      });
+      expect(result.status).toBe('PROCESSING');
+    });
+
+    it('rejects an illegal transition (PAID -> SHIPPED)', async () => {
+      prisma.order.findUnique.mockResolvedValue({ id: 'o1', status: 'PAID' });
+      await expect(
+        service.updateStatus('o1', 'SHIPPED' as never),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFound for a missing order', async () => {
+      prisma.order.findUnique.mockResolvedValue(null);
+      await expect(
+        service.updateStatus('missing', 'PROCESSING' as never),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('throws Conflict when the status changed concurrently (count 0)', async () => {
+      prisma.order.findUnique.mockResolvedValue({ id: 'o1', status: 'PAID' });
+      const txMock = {
+        order: {
+          updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+          findUniqueOrThrow: jest.fn(),
+        },
+        orderStatusHistory: { create: jest.fn() },
+      };
+      prisma.$transaction.mockImplementation(
+        (cb: (tx: unknown) => unknown) => cb(txMock),
+      );
+      await expect(
+        service.updateStatus('o1', 'PROCESSING' as never),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(txMock.orderStatusHistory.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listForAdmin', () => {
+    it('filters by status when provided', async () => {
+      prisma.order.findMany.mockResolvedValue([]);
+      await service.listForAdmin('SHIPPED' as never);
+      expect(prisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { status: 'SHIPPED' } }),
+      );
+    });
+
+    it('lists all orders when no status filter is given', async () => {
+      prisma.order.findMany.mockResolvedValue([]);
+      await service.listForAdmin();
+      expect(prisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: undefined }),
+      );
+    });
+  });
+
   describe('markPaid', () => {
     it('flips PENDING_PAYMENT to PAID and records history', async () => {
       const tx = {
