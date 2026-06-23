@@ -1,0 +1,291 @@
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma, Product } from '@prisma/client';
+import { CategoryService } from '../category/category.service';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { ProductService } from './product.service';
+
+type ProductDelegateMock = {
+  findMany: jest.Mock;
+  findUnique: jest.Mock;
+  create: jest.Mock;
+  update: jest.Mock;
+};
+
+// Only the methods ProductService is allowed to call in-process.
+type CategoryServiceMock = {
+  assertActive: jest.Mock;
+  isCategoryVisible: jest.Mock;
+  getVisibleCategoryIds: jest.Mock;
+  getActiveBySlug: jest.Mock;
+};
+
+function makeProduct(overrides: Partial<Product> = {}): Product {
+  return {
+    id: 'p1',
+    categoryId: 'c1',
+    nameVi: 'Giày',
+    nameEn: 'Sneaker',
+    slug: 'sneaker',
+    descriptionVi: null,
+    descriptionEn: null,
+    brand: null,
+    basePriceCents: 1000,
+    salePriceCents: null,
+    archivedAt: null,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+function validCreateDto() {
+  return {
+    categoryId: 'c1',
+    nameVi: 'Giày',
+    nameEn: 'Sneaker',
+    slug: 'sneaker',
+    basePriceCents: 1000,
+  };
+}
+
+function p2002(): Prisma.PrismaClientKnownRequestError {
+  return new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+    code: 'P2002',
+    clientVersion: '5.22.0',
+  });
+}
+
+describe('ProductService', () => {
+  let prisma: { product: ProductDelegateMock };
+  let categoryService: CategoryServiceMock;
+  let service: ProductService;
+
+  beforeEach(() => {
+    // NOTE: the prisma mock exposes ONLY a `product` delegate. There is no
+    // `category` delegate, so any attempt by ProductService to query the category
+    // table directly would throw here — boundary enforced structurally.
+    prisma = {
+      product: {
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+      },
+    };
+    categoryService = {
+      assertActive: jest.fn().mockResolvedValue(undefined),
+      isCategoryVisible: jest.fn().mockResolvedValue(true),
+      getVisibleCategoryIds: jest.fn().mockResolvedValue(new Set<string>()),
+      getActiveBySlug: jest.fn(),
+    };
+    service = new ProductService(
+      prisma as unknown as PrismaService,
+      categoryService as unknown as CategoryService,
+    );
+  });
+
+  describe('create', () => {
+    it('validates the category via CategoryService, then creates', async () => {
+      const created = makeProduct();
+      prisma.product.create.mockResolvedValue(created);
+
+      await expect(service.create(validCreateDto())).resolves.toEqual(created);
+      expect(categoryService.assertActive).toHaveBeenCalledWith('c1');
+      expect(prisma.product.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects an invalid category WITHOUT writing (delegates to CategoryService)', async () => {
+      categoryService.assertActive.mockRejectedValue(
+        new BadRequestException('Category does not exist.'),
+      );
+      await expect(service.create(validCreateDto())).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(prisma.product.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a sale price not below the base price', async () => {
+      await expect(
+        service.create({ ...validCreateDto(), salePriceCents: 1000 }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.product.create).not.toHaveBeenCalled();
+    });
+
+    it('maps a unique-slug violation to ConflictException', async () => {
+      prisma.product.create.mockRejectedValue(p2002());
+      await expect(service.create(validCreateDto())).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+    });
+  });
+
+  describe('update', () => {
+    it('throws NotFound when the product is missing', async () => {
+      prisma.product.findUnique.mockResolvedValue(null);
+      await expect(
+        service.update('missing', { nameEn: 'x' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('validates the category via CategoryService when re-categorizing', async () => {
+      prisma.product.findUnique.mockResolvedValue(makeProduct());
+      const updated = makeProduct({ categoryId: 'c2' });
+      prisma.product.update.mockResolvedValue(updated);
+
+      await expect(
+        service.update('p1', { categoryId: 'c2' }),
+      ).resolves.toEqual(updated);
+      expect(categoryService.assertActive).toHaveBeenCalledWith('c2');
+      expect(prisma.product.update).toHaveBeenCalledWith({
+        where: { id: 'p1' },
+        data: { category: { connect: { id: 'c2' } } },
+      });
+    });
+
+    it('validates pricing against effective values (existing base + incoming sale)', async () => {
+      prisma.product.findUnique.mockResolvedValue(
+        makeProduct({ basePriceCents: 1000 }),
+      );
+      await expect(
+        service.update('p1', { salePriceCents: 1000 }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.product.update).not.toHaveBeenCalled();
+    });
+
+    it('clears the sale price when salePriceCents is null', async () => {
+      prisma.product.findUnique.mockResolvedValue(
+        makeProduct({ salePriceCents: 800 }),
+      );
+      const updated = makeProduct({ salePriceCents: null });
+      prisma.product.update.mockResolvedValue(updated);
+
+      await expect(
+        service.update('p1', { salePriceCents: null }),
+      ).resolves.toEqual(updated);
+      expect(prisma.product.update).toHaveBeenCalledWith({
+        where: { id: 'p1' },
+        data: { salePriceCents: null },
+      });
+    });
+
+    it('maps a slug conflict on update to ConflictException', async () => {
+      prisma.product.findUnique.mockResolvedValue(makeProduct());
+      prisma.product.update.mockRejectedValue(p2002());
+      await expect(
+        service.update('p1', { slug: 'taken' }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+  });
+
+  describe('archive', () => {
+    it('sets archivedAt for an active product', async () => {
+      prisma.product.findUnique.mockResolvedValue(
+        makeProduct({ archivedAt: null }),
+      );
+      const archived = makeProduct({ archivedAt: new Date() });
+      prisma.product.update.mockResolvedValue(archived);
+      await expect(service.archive('p1')).resolves.toEqual(archived);
+      expect(prisma.product.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('is idempotent when already archived (no write)', async () => {
+      const already = makeProduct({ archivedAt: new Date('2026-01-01') });
+      prisma.product.findUnique.mockResolvedValue(already);
+      await expect(service.archive('p1')).resolves.toEqual(already);
+      expect(prisma.product.update).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFound when missing', async () => {
+      prisma.product.findUnique.mockResolvedValue(null);
+      await expect(service.archive('missing')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('restore', () => {
+    it('clears archivedAt', async () => {
+      prisma.product.findUnique.mockResolvedValue(
+        makeProduct({ archivedAt: new Date() }),
+      );
+      const restored = makeProduct({ archivedAt: null });
+      prisma.product.update.mockResolvedValue(restored);
+      await expect(service.restore('p1')).resolves.toEqual(restored);
+      expect(prisma.product.update).toHaveBeenCalledWith({
+        where: { id: 'p1' },
+        data: { archivedAt: null },
+      });
+    });
+  });
+
+  describe('getActiveList', () => {
+    it('hides products whose category is not visible (cascade)', async () => {
+      prisma.product.findMany.mockResolvedValue([
+        makeProduct({ id: 'p1', categoryId: 'visible' }),
+        makeProduct({ id: 'p2', categoryId: 'hidden' }),
+      ]);
+      categoryService.getVisibleCategoryIds.mockResolvedValue(
+        new Set(['visible']),
+      );
+
+      const result = await service.getActiveList();
+      expect(result.map((p) => p.id)).toEqual(['p1']);
+    });
+
+    it('narrows to one category via its slug (resolved by CategoryService)', async () => {
+      categoryService.getActiveBySlug.mockResolvedValue({ id: 'c9' });
+      prisma.product.findMany.mockResolvedValue([
+        makeProduct({ id: 'p1', categoryId: 'c9' }),
+      ]);
+
+      const result = await service.getActiveList('tops');
+      expect(categoryService.getActiveBySlug).toHaveBeenCalledWith('tops');
+      expect(prisma.product.findMany).toHaveBeenCalledWith({
+        where: { archivedAt: null, categoryId: 'c9' },
+        orderBy: { nameEn: 'asc' },
+      });
+      expect(result.map((p) => p.id)).toEqual(['p1']);
+    });
+
+    it('propagates NotFound when the category slug is not visible', async () => {
+      categoryService.getActiveBySlug.mockRejectedValue(
+        new NotFoundException('Category not found.'),
+      );
+      await expect(service.getActiveList('ghost')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(prisma.product.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getActiveBySlug', () => {
+    it('returns an active product under a visible category', async () => {
+      const product = makeProduct();
+      prisma.product.findUnique.mockResolvedValue(product);
+      categoryService.isCategoryVisible.mockResolvedValue(true);
+      await expect(service.getActiveBySlug('sneaker')).resolves.toEqual(product);
+      expect(categoryService.isCategoryVisible).toHaveBeenCalledWith('c1');
+    });
+
+    it('throws NotFound for an archived product', async () => {
+      prisma.product.findUnique.mockResolvedValue(
+        makeProduct({ archivedAt: new Date() }),
+      );
+      await expect(service.getActiveBySlug('sneaker')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it('throws NotFound when the category is not visible (cascade)', async () => {
+      prisma.product.findUnique.mockResolvedValue(makeProduct());
+      categoryService.isCategoryVisible.mockResolvedValue(false);
+      await expect(service.getActiveBySlug('sneaker')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+  });
+});

@@ -229,4 +229,75 @@ describe('CategoryService', () => {
       expect(tree).toHaveLength(0);
     });
   });
+
+  // Cross-module API consumed in-process by the product slice.
+  describe('assertActive', () => {
+    it('resolves for an active category', async () => {
+      prisma.category.findUnique.mockResolvedValue(makeCategory({ id: 'c1' }));
+      await expect(service.assertActive('c1')).resolves.toBeUndefined();
+    });
+
+    it('rejects a missing category', async () => {
+      prisma.category.findUnique.mockResolvedValue(null);
+      await expect(service.assertActive('nope')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('rejects an archived category', async () => {
+      prisma.category.findUnique.mockResolvedValue(
+        makeCategory({ id: 'c1', archivedAt: new Date() }),
+      );
+      await expect(service.assertActive('c1')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+  });
+
+  describe('isCategoryVisible', () => {
+    it('is true for an active root', async () => {
+      prisma.category.findUnique.mockResolvedValue(
+        makeCategory({ id: 'c1', parentId: null }),
+      );
+      await expect(service.isCategoryVisible('c1')).resolves.toBe(true);
+    });
+
+    it('is false when the category itself is archived', async () => {
+      prisma.category.findUnique.mockResolvedValue(
+        makeCategory({ id: 'c1', archivedAt: new Date() }),
+      );
+      await expect(service.isCategoryVisible('c1')).resolves.toBe(false);
+    });
+
+    it('is false when an ancestor is archived', async () => {
+      const child = makeCategory({ id: 'c2', parentId: 'p1' });
+      const archivedParent = makeCategory({
+        id: 'p1',
+        parentId: null,
+        archivedAt: new Date(),
+      });
+      prisma.category.findUnique
+        .mockResolvedValueOnce(child)
+        .mockResolvedValueOnce(archivedParent);
+      await expect(service.isCategoryVisible('c2')).resolves.toBe(false);
+    });
+  });
+
+  describe('getVisibleCategoryIds', () => {
+    it('includes active roots and their active descendants', async () => {
+      const root = makeCategory({ id: 'r', parentId: null });
+      const child = makeCategory({ id: 'k', parentId: 'r' });
+      prisma.category.findMany.mockResolvedValue([root, child]);
+      const ids = await service.getVisibleCategoryIds();
+      expect(ids).toEqual(new Set(['r', 'k']));
+    });
+
+    it('drops a subtree under an archived ancestor', async () => {
+      // Parent 'p' is archived → absent from the active set; orphan must not appear.
+      const orphan = makeCategory({ id: 'k', parentId: 'p' });
+      prisma.category.findMany.mockResolvedValue([orphan]);
+      const ids = await service.getVisibleCategoryIds();
+      expect(ids.has('k')).toBe(false);
+    });
+  });
 });

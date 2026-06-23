@@ -160,6 +160,74 @@ export class CategoryService {
   }
 
   // ---------------------------------------------------------------------------
+  // Cross-module API — called IN-PROCESS by sibling slices (e.g. product).
+  // These exist so another module never queries the `product.Category` table
+  // directly; it asks the owning service instead. See ARCHITECTURE.md §4.3.
+  // ---------------------------------------------------------------------------
+
+  // Validate a categoryId a product wants to attach to. Node-level active check,
+  // matching the parent-validation convention. Throws 400 if missing/archived.
+  async assertActive(categoryId: string): Promise<void> {
+    const category = await this.prisma.category.findUnique({
+      where: { id: categoryId },
+    });
+    if (!category || category.archivedAt !== null) {
+      throw new BadRequestException('Category does not exist.');
+    }
+  }
+
+  // True iff the category is active AND no ancestor is archived — i.e. it would
+  // appear on the storefront tree. Mirrors the cascade in getActiveBySlug.
+  async isCategoryVisible(categoryId: string): Promise<boolean> {
+    const category = await this.prisma.category.findUnique({
+      where: { id: categoryId },
+    });
+    if (!category || category.archivedAt !== null) return false;
+
+    let current = category;
+    for (let depth = 0; depth < MAX_TREE_DEPTH; depth++) {
+      if (current.parentId === null) return true;
+      const parent = await this.prisma.category.findUnique({
+        where: { id: current.parentId },
+      });
+      if (!parent || parent.archivedAt !== null) return false;
+      current = parent;
+    }
+    // Exceeded the depth cap → treat as bad data and hide it.
+    return false;
+  }
+
+  // The set of category ids visible on the storefront (active + no archived
+  // ancestor). Computed top-down like getActiveTree so a subtree under an
+  // archived ancestor drops out. Lets a caller filter a product list in one pass.
+  async getVisibleCategoryIds(): Promise<Set<string>> {
+    const active = await this.prisma.category.findMany({
+      where: { archivedAt: null },
+    });
+
+    const childrenByParent = new Map<string, Category[]>();
+    for (const category of active) {
+      if (category.parentId === null) continue;
+      const siblings = childrenByParent.get(category.parentId) ?? [];
+      siblings.push(category);
+      childrenByParent.set(category.parentId, siblings);
+    }
+
+    const visible = new Set<string>();
+    const visit = (node: Category, depth: number): void => {
+      visible.add(node.id);
+      if (depth >= MAX_TREE_DEPTH) return;
+      for (const child of childrenByParent.get(node.id) ?? []) {
+        visit(child, depth + 1);
+      }
+    };
+    for (const root of active.filter((c) => c.parentId === null)) {
+      visit(root, 0);
+    }
+    return visible;
+  }
+
+  // ---------------------------------------------------------------------------
   // Internal helpers
   // ---------------------------------------------------------------------------
 
