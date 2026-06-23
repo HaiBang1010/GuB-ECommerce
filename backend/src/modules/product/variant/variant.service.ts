@@ -17,6 +17,12 @@ export type GenerateResult = {
   variants: ProductVariant[];
 };
 
+// A variant + quantity for an in-transaction stock movement (decrement/release).
+export interface StockChange {
+  variantId: string;
+  quantity: number;
+}
+
 @Injectable()
 export class ProductVariantService {
   constructor(
@@ -203,6 +209,41 @@ export class ProductVariantService {
       throw new NotFoundException('Variant not found.');
     }
     return variant;
+  }
+
+  // Atomic stock decrement — the stock-race fix (ARCHITECTURE §5.1). Runs inside
+  // the caller's transaction (ordering owns the tx, product owns the table) so a
+  // failed order rolls the stock back automatically. The `stockQty >= quantity`
+  // guard makes overselling impossible: a losing concurrent buyer matches 0 rows.
+  async decrementForOrder(
+    tx: Prisma.TransactionClient,
+    items: StockChange[],
+  ): Promise<void> {
+    for (const { variantId, quantity } of items) {
+      const result = await tx.productVariant.updateMany({
+        where: { id: variantId, archivedAt: null, stockQty: { gte: quantity } },
+        data: { stockQty: { decrement: quantity } },
+      });
+      if (result.count !== 1) {
+        throw new ConflictException(
+          'Insufficient stock for one or more items.',
+        );
+      }
+    }
+  }
+
+  // Return stock to the shelf on cancellation / payment failure / expiry. Runs in
+  // the caller's transaction. No guard needed — incrementing is always safe.
+  async releaseForOrder(
+    tx: Prisma.TransactionClient,
+    items: StockChange[],
+  ): Promise<void> {
+    for (const { variantId, quantity } of items) {
+      await tx.productVariant.updateMany({
+        where: { id: variantId },
+        data: { stockQty: { increment: quantity } },
+      });
+    }
   }
 
   // ---------------------------------------------------------------------------

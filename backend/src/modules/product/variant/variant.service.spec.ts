@@ -378,4 +378,45 @@ describe('ProductVariantService', () => {
       );
     });
   });
+
+  describe('decrementForOrder', () => {
+    it('atomically decrements each variant guarded by stockQty>=quantity', async () => {
+      const tx = {
+        productVariant: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      };
+      await service.decrementForOrder(tx as unknown as Prisma.TransactionClient, [
+        { variantId: 'v1', quantity: 2 },
+      ]);
+      expect(tx.productVariant.updateMany).toHaveBeenCalledWith({
+        where: { id: 'v1', archivedAt: null, stockQty: { gte: 2 } },
+        data: { stockQty: { decrement: 2 } },
+      });
+    });
+
+    it('throws Conflict when stock is insufficient (0 rows matched)', async () => {
+      const tx = {
+        productVariant: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      };
+      await expect(
+        service.decrementForOrder(tx as unknown as Prisma.TransactionClient, [
+          { variantId: 'v1', quantity: 5 },
+        ]),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+  });
+
+  describe('releaseForOrder', () => {
+    it('increments stock back for each item', async () => {
+      const tx = {
+        productVariant: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      };
+      await service.releaseForOrder(tx as unknown as Prisma.TransactionClient, [
+        { variantId: 'v1', quantity: 3 },
+      ]);
+      expect(tx.productVariant.updateMany).toHaveBeenCalledWith({
+        where: { id: 'v1' },
+        data: { stockQty: { increment: 3 } },
+      });
+    });
+  });
 });
