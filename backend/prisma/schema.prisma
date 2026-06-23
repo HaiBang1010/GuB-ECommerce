@@ -96,6 +96,7 @@ model ProductImage {
   productId String
   product   Product @relation(fields: [productId], references: [id])
   url       String
+  publicId  String  @unique // Cloudinary public_id: asset identity for delivery URLs + deletion
   color     String? // image belongs to a color variant; null = generic
   position  Int     @default(0)
 

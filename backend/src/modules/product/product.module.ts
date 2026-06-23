@@ -11,15 +11,19 @@ import { ProductVariantService } from './variant/variant.service';
 import { CollectionAdminController } from './collection/collection-admin.controller';
 import { CollectionController } from './collection/collection.controller';
 import { CollectionService } from './collection/collection.service';
+import { CloudinaryService } from './image/cloudinary.service';
+import { ImageAdminController } from './image/image-admin.controller';
+import { ImageController } from './image/image.controller';
+import { ProductImageService } from './image/image.service';
 
 /**
- * Catalog module. Ships the Category, Product, ProductVariant and Collection
- * slices; the ProductImage slice attaches here as a sibling subfolder.
+ * Catalog module. Ships the Category, Product, ProductVariant, Collection and
+ * ProductImage slices — the full Phase 1 catalog.
  *
  * Services are EXPORTED so other modules call them in-process (e.g. ProductService
- * validates categoryId via CategoryService; ProductVariantService and
- * CollectionService validate productId via ProductService) — never by querying
- * the product tables directly.
+ * validates categoryId via CategoryService; ProductVariantService,
+ * CollectionService and ProductImageService validate productId via
+ * ProductService) — never by querying the product tables directly.
  */
 @Module({
   controllers: [
@@ -31,18 +35,23 @@ import { CollectionService } from './collection/collection.service';
     VariantAdminController,
     CollectionController,
     CollectionAdminController,
+    ImageController,
+    ImageAdminController,
   ],
   providers: [
     CategoryService,
     ProductService,
     ProductVariantService,
     CollectionService,
+    CloudinaryService,
+    ProductImageService,
   ],
   exports: [
     CategoryService,
     ProductService,
     ProductVariantService,
     CollectionService,
+    ProductImageService,
   ],
 })
 export class ProductModule {}
