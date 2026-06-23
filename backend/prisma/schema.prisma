@@ -13,7 +13,7 @@
 // ---------------------------------------------------------------------------
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   // multiSchema is GA since Prisma 6 — if you're on v6+, REMOVE "multiSchema" from
   // this list (keeping it there errors out). On Prisma 4.7–5.x, keep it.
   // postgresqlExtensions is still preview as of v6 → keep it for the pg_trgm extension.
@@ -32,17 +32,17 @@ datasource db {
 // ===========================================================================
 
 model Category {
-  id        String     @id @default(cuid())
-  nameVi    String
-  nameEn    String
-  slug      String     @unique
-  parentId  String?
-  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
-  children  Category[] @relation("CategoryTree")
-  products  Product[]
+  id         String     @id @default(cuid())
+  nameVi     String
+  nameEn     String
+  slug       String     @unique
+  parentId   String?
+  parent     Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children   Category[] @relation("CategoryTree")
+  products   Product[]
   archivedAt DateTime?
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
 
   @@index([parentId])
   @@schema("product")
@@ -158,9 +158,9 @@ model User {
 }
 
 model Profile {
-  id           String @id @default(cuid())
-  userId       String @unique
-  user         User   @relation(fields: [userId], references: [id])
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id])
   heightCm     Int?
   weightKg     Int?
   measurements Json? // { chest, waist, hip, ... } → rule-based size suggestion
@@ -236,23 +236,23 @@ enum OrderStatus {
 }
 
 model Order {
-  id            String               @id @default(cuid())
-  userId        String // cross-module → iam.User.id (scalar)
-  status        OrderStatus          @default(PENDING_PAYMENT)
-  subtotalCents Int
-  discountCents Int                  @default(0)
-  totalCents    Int
+  id              String               @id @default(cuid())
+  userId          String // cross-module → iam.User.id (scalar)
+  status          OrderStatus          @default(PENDING_PAYMENT)
+  subtotalCents   Int
+  discountCents   Int                  @default(0)
+  totalCents      Int
   // Voucher snapshot (code + id captured at checkout; cross-module scalar)
-  voucherId     String?
-  voucherCode   String?
+  voucherId       String?
+  voucherCode     String?
   // Address snapshot — full copy, NOT a foreign key, so the order is immutable
   // even if the user later edits/deletes the address.
   shippingAddress Json
-  items         OrderItem[]
-  statusHistory OrderStatusHistory[]
-  placedAt      DateTime?
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
+  items           OrderItem[]
+  statusHistory   OrderStatusHistory[]
+  placedAt        DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
 
   @@index([userId])
   @@index([status])
@@ -422,20 +422,20 @@ enum VoucherType {
 }
 
 model Voucher {
-  id              String        @id @default(cuid())
-  code            String        @unique
-  type            VoucherType
-  value           Int // PERCENT: 0..100 ; FIXED: amount in cents
-  minOrderCents   Int?
+  id               String        @id @default(cuid())
+  code             String        @unique
+  type             VoucherType
+  value            Int // PERCENT: 0..100 ; FIXED: amount in cents
+  minOrderCents    Int?
   maxDiscountCents Int? // cap for PERCENT vouchers
-  validFrom       DateTime?
-  validTo         DateTime?
-  usageLimit      Int? // global redemption cap
-  perUserLimit    Int?
-  usedCount       Int           @default(0)
-  userVouchers    UserVoucher[]
-  archivedAt      DateTime?
-  createdAt       DateTime      @default(now())
+  validFrom        DateTime?
+  validTo          DateTime?
+  usageLimit       Int? // global redemption cap
+  perUserLimit     Int?
+  usedCount        Int           @default(0)
+  userVouchers     UserVoucher[]
+  archivedAt       DateTime?
+  createdAt        DateTime      @default(now())
 
   @@schema("voucher")
 }
