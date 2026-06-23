@@ -171,8 +171,8 @@ Render free **750 instance-hours/month** → only enough to keep **one** service
 
 Principle: **get the purchase flow (Phase 0→2) working first**, layer engagement after. Every phase is deployable.
 
-0. **Foundation** — monorepo, NestJS + Next.js skeleton, Neon + Prisma, Supabase Auth, `.claude`, CI: skip — solo/commit-to-main, keep-alive (UptimeRobot), i18n scaffold. Deploy "hello world".
-1. **Catalog** — product/variant/category/collection, admin CRUD + archive, image upload by color, storefront list/detail/search/filter. (No login required.)
+0. **Foundation** — **DONE** (CI skipped on purpose · deploy deferred). monorepo (npm workspaces), NestJS + Next.js skeleton, `GET /health`, Prisma **init migration applied on local Postgres (Docker)**, i18n (vi/en) scaffold. Deferred for later: Neon, Supabase Auth (→ Phase 2), keep-alive (UptimeRobot), and the "hello world" deploy.
+1. **Catalog** — **IN PROGRESS.** Done: **Category** slice — admin CRUD + cascade archive, storefront category tree, temporary AdminGuard, jest tests. Remaining: Product/Variant, image upload by color, Collection, search/filter (full-text). (No login required.)
 2. **Cart + Auth + Checkout** *(hardest)* — guest cart → merge on login, address book, Stripe, order creation, safe stock reserve/decrement, order status.
 3. **Post-purchase** — order timeline, notifications (in-app + email via queue), reviews (purchased-only) + admin reply.
 4. **Promotions & personalization** — vouchers (wallet + birthday cron), product discounts, profile + measurements + rule-based size suggestion (no ML), home banners.
