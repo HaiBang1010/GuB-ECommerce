@@ -9,14 +9,17 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { Category } from '@prisma/client';
-import { AdminGuard } from '../../../common/guards/admin.guard';
+import { Category, Role } from '@prisma/client';
+import { Roles } from '../../../common/auth/roles.decorator';
+import { RolesGuard } from '../../../common/auth/roles.guard';
+import { SupabaseAuthGuard } from '../../../modules/iam/auth/supabase-auth.guard';
 import { CategoryService } from './category.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 
-// Admin catalog management — gated by AdminGuard (backend-enforced, not UI-only).
-@UseGuards(AdminGuard)
+// Admin catalog management — Supabase JWT + ADMIN role (backend-enforced, not UI-only).
+@UseGuards(SupabaseAuthGuard, RolesGuard)
+@Roles(Role.ADMIN)
 @Controller('admin/categories')
 export class CategoryAdminController {
   constructor(private readonly categoryService: CategoryService) {}

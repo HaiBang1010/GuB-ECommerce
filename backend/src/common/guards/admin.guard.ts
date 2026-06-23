@@ -10,15 +10,16 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 const ADMIN_SECRET_HEADER = 'x-admin-secret';
 
 /**
- * Temporary gate for /admin/* routes.
+ * Secret-header gate for MACHINE callers (no Supabase session): scheduled jobs
+ * hit from UptimeRobot / cron-job.org, e.g. POST /admin/jobs/* (ARCHITECTURE §6).
  *
  * Compares the `x-admin-secret` request header against process.env.ADMIN_API_SECRET
- * in constant time. This is a PLACEHOLDER until the auth module ships a real JWT
- * role guard — the architecture mandates that admin endpoints are enforced on the
- * BACKEND, not merely hidden in the UI.
+ * in constant time. Human admin endpoints (the catalog CRUD) are NOT guarded by
+ * this — they authenticate via Supabase JWT + RolesGuard. Both enforce access on
+ * the BACKEND, never by hiding UI.
  *
- * Fails CLOSED: if ADMIN_API_SECRET is unset, every admin request is rejected with
- * 500 rather than allowed through.
+ * Fails CLOSED: if ADMIN_API_SECRET is unset, every request is rejected with 500
+ * rather than allowed through.
  */
 @Injectable()
 export class AdminGuard implements CanActivate {

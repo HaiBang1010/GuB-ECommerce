@@ -10,15 +10,18 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ProductVariant } from '@prisma/client';
-import { AdminGuard } from '../../../common/guards/admin.guard';
+import { ProductVariant, Role } from '@prisma/client';
+import { Roles } from '../../../common/auth/roles.decorator';
+import { RolesGuard } from '../../../common/auth/roles.guard';
+import { SupabaseAuthGuard } from '../../../modules/iam/auth/supabase-auth.guard';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { GenerateVariantsDto } from './dto/generate-variants.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
 import { GenerateResult, ProductVariantService } from './variant.service';
 
-// Admin variant management — gated by AdminGuard (backend-enforced, not UI-only).
-@UseGuards(AdminGuard)
+// Admin variant management — Supabase JWT + ADMIN role (backend-enforced, not UI-only).
+@UseGuards(SupabaseAuthGuard, RolesGuard)
+@Roles(Role.ADMIN)
 @Controller('admin/product-variants')
 export class VariantAdminController {
   constructor(private readonly variantService: ProductVariantService) {}

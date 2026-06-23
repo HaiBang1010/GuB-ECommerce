@@ -9,14 +9,17 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { Product } from '@prisma/client';
-import { AdminGuard } from '../../../common/guards/admin.guard';
+import { Product, Role } from '@prisma/client';
+import { Roles } from '../../../common/auth/roles.decorator';
+import { RolesGuard } from '../../../common/auth/roles.guard';
+import { SupabaseAuthGuard } from '../../../modules/iam/auth/supabase-auth.guard';
 import { ProductService } from './product.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
-// Admin catalog management — gated by AdminGuard (backend-enforced, not UI-only).
-@UseGuards(AdminGuard)
+// Admin catalog management — Supabase JWT + ADMIN role (backend-enforced, not UI-only).
+@UseGuards(SupabaseAuthGuard, RolesGuard)
+@Roles(Role.ADMIN)
 @Controller('admin/products')
 export class ProductAdminController {
   constructor(private readonly productService: ProductService) {}

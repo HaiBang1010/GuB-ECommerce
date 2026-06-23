@@ -11,16 +11,19 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ProductImage } from '@prisma/client';
-import { AdminGuard } from '../../../common/guards/admin.guard';
+import { ProductImage, Role } from '@prisma/client';
+import { Roles } from '../../../common/auth/roles.decorator';
+import { RolesGuard } from '../../../common/auth/roles.guard';
+import { SupabaseAuthGuard } from '../../../modules/iam/auth/supabase-auth.guard';
 import { SignedUpload } from './cloudinary.service';
 import { CreateImageDto } from './dto/create-image.dto';
 import { SignUploadDto } from './dto/sign-upload.dto';
 import { UpdateImageDto } from './dto/update-image.dto';
 import { ProductImageService } from './image.service';
 
-// Admin image management — gated by AdminGuard (backend-enforced, not UI-only).
-@UseGuards(AdminGuard)
+// Admin image management — Supabase JWT + ADMIN role (backend-enforced, not UI-only).
+@UseGuards(SupabaseAuthGuard, RolesGuard)
+@Roles(Role.ADMIN)
 @Controller('admin/product-images')
 export class ImageAdminController {
   constructor(private readonly imageService: ProductImageService) {}

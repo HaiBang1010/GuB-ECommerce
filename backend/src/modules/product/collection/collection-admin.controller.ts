@@ -10,15 +10,18 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { Collection } from '@prisma/client';
-import { AdminGuard } from '../../../common/guards/admin.guard';
+import { Collection, Role } from '@prisma/client';
+import { Roles } from '../../../common/auth/roles.decorator';
+import { RolesGuard } from '../../../common/auth/roles.guard';
+import { SupabaseAuthGuard } from '../../../modules/iam/auth/supabase-auth.guard';
 import { CollectionService } from './collection.service';
 import { CollectionProductsDto } from './dto/collection-products.dto';
 import { CreateCollectionDto } from './dto/create-collection.dto';
 import { UpdateCollectionDto } from './dto/update-collection.dto';
 
-// Admin collection management — gated by AdminGuard (backend-enforced, not UI-only).
-@UseGuards(AdminGuard)
+// Admin collection management — Supabase JWT + ADMIN role (backend-enforced, not UI-only).
+@UseGuards(SupabaseAuthGuard, RolesGuard)
+@Roles(Role.ADMIN)
 @Controller('admin/collections')
 export class CollectionAdminController {
   constructor(private readonly collectionService: CollectionService) {}
