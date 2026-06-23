@@ -20,6 +20,7 @@ type VariantDelegateMock = {
 type ProductServiceMock = {
   assertExists: jest.Mock;
   getActiveBySlug: jest.Mock;
+  getActiveByIds: jest.Mock;
 };
 
 function makeVariant(overrides: Partial<ProductVariant> = {}): ProductVariant {
@@ -86,6 +87,7 @@ describe('ProductVariantService', () => {
     productService = {
       assertExists: jest.fn().mockResolvedValue(makeProduct()),
       getActiveBySlug: jest.fn(),
+      getActiveByIds: jest.fn(),
     };
     service = new ProductVariantService(
       prisma as unknown as PrismaService,
@@ -332,6 +334,48 @@ describe('ProductVariantService', () => {
         service.getActiveForProductSlug('ghost'),
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.productVariant.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getPurchasableByIds', () => {
+    it('returns active variants whose product is storefront-visible', async () => {
+      const v1 = makeVariant({ id: 'v1', productId: 'p1' });
+      const v2 = makeVariant({ id: 'v2', productId: 'p2' });
+      prisma.productVariant.findMany.mockResolvedValue([v1, v2]);
+      // Only p1 is visible → v2 (under p2) is filtered out.
+      productService.getActiveByIds.mockResolvedValue([makeProduct({ id: 'p1' })]);
+
+      await expect(service.getPurchasableByIds(['v1', 'v2'])).resolves.toEqual([
+        v1,
+      ]);
+      expect(productService.getActiveByIds).toHaveBeenCalledWith(['p1', 'p2']);
+    });
+
+    it('returns [] for an empty id list without querying', async () => {
+      await expect(service.getPurchasableByIds([])).resolves.toEqual([]);
+      expect(prisma.productVariant.findMany).not.toHaveBeenCalled();
+    });
+
+    it('returns [] (and skips the product call) when no active variant exists', async () => {
+      prisma.productVariant.findMany.mockResolvedValue([]);
+      await expect(service.getPurchasableByIds(['v1'])).resolves.toEqual([]);
+      expect(productService.getActiveByIds).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getPurchasable', () => {
+    it('returns the variant when purchasable', async () => {
+      const v1 = makeVariant({ id: 'v1', productId: 'p1' });
+      prisma.productVariant.findMany.mockResolvedValue([v1]);
+      productService.getActiveByIds.mockResolvedValue([makeProduct({ id: 'p1' })]);
+      await expect(service.getPurchasable('v1')).resolves.toEqual(v1);
+    });
+
+    it('throws NotFound when the variant is not purchasable', async () => {
+      prisma.productVariant.findMany.mockResolvedValue([]);
+      await expect(service.getPurchasable('v1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 });
