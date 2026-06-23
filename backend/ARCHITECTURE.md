@@ -161,11 +161,31 @@ preview feature; each model carries `@@schema("<module>")`.
 - `StripeEvent.id` = the Stripe event id → webhook idempotency ledger.
 - `Cart`: at most one of `userId` / `sessionId` (both `@unique`).
 
-### 5.5 Full-text search
-`Product` gets a `search_tsv tsvector` column + GIN index, plus a `pg_trgm` GIN index for
-fuzzy name/slug matching. These are added by a **raw SQL migration** (Prisma can't express a
-generated `tsvector` column natively). The `product` module exposes a `search(query, locale)`
-service method. No Elasticsearch/Algolia.
+### 5.5 Full-text + fuzzy search
+`Product` has a **generated** `search_tsv tsvector` column (weighted name=A, brand=B,
+description=C) with a GIN index, plus two `pg_trgm` GIN indexes on **accent-folded** names
+(`f_unaccent("nameVi"/"nameEn")`) for typo tolerance. All added by the hand-written migration
+`20260623113838_add_product_search`.
+
+- **Accent-insensitive VN search.** A custom text-search config `product.gub_vn` (`COPY = simple`
+  — NO language stemming; `english` would corrupt Vietnamese — with the `unaccent` dictionary in
+  its mapping) folds accents on **both** sides: the stored `tsvector` and the query
+  (`websearch_to_tsquery('product.gub_vn', q)`), so `"ao thun"` finds `"Áo thun"`.
+- **Why generated, not a trigger.** Pushing `unaccent` into the config's *dictionary* means the
+  column expression only calls the IMMUTABLE `to_tsvector(regconfig, text)` — never the STABLE
+  `unaccent()` function — so Postgres accepts a `GENERATED ALWAYS … STORED` column with no trigger.
+  The IMMUTABLE wrapper `product.f_unaccent(text)` exists **only** for the trgm functional indexes
+  (which must call unaccent on raw text in the index expression).
+- **Service.** `ProductService.searchActive(query, categorySlug?)` runs the raw SQL (FTS OR trgm
+  fallback, ranked `ts_rank` then `similarity`), re-fetches typed rows, then applies the category
+  archive-cascade in-process (`getVisibleCategoryIds`) — no cross-schema join. Exposed at
+  `GET /products?search=` (combinable with `?category=`). Accent/typo behaviour is covered by a
+  DB-backed integration spec (`product.search.spec.ts`). No Elasticsearch/Algolia.
+- **⚠ Prisma drift caveat.** The config `product.gub_vn`, the `f_unaccent` function, and the trgm/
+  tsv indexes live **outside Prisma's model** (the column is declared `Unsupported("tsvector")`
+  only so Prisma won't drop it). A later `prisma migrate dev` may propose `DROP`ing these objects.
+  **Always apply with `prisma migrate deploy`;** if you must run `migrate dev`, delete any
+  unintended `DROP` lines from the generated SQL.
 
 ## 6. Cron / scheduled jobs
 
