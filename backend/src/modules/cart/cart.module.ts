@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ProductModule } from '../product/product.module';
+import { CartMergeController } from './cart-merge.controller';
 import { CartController } from './cart.controller';
 import { CartService } from './cart.service';
 
@@ -11,7 +12,7 @@ import { CartService } from './cart.service';
  */
 @Module({
   imports: [ProductModule],
-  controllers: [CartController],
+  controllers: [CartController, CartMergeController],
   providers: [CartService],
   exports: [CartService],
 })

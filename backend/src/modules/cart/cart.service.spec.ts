@@ -4,7 +4,11 @@ import { CartService } from './cart.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProductVariantService } from '../product/variant/variant.service';
 
-type CartDelegate = { findUnique: jest.Mock; create: jest.Mock };
+type CartDelegate = {
+  findUnique: jest.Mock;
+  create: jest.Mock;
+  delete: jest.Mock;
+};
 type CartItemDelegate = {
   findUnique: jest.Mock;
   findMany: jest.Mock;
@@ -42,13 +46,17 @@ function makeItem(overrides: Partial<CartItem> = {}): CartItem {
 }
 
 describe('CartService', () => {
-  let prisma: { cart: CartDelegate; cartItem: CartItemDelegate };
+  let prisma: {
+    cart: CartDelegate;
+    cartItem: CartItemDelegate;
+    $transaction: jest.Mock;
+  };
   let variants: VariantsMock;
   let service: CartService;
 
   beforeEach(() => {
     prisma = {
-      cart: { findUnique: jest.fn(), create: jest.fn() },
+      cart: { findUnique: jest.fn(), create: jest.fn(), delete: jest.fn() },
       cartItem: {
         findUnique: jest.fn(),
         findMany: jest.fn(),
@@ -56,6 +64,7 @@ describe('CartService', () => {
         update: jest.fn(),
         deleteMany: jest.fn(),
       },
+      $transaction: jest.fn(),
     };
     variants = {
       getPurchasable: jest.fn(),
@@ -238,6 +247,120 @@ describe('CartService', () => {
       expect(prisma.cartItem.deleteMany).toHaveBeenCalledWith({
         where: { cartId: 'c1' },
       });
+    });
+  });
+
+  describe('mergeGuestIntoUser', () => {
+    it('returns the user view and does nothing when there is no guest cart', async () => {
+      prisma.cart.findUnique
+        .mockResolvedValueOnce(null) // guest lookup
+        .mockResolvedValueOnce(null); // getView user lookup
+      await expect(service.mergeGuestIntoUser('u1', 's1')).resolves.toEqual({
+        items: [],
+        subtotalCents: 0,
+      });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.cart.delete).not.toHaveBeenCalled();
+    });
+
+    it('deletes an empty guest cart and returns the user view', async () => {
+      prisma.cart.findUnique
+        .mockResolvedValueOnce({ id: 'g1', items: [] }) // guest (empty)
+        .mockResolvedValueOnce(null); // getView user
+      prisma.cart.delete.mockResolvedValue({});
+      await expect(service.mergeGuestIntoUser('u1', 's1')).resolves.toEqual({
+        items: [],
+        subtotalCents: 0,
+      });
+      expect(prisma.cart.delete).toHaveBeenCalledWith({ where: { id: 'g1' } });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('sums quantities and removes the guest cart atomically', async () => {
+      prisma.cart.findUnique
+        .mockResolvedValueOnce({
+          id: 'g1',
+          items: [makeItem({ variantId: 'v1', quantity: 2 })],
+        }) // guest
+        .mockResolvedValueOnce(null); // getOrCreateCart(user): none yet
+      prisma.cart.create.mockResolvedValue({ id: 'u-cart' });
+      prisma.cartItem.findMany
+        .mockResolvedValueOnce([]) // user existing items
+        .mockResolvedValueOnce([makeItem({ cartId: 'u-cart', variantId: 'v1', quantity: 2 })]); // viewForCart
+      variants.getPurchasableByIds
+        .mockResolvedValueOnce([makeVariant({ id: 'v1', stockQty: 10 })]) // stock map
+        .mockResolvedValueOnce([makeVariant({ id: 'v1', stockQty: 10, priceCents: 1000 })]); // view
+      prisma.cartItem.upsert.mockReturnValue('upsertOp');
+      prisma.cartItem.deleteMany.mockReturnValue('delItemsOp');
+      prisma.cart.delete.mockReturnValue('delCartOp');
+      prisma.$transaction.mockResolvedValue([]);
+
+      const view = await service.mergeGuestIntoUser('u1', 's1');
+      expect(prisma.cartItem.upsert).toHaveBeenCalledWith({
+        where: { cartId_variantId: { cartId: 'u-cart', variantId: 'v1' } },
+        create: { cartId: 'u-cart', variantId: 'v1', quantity: 2 },
+        update: { quantity: 2 },
+      });
+      expect(prisma.$transaction).toHaveBeenCalledWith([
+        'upsertOp',
+        'delItemsOp',
+        'delCartOp',
+      ]);
+      expect(view.subtotalCents).toBe(2000);
+    });
+
+    it('caps the merged quantity at available stock', async () => {
+      prisma.cart.findUnique
+        .mockResolvedValueOnce({
+          id: 'g1',
+          items: [makeItem({ variantId: 'v1', quantity: 5 })],
+        })
+        .mockResolvedValueOnce({ id: 'u-cart' });
+      prisma.cartItem.findMany
+        .mockResolvedValueOnce([
+          makeItem({ cartId: 'u-cart', variantId: 'v1', quantity: 8 }),
+        ]) // user already has 8
+        .mockResolvedValueOnce([
+          makeItem({ cartId: 'u-cart', variantId: 'v1', quantity: 10 }),
+        ]);
+      variants.getPurchasableByIds
+        .mockResolvedValueOnce([makeVariant({ id: 'v1', stockQty: 10 })])
+        .mockResolvedValueOnce([makeVariant({ id: 'v1', stockQty: 10 })]);
+      prisma.cartItem.upsert.mockReturnValue('upsertOp');
+      prisma.cartItem.deleteMany.mockReturnValue('delItemsOp');
+      prisma.cart.delete.mockReturnValue('delCartOp');
+      prisma.$transaction.mockResolvedValue([]);
+
+      await service.mergeGuestIntoUser('u1', 's1');
+      // 8 + 5 = 13, capped to stock 10.
+      expect(prisma.cartItem.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ update: { quantity: 10 } }),
+      );
+    });
+
+    it('drops guest lines whose variant is no longer purchasable', async () => {
+      prisma.cart.findUnique
+        .mockResolvedValueOnce({
+          id: 'g1',
+          items: [makeItem({ variantId: 'gone', quantity: 2 })],
+        })
+        .mockResolvedValueOnce({ id: 'u-cart' });
+      prisma.cartItem.findMany
+        .mockResolvedValueOnce([]) // user items
+        .mockResolvedValueOnce([]); // view
+      variants.getPurchasableByIds
+        .mockResolvedValueOnce([]) // nothing purchasable
+        .mockResolvedValueOnce([]);
+      prisma.cartItem.deleteMany.mockReturnValue('delItemsOp');
+      prisma.cart.delete.mockReturnValue('delCartOp');
+      prisma.$transaction.mockResolvedValue([]);
+
+      await service.mergeGuestIntoUser('u1', 's1');
+      expect(prisma.cartItem.upsert).not.toHaveBeenCalled();
+      expect(prisma.$transaction).toHaveBeenCalledWith([
+        'delItemsOp',
+        'delCartOp',
+      ]);
     });
   });
 });

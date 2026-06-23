@@ -120,6 +120,69 @@ export class CartService {
     return { ...EMPTY_VIEW };
   }
 
+  /**
+   * Merge a guest's session cart into the user's cart on login (ARCHITECTURE
+   * §5.2). Quantities are summed per variant and capped at live stock; a guest
+   * line whose variant is no longer purchasable is dropped. The guest cart is
+   * deleted afterwards. The upserts + guest-cart deletion run in one transaction
+   * so a login never ends up with the items duplicated across both carts.
+   */
+  async mergeGuestIntoUser(
+    userId: string,
+    sessionId: string,
+  ): Promise<CartView> {
+    const guestCart = await this.prisma.cart.findUnique({
+      where: { sessionId },
+      include: { items: true },
+    });
+    if (!guestCart) {
+      return this.getView({ userId });
+    }
+    if (guestCart.items.length === 0) {
+      await this.prisma.cart.delete({ where: { id: guestCart.id } });
+      return this.getView({ userId });
+    }
+
+    const userCart = await this.getOrCreateCart({ userId });
+    const userItems = await this.prisma.cartItem.findMany({
+      where: { cartId: userCart.id },
+    });
+    const userQty = new Map(userItems.map((i) => [i.variantId, i.quantity]));
+
+    const variantIds = [...new Set(guestCart.items.map((i) => i.variantId))];
+    const purchasable = await this.variants.getPurchasableByIds(variantIds);
+    const stockById = new Map(purchasable.map((v) => [v.id, v.stockQty]));
+
+    const ops: Prisma.PrismaPromise<unknown>[] = [];
+    for (const item of guestCart.items) {
+      const stock = stockById.get(item.variantId);
+      if (stock === undefined || stock <= 0) continue; // dropped: not buyable
+      const combined = (userQty.get(item.variantId) ?? 0) + item.quantity;
+      const finalQty = Math.min(combined, stock);
+      ops.push(
+        this.prisma.cartItem.upsert({
+          where: {
+            cartId_variantId: { cartId: userCart.id, variantId: item.variantId },
+          },
+          create: {
+            cartId: userCart.id,
+            variantId: item.variantId,
+            quantity: finalQty,
+          },
+          update: { quantity: finalQty },
+        }),
+      );
+    }
+    // Remove the guest cart (items first — CartItem.cart has no cascade).
+    ops.push(
+      this.prisma.cartItem.deleteMany({ where: { cartId: guestCart.id } }),
+    );
+    ops.push(this.prisma.cart.delete({ where: { id: guestCart.id } }));
+
+    await this.prisma.$transaction(ops);
+    return this.viewForCart(userCart.id);
+  }
+
   // ---------------------------------------------------------------------------
   // Internal helpers
   // ---------------------------------------------------------------------------
