@@ -1,0 +1,48 @@
+// Flat ESLint config for the Next.js App Router frontend.
+//
+// We use @next/eslint-plugin-next directly instead of `eslint-config-next`:
+// in Next 15.5 that shareable config references `next/dist/compiled/babel/
+// eslint-parser`, which was removed from the `next` package — so loading it
+// throws. Next.js requires default exports for pages/layouts/middleware, so the
+// backend's "named exports only" rule deliberately does NOT apply here.
+import js from "@eslint/js";
+import nextPlugin from "@next/eslint-plugin-next";
+import globals from "globals";
+import tseslint from "typescript-eslint";
+import { fileURLToPath } from "url";
+import path from "path";
+
+// __dirname is not available in ESM — recreate it.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export default tseslint.config(
+  {
+    ignores: [".next/**", "node_modules/**", "next-env.d.ts"],
+  },
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
+  {
+    // Type-aware parsing only for TS sources — config files (.mjs/.js) live
+    // outside tsconfig, so applying `project` to them would error.
+    files: ["**/*.{ts,tsx}"],
+    languageOptions: {
+      parserOptions: {
+        project: "./tsconfig.json",
+        tsconfigRootDir: __dirname,
+      },
+    },
+  },
+  {
+    plugins: { "@next/next": nextPlugin },
+    rules: {
+      ...nextPlugin.configs.recommended.rules,
+      ...nextPlugin.configs["core-web-vitals"].rules,
+    },
+  },
+  {
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
+    },
+  },
+);

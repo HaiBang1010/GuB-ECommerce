@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+/* Light theme only — no dark mode (see ARCHITECTURE.md decision log). */
+:root {
+  color-scheme: light;
+}
+
+body {
+  background-color: #ffffff;
+  color: #111827;
+}
