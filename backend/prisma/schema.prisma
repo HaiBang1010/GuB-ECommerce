@@ -1,0 +1,470 @@
+// GuB — Prisma schema (modular monolith, schema-per-module)
+// ---------------------------------------------------------------------------
+// Conventions (see backend/ARCHITECTURE.md for rationale):
+//  - Money is stored as integer cents (Int). Never float/Decimal for prices.
+//  - Soft delete everywhere via `archivedAt DateTime?` — no hard deletes.
+//  - schema-per-module: each module owns one Postgres schema (@@schema).
+//  - Cross-module references are SCALAR IDs only (no @relation across schemas).
+//    Referential integrity across modules is enforced in application code via
+//    service interfaces, NOT by database foreign keys. Relations exist only
+//    WITHIN a single module's schema.
+//  - Reserved SQL words avoided in schema names: `ordering` (not "order"),
+//    `iam` (not "user"/"auth").
+// ---------------------------------------------------------------------------
+
+generator client {
+  provider = "prisma-client-js"
+  // multiSchema is GA since Prisma 6 — if you're on v6+, REMOVE "multiSchema" from
+  // this list (keeping it there errors out). On Prisma 4.7–5.x, keep it.
+  // postgresqlExtensions is still preview as of v6 → keep it for the pg_trgm extension.
+  previewFeatures = ["multiSchema", "postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pg_trgm]
+  schemas    = ["product", "iam", "cart", "ordering", "payment", "review", "notification", "chat", "voucher", "activity"]
+}
+
+// ===========================================================================
+// MODULE: product  (catalog)
+// ===========================================================================
+
+model Category {
+  id        String     @id @default(cuid())
+  nameVi    String
+  nameEn    String
+  slug      String     @unique
+  parentId  String?
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryTree")
+  products  Product[]
+  archivedAt DateTime?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([parentId])
+  @@schema("product")
+}
+
+model Product {
+  id             String              @id @default(cuid())
+  categoryId     String
+  category       Category            @relation(fields: [categoryId], references: [id])
+  nameVi         String
+  nameEn         String
+  slug           String              @unique
+  descriptionVi  String?
+  descriptionEn  String?
+  brand          String?
+  basePriceCents Int
+  salePriceCents Int? // null = not on sale
+  variants       ProductVariant[]
+  images         ProductImage[]
+  collections    ProductCollection[]
+  archivedAt     DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  // Full-text search: a `search_tsv tsvector` column + GIN index is added by a
+  // raw SQL migration (Prisma cannot express generated tsvector columns).
+  // pg_trgm is used for fuzzy slug/name matching. See ARCHITECTURE.md §Search.
+
+  @@index([categoryId])
+  @@schema("product")
+}
+
+model ProductVariant {
+  id         String    @id @default(cuid())
+  productId  String
+  product    Product   @relation(fields: [productId], references: [id])
+  sku        String    @unique
+  size       String // "42", "M", "L" ...
+  color      String
+  priceCents Int // variant-level price (overrides base if set per variant)
+  stockQty   Int       @default(0)
+  archivedAt DateTime?
+
+  @@unique([productId, size, color])
+  @@index([productId])
+  @@schema("product")
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  url       String
+  color     String? // image belongs to a color variant; null = generic
+  position  Int     @default(0)
+
+  @@index([productId])
+  @@schema("product")
+}
+
+model Collection {
+  id         String              @id @default(cuid())
+  nameVi     String
+  nameEn     String
+  slug       String              @unique
+  // A "season" is a Collection with a validity window (auto on/off).
+  validFrom  DateTime?
+  validTo    DateTime?
+  products   ProductCollection[]
+  archivedAt DateTime?
+  createdAt  DateTime            @default(now())
+
+  @@schema("product")
+}
+
+// n-n join between Product and Collection (both in `product` schema → real relation OK)
+model ProductCollection {
+  productId    String
+  collectionId String
+  product      Product    @relation(fields: [productId], references: [id])
+  collection   Collection @relation(fields: [collectionId], references: [id])
+  createdAt    DateTime   @default(now())
+
+  @@id([productId, collectionId])
+  @@schema("product")
+}
+
+// ===========================================================================
+// MODULE: iam  (auth / users — synced from Supabase Auth)
+// ===========================================================================
+
+enum Role {
+  CUSTOMER
+  ADMIN
+
+  @@schema("iam")
+}
+
+model User {
+  // `id` equals the Supabase Auth user UUID (set on first login upsert, no default).
+  id         String    @id
+  email      String    @unique
+  name       String?
+  role       Role      @default(CUSTOMER)
+  birthday   DateTime? // used by the birthday-voucher scheduled job
+  profile    Profile?
+  addresses  Address[]
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@schema("iam")
+}
+
+model Profile {
+  id           String @id @default(cuid())
+  userId       String @unique
+  user         User   @relation(fields: [userId], references: [id])
+  heightCm     Int?
+  weightKg     Int?
+  measurements Json? // { chest, waist, hip, ... } → rule-based size suggestion
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@schema("iam")
+}
+
+model Address {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  fullName   String
+  phone      String
+  line1      String
+  line2      String?
+  ward       String?
+  district   String?
+  city       String
+  country    String    @default("VN")
+  postalCode String?
+  isDefault  Boolean   @default(false)
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@schema("iam")
+}
+
+// ===========================================================================
+// MODULE: cart
+// ===========================================================================
+
+model Cart {
+  id        String     @id @default(cuid())
+  // Exactly one of userId / sessionId is set. Guest carts live mostly client-side
+  // (Zustand + localStorage); a server cart row is the source of truth after login.
+  userId    String?    @unique
+  sessionId String?    @unique
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@schema("cart")
+}
+
+model CartItem {
+  id        String @id @default(cuid())
+  cartId    String
+  cart      Cart   @relation(fields: [cartId], references: [id])
+  variantId String // cross-module → product.ProductVariant.id (scalar only, no relation)
+  quantity  Int
+
+  @@unique([cartId, variantId])
+  @@schema("cart")
+}
+
+// ===========================================================================
+// MODULE: ordering  (order)
+// ===========================================================================
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  PROCESSING
+  SHIPPED
+  DELIVERED // unlocks review permission
+  CANCELLED
+  REFUNDED
+
+  @@schema("ordering")
+}
+
+model Order {
+  id            String               @id @default(cuid())
+  userId        String // cross-module → iam.User.id (scalar)
+  status        OrderStatus          @default(PENDING_PAYMENT)
+  subtotalCents Int
+  discountCents Int                  @default(0)
+  totalCents    Int
+  // Voucher snapshot (code + id captured at checkout; cross-module scalar)
+  voucherId     String?
+  voucherCode   String?
+  // Address snapshot — full copy, NOT a foreign key, so the order is immutable
+  // even if the user later edits/deletes the address.
+  shippingAddress Json
+  items         OrderItem[]
+  statusHistory OrderStatusHistory[]
+  placedAt      DateTime?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@schema("ordering")
+}
+
+model OrderItem {
+  id             String @id @default(cuid())
+  orderId        String
+  order          Order  @relation(fields: [orderId], references: [id])
+  variantId      String // cross-module scalar → product.ProductVariant.id
+  productId      String // snapshot for convenience / review linkage
+  // Snapshots captured at purchase time (catalog may change later):
+  productNameVi  String
+  productNameEn  String
+  size           String
+  color          String
+  unitPriceCents Int // PRICE SNAPSHOT — never reference live variant price
+  quantity       Int
+
+  @@index([orderId])
+  @@schema("ordering")
+}
+
+model OrderStatusHistory {
+  id        String      @id @default(cuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id])
+  status    OrderStatus
+  note      String?
+  createdAt DateTime    @default(now())
+
+  @@index([orderId])
+  @@schema("ordering")
+}
+
+// ===========================================================================
+// MODULE: payment
+// ===========================================================================
+
+enum PaymentStatus {
+  REQUIRES_PAYMENT
+  SUCCEEDED
+  FAILED
+  REFUNDED
+
+  @@schema("payment")
+}
+
+model Payment {
+  id                    String        @id @default(cuid())
+  orderId               String // cross-module scalar → ordering.Order.id
+  stripePaymentIntentId String?       @unique
+  status                PaymentStatus @default(REQUIRES_PAYMENT)
+  amountCents           Int
+  idempotencyKey        String        @unique // prevents duplicate PaymentIntent creation
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@index([orderId])
+  @@schema("payment")
+}
+
+// Webhook idempotency ledger: a processed Stripe event is recorded here.
+// Handler checks this first → same event processed twice is a no-op.
+model StripeEvent {
+  id          String   @id // Stripe event id (evt_...)
+  type        String
+  processedAt DateTime @default(now())
+
+  @@schema("payment")
+}
+
+// ===========================================================================
+// MODULE: review
+// ===========================================================================
+
+model Review {
+  id           String    @id @default(cuid())
+  userId       String // cross-module scalar → iam.User.id
+  productId    String // cross-module scalar → product.Product.id
+  orderItemId  String    @unique // proof of purchase → ordering.OrderItem.id
+  rating       Int // 1..5 (CHECK constraint added via raw SQL migration)
+  body         String?
+  adminReply   String?
+  adminReplyAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // One review per (user, product); only allowed when the order is DELIVERED
+  // (enforced in the service layer).
+  @@unique([userId, productId])
+  @@index([productId])
+  @@schema("review")
+}
+
+// ===========================================================================
+// MODULE: notification
+// ===========================================================================
+
+enum Channel {
+  IN_APP
+  EMAIL
+  BOTH
+
+  @@schema("notification")
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String // cross-module scalar → iam.User.id
+  type      String // e.g. "ORDER_SHIPPED", "VOUCHER_GRANTED"
+  title     String
+  body      String
+  channel   Channel   @default(IN_APP)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+  @@schema("notification")
+}
+
+// ===========================================================================
+// MODULE: chat
+// ===========================================================================
+
+enum Sender {
+  USER
+  ADMIN
+
+  @@schema("chat")
+}
+
+model Conversation {
+  id            String        @id @default(cuid())
+  userId        String // cross-module scalar → iam.User.id (the customer)
+  lastMessageAt DateTime?
+  messages      ChatMessage[]
+  createdAt     DateTime      @default(now())
+
+  @@index([userId])
+  @@schema("chat")
+}
+
+model ChatMessage {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  sender         Sender
+  body           String
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+  @@schema("chat")
+}
+
+// ===========================================================================
+// MODULE: voucher  (promo)
+// ===========================================================================
+
+enum VoucherType {
+  PERCENT
+  FIXED
+
+  @@schema("voucher")
+}
+
+model Voucher {
+  id              String        @id @default(cuid())
+  code            String        @unique
+  type            VoucherType
+  value           Int // PERCENT: 0..100 ; FIXED: amount in cents
+  minOrderCents   Int?
+  maxDiscountCents Int? // cap for PERCENT vouchers
+  validFrom       DateTime?
+  validTo         DateTime?
+  usageLimit      Int? // global redemption cap
+  perUserLimit    Int?
+  usedCount       Int           @default(0)
+  userVouchers    UserVoucher[]
+  archivedAt      DateTime?
+  createdAt       DateTime      @default(now())
+
+  @@schema("voucher")
+}
+
+// Voucher wallet: vouchers granted to a specific user (e.g. birthday gift).
+model UserVoucher {
+  id        String    @id @default(cuid())
+  userId    String // cross-module scalar → iam.User.id
+  voucherId String
+  voucher   Voucher   @relation(fields: [voucherId], references: [id])
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@unique([userId, voucherId])
+  @@index([userId])
+  @@schema("voucher")
+}
+
+// ===========================================================================
+// MODULE: activity
+// ===========================================================================
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String? // null for anonymous; cross-module scalar → iam.User.id
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@schema("activity")
+}
