@@ -40,5 +40,18 @@
     "noAccount": "No account? Sign up",
     "haveAccount": "Have an account? Sign in",
     "submitting": "Processing..."
+  },
+  "cart": {
+    "title": "Cart",
+    "empty": "Your cart is empty",
+    "total": "Total",
+    "checkout": "Proceed to checkout",
+    "continueShopping": "Continue shopping",
+    "remove": "Remove",
+    "quantity": "Quantity",
+    "addedToCart": "Added to cart",
+    "error": "Couldn't load your cart.",
+    "increase": "Increase",
+    "decrease": "Decrease"
   }
 }

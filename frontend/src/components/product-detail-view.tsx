@@ -5,6 +5,8 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
 import { useProduct } from '@/hooks/use-product';
+import { useAddToCart } from '@/hooks/use-cart';
+import { useCartStore } from '@/stores/cart.store';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -36,6 +38,9 @@ export function ProductDetailView({ slug }: { slug: string }) {
 function DetailContent({ product }: { product: ProductDetail }) {
   const locale = useLocale();
   const t = useTranslations('product');
+  const tCart = useTranslations('cart');
+  const addToCart = useAddToCart();
+  const setSnapshot = useCartStore((s) => s.setSnapshot);
 
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
@@ -95,8 +100,15 @@ function DetailContent({ product }: { product: ProductDetail }) {
   }
 
   function handleAddToCart() {
-    // TODO: wire to the cart store in the auth/cart slice.
-    console.log('add', selectedVariant);
+    if (!selectedVariant) return;
+    // Cache display info for the cart page (the cart API returns no name/image).
+    setSnapshot(selectedVariant.id, {
+      nameVi: product.nameVi,
+      nameEn: product.nameEn,
+      slug: product.slug,
+      imageUrl: displayImages[0]?.url ?? null,
+    });
+    addToCart.mutate({ variantId: selectedVariant.id, quantity: 1 });
   }
 
   return (
@@ -213,12 +225,15 @@ function DetailContent({ product }: { product: ProductDetail }) {
         <Button
           type="button"
           size="lg"
-          disabled={!canAddToCart}
+          disabled={!canAddToCart || addToCart.isPending}
           onClick={handleAddToCart}
           className="w-full sm:w-auto"
         >
           {addToCartLabel}
         </Button>
+        {addToCart.isSuccess ? (
+          <p className="text-muted-foreground text-sm">{tCart('addedToCart')}</p>
+        ) : null}
 
         <Link
           href="/products"

@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth.store';
+import { useCartStore } from '@/stores/cart.store';
+import { mergeCart } from '@/lib/api/cart';
 
 // Client-only provider tree. The locale layout is a server component, so context
 // providers (TanStack Query) and the auth-session bridge live here.
@@ -45,10 +47,19 @@ export function Providers({ children }: { children: ReactNode }) {
       setLoading(false);
 
       if (event === 'SIGNED_IN') {
-        // TODO (slice 4): trigger cart merge (guest cart -> user cart)
+        // Fold the guest cart (X-Cart-Session) into the user cart, then start a
+        // fresh empty guest session. mergeCart no-ops when there's no guest cart,
+        // so a repeated SIGNED_IN (e.g. token refresh) is harmless.
+        void mergeCart()
+          .catch(() => undefined)
+          .finally(() => {
+            useCartStore.getState().resetSession();
+            void queryClient.invalidateQueries({ queryKey: ['cart'] });
+          });
       }
       if (event === 'SIGNED_OUT') {
-        // TODO (slice 4): clear the guest cart store
+        useCartStore.getState().clear();
+        void queryClient.invalidateQueries({ queryKey: ['cart'] });
       }
     });
 

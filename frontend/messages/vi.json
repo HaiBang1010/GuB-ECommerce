@@ -40,5 +40,18 @@
     "noAccount": "Chưa có tài khoản? Đăng ký",
     "haveAccount": "Đã có tài khoản? Đăng nhập",
     "submitting": "Đang xử lý..."
+  },
+  "cart": {
+    "title": "Giỏ hàng",
+    "empty": "Giỏ hàng trống",
+    "total": "Tổng cộng",
+    "checkout": "Thanh toán",
+    "continueShopping": "Tiếp tục mua sắm",
+    "remove": "Xóa",
+    "quantity": "Số lượng",
+    "addedToCart": "Đã thêm vào giỏ",
+    "error": "Không tải được giỏ hàng.",
+    "increase": "Tăng",
+    "decrease": "Giảm"
   }
 }
