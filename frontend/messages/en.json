@@ -8,5 +8,17 @@
     "empty": "No products yet.",
     "error": "Couldn't load products. Please try again.",
     "onSale": "Sale"
+  },
+  "product": {
+    "from": "From",
+    "addToCart": "Add to cart",
+    "outOfStock": "Out of stock",
+    "selectOptions": "Select options",
+    "onlyXLeft": "Only {count} left",
+    "backToProducts": "Back to products",
+    "error": "Could not load product.",
+    "brand": "Brand",
+    "color": "Color",
+    "size": "Size"
   }
 }

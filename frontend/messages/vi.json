@@ -8,5 +8,17 @@
     "empty": "Chưa có sản phẩm nào.",
     "error": "Không tải được sản phẩm. Vui lòng thử lại.",
     "onSale": "Giảm giá"
+  },
+  "product": {
+    "from": "Từ",
+    "addToCart": "Thêm vào giỏ",
+    "outOfStock": "Hết hàng",
+    "selectOptions": "Chọn phân loại",
+    "onlyXLeft": "Chỉ còn {count} sản phẩm",
+    "backToProducts": "Quay lại",
+    "error": "Không thể tải sản phẩm.",
+    "brand": "Thương hiệu",
+    "color": "Màu sắc",
+    "size": "Kích cỡ"
   }
 }
