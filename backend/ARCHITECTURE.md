@@ -83,10 +83,10 @@ updates order state by emitting an event / calling `order.service.markPaid()`.
 > **Known gap (Phase 2):** `OrderService.createFromCart` snapshots the cart's *currently purchasable* lines and **silently skips** any line whose variant has since been archived / hidden, instead of failing the checkout. The frontend must **warn the user that an item was dropped** before they confirm. **TODO — frontend phase.**
 
 ### 4.2 Stripe webhook (must be idempotent)
-- Verify the signature with `STRIPE_WEBHOOK_SECRET`.
-- Look up the event id in the `StripeEvent` ledger. If present → return `200` immediately (no-op).
-- Otherwise process, then insert the `StripeEvent` row in the **same transaction** as the state change.
-- The backend may be asleep when the webhook arrives → Stripe retries; the handler tolerates duplicates by design.
+- Verify the signature with `STRIPE_WEBHOOK_SECRET` (against the RAW body).
+- In ONE transaction, **INSERT the event id into the `StripeEvent` ledger FIRST**, then apply the effect (Payment → SUCCEEDED, Order → PAID). The unique `id` is the idempotency guard: a duplicate delivery hits `P2002` and the whole transaction is skipped → `200` no-op. A genuine failure rolls back (event NOT recorded) and 5xx-s so Stripe retries.
+- The backend may be asleep when the webhook arrives → Stripe retries; insert-first makes processing **exactly-once**.
+- **Verified e2e:** a re-sent `payment_intent.succeeded` left the order `PAID` once, no duplicated timeline, stock unchanged.
 
 ### 4.3 Atomic stock decrement
 ```sql
@@ -97,7 +97,7 @@ WHERE  "id" = $variantId AND "stockQty" >= $qty;
 ```
 Never read-then-write in separate statements (race window). Wrap the whole checkout in one transaction.
 
-> **Status (Phase 2): IMPLEMENTED.** Checkout decrements `stockQty` with the atomic `WHERE "stockQty" >= $qty` guard above, **inside the same transaction that creates the order** — `ProductVariantService.decrementForOrder(tx, …)` called from `OrderService.createFromCart`. 0 rows matched → `ConflictException` and the whole order rolls back (no oversell, no orphaned decrement). Stock is returned by `releaseForOrder(tx, …)` on cancel / expiry (§4.4). The chosen model is **atomic decrement**, not a time-boxed reservation table — so **no schema change was needed**.
+> **Status (Phase 2): IMPLEMENTED.** Checkout decrements `stockQty` with the atomic `WHERE "stockQty" >= $qty` guard above, **inside the same transaction that creates the order** — `ProductVariantService.decrementForOrder(tx, …)` called from `OrderService.createFromCart`. 0 rows matched → `ConflictException` and the whole order rolls back (no oversell, no orphaned decrement). Stock is returned by `releaseForOrder(tx, …)` on cancel / expiry (§4.4). The chosen model is **atomic decrement**, not a time-boxed reservation table — so **no schema change was needed**. **Verified e2e:** a real `quantity > stock` order was rejected and stock never went negative.
 
 ### 4.4 Stock release
 Triggered by: payment failure, order cancellation, or reservation expiry (cron). Re-increment `stockQty` for each line. Make it idempotent (don't double-release).
