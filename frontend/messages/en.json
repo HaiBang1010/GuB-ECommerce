@@ -20,5 +20,25 @@
     "brand": "Brand",
     "color": "Color",
     "size": "Size"
+  },
+  "auth": {
+    "login": "Sign in",
+    "signup": "Sign up",
+    "logout": "Sign out",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm password",
+    "magicLink": "Send magic link",
+    "magicLinkTab": "Magic link",
+    "passwordTab": "Password",
+    "checkEmail": "Check your email",
+    "emailConfirmation": "Please confirm your email before signing in",
+    "invalidCredentials": "Invalid email or password",
+    "passwordMismatch": "Passwords do not match",
+    "invalidEmail": "Invalid email",
+    "passwordTooShort": "Password must be at least 6 characters",
+    "noAccount": "No account? Sign up",
+    "haveAccount": "Have an account? Sign in",
+    "submitting": "Processing..."
   }
 }

@@ -3,7 +3,10 @@
 // The base URL comes from NEXT_PUBLIC_API_URL (set in .env.local); it falls back
 // to the local backend port (3001) so the app runs out of the box in dev. The
 // browser only ever talks to this backend — never directly to the DB/Stripe.
-// A later auth slice will attach `Authorization: Bearer <supabase-jwt>` here.
+// When a Supabase session exists (browser), the access token is attached as a
+// Bearer header so the backend's auth guards see the user.
+
+import { createClient } from '@/lib/supabase/client';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -20,13 +23,21 @@ export class ApiError extends Error {
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      ...init?.headers,
-    },
-  });
+  const headers = new Headers(init?.headers);
+  headers.set('Accept', 'application/json');
+
+  // Attach the Supabase access token when logged in (browser only). Public
+  // endpoints ignore it; guarded ones (cart, orders) need it.
+  if (typeof window !== 'undefined') {
+    const {
+      data: { session },
+    } = await createClient().auth.getSession();
+    if (session) {
+      headers.set('Authorization', `Bearer ${session.access_token}`);
+    }
+  }
+
+  const res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
 
   if (!res.ok) {
     const body: unknown = await res.json().catch(() => undefined);

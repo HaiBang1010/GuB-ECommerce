@@ -20,5 +20,25 @@
     "brand": "Thương hiệu",
     "color": "Màu sắc",
     "size": "Kích cỡ"
+  },
+  "auth": {
+    "login": "Đăng nhập",
+    "signup": "Đăng ký",
+    "logout": "Đăng xuất",
+    "email": "Email",
+    "password": "Mật khẩu",
+    "confirmPassword": "Xác nhận mật khẩu",
+    "magicLink": "Gửi link đăng nhập",
+    "magicLinkTab": "Magic link",
+    "passwordTab": "Mật khẩu",
+    "checkEmail": "Kiểm tra email của bạn",
+    "emailConfirmation": "Vui lòng xác nhận email trước khi đăng nhập",
+    "invalidCredentials": "Email hoặc mật khẩu không đúng",
+    "passwordMismatch": "Mật khẩu không khớp",
+    "invalidEmail": "Email không hợp lệ",
+    "passwordTooShort": "Mật khẩu tối thiểu 6 ký tự",
+    "noAccount": "Chưa có tài khoản? Đăng ký",
+    "haveAccount": "Đã có tài khoản? Đăng nhập",
+    "submitting": "Đang xử lý..."
   }
 }

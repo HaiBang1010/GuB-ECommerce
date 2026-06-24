@@ -5,6 +5,7 @@ import { setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { Providers } from "@/app/providers";
+import { Header } from "@/components/header";
 import "../globals.css";
 
 export const metadata: Metadata = {
@@ -36,7 +37,10 @@ export default async function LocaleLayout({
     <html lang={locale} suppressHydrationWarning>
       <body>
         <NextIntlClientProvider>
-          <Providers>{children}</Providers>
+          <Providers>
+            <Header />
+            {children}
+          </Providers>
         </NextIntlClientProvider>
       </body>
     </html>
