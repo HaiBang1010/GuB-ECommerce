@@ -5,9 +5,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { OrderService } from '../order/order.service';
 import { StripeService } from './stripe.service';
 
-// Order amounts are stored as integer cents; 'usd' keeps that 1:1. Override via
-// env if the store settles in another currency.
-const CURRENCY = process.env.STRIPE_CURRENCY ?? 'usd';
+// Currency is LOCKED to USD on purpose — no env override. Stripe `amount` is in
+// the currency's MINOR unit; for USD (a 2-decimal currency) that unit is the
+// cent, so passing order.totalCents (already integer cents) 1:1 is correct.
+// A ZERO-DECIMAL currency (VND, JPY, ...) treats `amount` as whole units, so the
+// same totalCents would overcharge by 100x. Switching currency must therefore be
+// a deliberate code change that also converts away from the cents assumption —
+// not a config flip.
+const CURRENCY = 'usd';
 
 export interface PaymentIntentResult {
   clientSecret: string;
@@ -47,6 +52,9 @@ export class PaymentService {
       return this.toResult(intent, existing.id);
     }
 
+    // TODO (real checkout): guard a minimum amount. Stripe rejects very small
+    // amounts (~$0.50 / 50 cents for USD), so an order total below that will fail
+    // here at PaymentIntent creation — add a min-amount check before this point.
     const idempotencyKey = `order_${orderId}`;
     const intent = await this.stripe.createPaymentIntent({
       amountCents: order.totalCents,
