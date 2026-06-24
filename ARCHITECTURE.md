@@ -56,7 +56,7 @@ pg_cron (Supabase) / cron-job.org ── scheduled jobs (birthday vouchers, cart
 
 **Frontend (Vercel):** Next.js App Router · TypeScript · Tailwind · shadcn/ui · react-hook-form + zod · TanStack Query · Zustand (guest cart) · next-intl (vi/en) · Recharts · Vercel Web Analytics.
 
-**Backend (Render/Koyeb):** NestJS · Prisma · PostgreSQL · class-validator + zod · Supabase JWT verification · Postgres full-text + `pg_trgm`.
+**Backend (Render/Koyeb):** NestJS · Prisma · PostgreSQL · class-validator + zod · Supabase JWT verification · Postgres full-text + `pg_trgm` · OpenAPI/Swagger (`/docs`, codegen-ready).
 
 | Concern | Service | Free-tier note |
 |---|---|---|
@@ -174,7 +174,7 @@ Principle: **get the purchase flow (Phase 0→2) working first**, layer engageme
 0. **Foundation** — **DONE** (CI skipped on purpose · deploy deferred). monorepo (npm workspaces), NestJS + Next.js skeleton, `GET /health`, Prisma **init migration applied on local Postgres (Docker)**, i18n (vi/en) scaffold. Deferred for later: Neon, Supabase Auth (→ Phase 2), keep-alive (UptimeRobot), and the "hello world" deploy.
 1. **Catalog** — **DONE.** **Category · Product · ProductVariant · Collection · ProductImage** slices — admin CRUD + cascade/season-window archive, storefront reads, size×color variant matrix (per-variant `stockQty` + unique `sku`), n-n Collection membership with season window, by-color images via **Cloudinary signed direct upload** (delivery-time URL transforms, no backend image processing), and **full-text + fuzzy search** — generated `search_tsv` via a `simple`+`unaccent` text-search config (`product.gub_vn`), GIN index + `pg_trgm` typo tolerance, accent-insensitive `searchActive` on `GET /products?search=`. Temporary AdminGuard; jest specs throughout (incl. a DB-backed search integration spec). Cross-slice validation goes through in-process service calls (no cross-table queries). (No login required.)
 2. **Cart + Auth + Checkout** *(hardest)* — **BACKEND CODE-COMPLETE · NOT yet verified end-to-end.**
-   Done (backend, unit-tested + DI boot smoke test): Supabase JWT auth + first-login `User`/`Profile` upsert, real `RoleGuard` (catalog admin re-gated), address book, server-side cart (guest `sessionId` + user) with merge-on-login, checkout with **atomic stock decrement** + release, Stripe PaymentIntent + idempotent webhook (`StripeEvent` ledger), admin order-status timeline, and the `release-expired` job endpoint.
+   Done (backend, unit-tested + DI boot smoke test): Supabase JWT auth + first-login `User`/`Profile` upsert, real `RoleGuard` (catalog admin re-gated), address book, server-side cart (guest `sessionId` + user) with merge-on-login, checkout with **atomic stock decrement** + release, Stripe PaymentIntent + idempotent webhook (`StripeEvent` ledger), admin order-status timeline, the `release-expired` job endpoint, and **OpenAPI/Swagger docs at `GET /docs`** (full request + response schemas, codegen-ready via `/docs-json`).
    **Still required before this counts as truly done:** a real `SUPABASE_URL` (JWKS), Stripe live test-mode keys + `stripe listen`, an integration test run against a **real Postgres**, and at least one `Role.ADMIN` user to exercise admin routes.
    **Not started:** the entire frontend (cart/checkout UI, Stripe.js). Deferred to Phase 4: refund / admin-cancel of a PAID order, voucher discount at checkout.
 3. **Post-purchase** — order timeline, notifications (in-app + email via queue), reviews (purchased-only) + admin reply.

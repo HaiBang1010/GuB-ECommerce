@@ -75,7 +75,7 @@ updates order state by emitting an event / calling `order.service.markPaid()`.
 1. `order.service` reads the cart and validates each line against `product.service` (active variant, enough stock).
 2. **Reserve stock atomically** — see 4.3. Either decrement now inside a transaction, or create a time-boxed reservation that a cron releases on expiry.
 3. **Snapshot** prices and product fields into `OrderItem` (`unitPriceCents`, `productNameVi/En`, `size`, `color`) and the address into `Order.shippingAddress`. Snapshot the voucher (`voucherCode`, `voucherId`, `discountCents`).
-4. `payment.service` creates a Stripe PaymentIntent with an `idempotencyKey`; order is `PENDING_PAYMENT`.
+4. `payment.service` creates a Stripe PaymentIntent (`amount` = `order.totalCents`; **currency hard-locked to `usd`** — cents map 1:1 only for 2-decimal currencies, a zero-decimal one like VND/JPY would need conversion) with an `idempotencyKey`; order is `PENDING_PAYMENT`.
 5. Return the `clientSecret` to the frontend; the browser confirms payment.
 6. Stripe webhook `payment_intent.succeeded` → order becomes `PAID`, append `OrderStatusHistory`, emit a notification event.
 7. On payment failure / reservation timeout → **release stock** (4.4).
@@ -209,3 +209,22 @@ minutes to keep the Render instance awake. (Keep-alive is UptimeRobot, **not** G
 - Stripe secret key, Supabase service-role key, `ADMIN_API_SECRET`, `CLOUDINARY_API_SECRET`, and `DATABASE_URL` live only in backend env — never sent to the browser. Image uploads are signed server-side so the Cloudinary secret never reaches the client (§4.6).
 - Rate-limit review and chat write endpoints to mitigate spam.
 - Never log card data or secrets.
+
+## 9. API documentation (OpenAPI)
+
+- **Swagger UI** at `GET /docs`, raw document at `GET /docs-json`. Set up in
+  `main.ts` after CORS + ValidationPipe; documents only — it does **not** alter
+  the webhook's raw-body parsing. Gated: enabled unless `NODE_ENV==='production'`,
+  or forced on with `SWAGGER_ENABLED=true` (off in prod by default; flip it for a
+  portfolio demo).
+- **Auth schemes:** `bearer` (Supabase JWT, most routes) + the `admin-secret`
+  api-key (`x-admin-secret`, for `/admin/jobs/*`). The Authorize box drives both.
+- **No `@nestjs/swagger` CLI plugin** (keeps the build unchanged) → schemas come
+  from EXPLICIT decorators: controllers carry `@ApiTags`/`@ApiOperation`/
+  `@ApiResponse` (`@ApiOkResponse`/`@ApiCreatedResponse` + 400/401/403/404/204);
+  request DTOs carry `@ApiProperty`/`@ApiPropertyOptional` with realistic
+  examples; every entity has a `*-response.dto.ts` so each endpoint returns a real
+  type, never `any`. Money examples are USD cents (`1200` = $12.00).
+- **Codegen-ready:** `npx openapi-typescript <…>/docs-json` yields typed clients
+  (verified: 0 `any`, enums as unions). Annotate every new endpoint the same way
+  so the contract stays complete.

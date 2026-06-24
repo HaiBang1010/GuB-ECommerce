@@ -35,3 +35,6 @@
 
 ## Health
 - `GET /health` is a lightweight endpoint — **does NOT query the DB** (UptimeRobot pings it to keep Render awake).
+
+## API docs (OpenAPI)
+- Every endpoint is documented via `@nestjs/swagger` (no CLI plugin): controllers get `@ApiTags`/`@ApiOperation`/`@ApiResponse`; request DTOs get `@ApiProperty(+example)`; each entity has a `*-response.dto.ts` so no endpoint serializes to `any`. Keep new endpoints annotated — the doc at `GET /docs` (`/docs-json`) is the frontend's type source. See `ARCHITECTURE.md` §9.
