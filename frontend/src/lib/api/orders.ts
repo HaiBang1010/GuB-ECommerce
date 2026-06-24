@@ -3,6 +3,9 @@ import type { components } from '@/lib/api/schema';
 
 export type Order = components['schemas']['OrderResponseDto'];
 export type OrderItem = components['schemas']['OrderItemDto'];
+export type OrderStatusHistory =
+  components['schemas']['OrderStatusHistoryDto'];
+export type OrderStatus = Order['status'];
 export type PaymentIntentResult =
   components['schemas']['PaymentIntentResponseDto'];
 
@@ -27,7 +30,12 @@ export function createPaymentIntent(
   });
 }
 
-// GET /orders/:id — one of the user's orders.
+// GET /orders/:id — one of the user's orders (includes items + statusHistory).
 export function getOrder(id: string): Promise<Order> {
   return apiFetch<Order>(`/orders/${encodeURIComponent(id)}`);
+}
+
+// GET /orders — the current user's order history (bare array).
+export function getMyOrders(): Promise<Order[]> {
+  return apiFetch<Order[]>('/orders');
 }

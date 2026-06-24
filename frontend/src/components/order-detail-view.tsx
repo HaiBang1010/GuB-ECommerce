@@ -1,0 +1,156 @@
+'use client';
+
+import { useLocale, useTranslations } from 'next-intl';
+
+import { Link } from '@/i18n/navigation';
+import { useOrder } from '@/hooks/use-orders';
+import { OrderStatusBadge } from '@/components/order-status-badge';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
+import { formatPriceCents } from '@/lib/money';
+import { formatDate, formatDateTime } from '@/lib/datetime';
+
+export function OrderDetailView({ orderId }: { orderId: string }) {
+  const t = useTranslations('order');
+  const locale = useLocale();
+  const order = useOrder(orderId);
+
+  if (order.isPending) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-8">
+        <Skeleton className="h-8 w-48" />
+      </main>
+    );
+  }
+
+  if (order.isError) {
+    return (
+      <main className="mx-auto flex max-w-3xl flex-col items-start gap-4 px-4 py-8">
+        <p className="text-destructive">{t('error')}</p>
+        <Button asChild variant="outline">
+          <Link href="/orders">{t('back')}</Link>
+        </Button>
+      </main>
+    );
+  }
+
+  const o = order.data;
+  const addr = o.shippingAddress;
+  // Chronological order for the timeline; the last entry is the current status.
+  const history = [...o.statusHistory].sort((a, b) =>
+    a.createdAt.localeCompare(b.createdAt),
+  );
+  const addrLine = [
+    addr.line1,
+    addr.line2,
+    addr.ward,
+    addr.district,
+    addr.city,
+    addr.country,
+  ]
+    .filter(Boolean)
+    .join(', ');
+
+  return (
+    <main className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8">
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-2xl font-semibold">#{o.id.slice(-8)}</h1>
+        <OrderStatusBadge status={o.status} />
+      </div>
+      <p className="text-muted-foreground text-sm">
+        {t('orderDate')}: {formatDate(o.createdAt, locale)}
+      </p>
+
+      {/* Shipping address (snapshot) */}
+      <section className="flex flex-col gap-1">
+        <h2 className="font-medium">{t('shippingAddress')}</h2>
+        <p className="text-muted-foreground text-sm">
+          {addr.fullName} · {addr.phone}
+        </p>
+        <p className="text-muted-foreground text-sm">{addrLine}</p>
+      </section>
+
+      {/* Line items (names from the order snapshot, not live catalog) */}
+      <section className="flex flex-col">
+        {o.items.map((item) => (
+          <div
+            key={item.id}
+            className="flex justify-between gap-2 border-b py-2 text-sm"
+          >
+            <div>
+              <div>
+                {locale === 'vi' ? item.productNameVi : item.productNameEn}
+              </div>
+              <div className="text-muted-foreground text-xs">
+                {item.size}/{item.color} ·{' '}
+                {formatPriceCents(item.unitPriceCents)} × {item.quantity}
+              </div>
+            </div>
+            <span className="font-medium">
+              {formatPriceCents(item.unitPriceCents * item.quantity)}
+            </span>
+          </div>
+        ))}
+        <div className="mt-3 flex flex-col gap-1 text-sm">
+          <div className="flex justify-between">
+            <span>{t('subtotal')}</span>
+            <span>{formatPriceCents(o.subtotalCents)}</span>
+          </div>
+          {o.discountCents > 0 ? (
+            <div className="flex justify-between">
+              <span>{t('discount')}</span>
+              <span>-{formatPriceCents(o.discountCents)}</span>
+            </div>
+          ) : null}
+          <div className="flex justify-between text-base font-semibold">
+            <span>{t('total')}</span>
+            <span>{formatPriceCents(o.totalCents)}</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Status timeline */}
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">{t('timeline')}</h2>
+        <ol className="flex flex-col gap-3">
+          {history.map((h, i) => {
+            const isCurrent = i === history.length - 1;
+            return (
+              <li
+                key={h.id}
+                className={cn(
+                  'flex flex-col gap-1 border-l-2 pl-3',
+                  isCurrent ? 'border-primary' : 'border-muted',
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <OrderStatusBadge status={h.status} />
+                  <span className="text-muted-foreground text-xs">
+                    {formatDateTime(h.createdAt, locale)}
+                  </span>
+                </div>
+                {h.note ? (
+                  <span className={cn('text-sm', isCurrent && 'font-medium')}>
+                    {h.note}
+                  </span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ol>
+      </section>
+
+      {/* Reviews land in Phase 3 — disabled hint only */}
+      {o.status === 'DELIVERED' ? (
+        <Button variant="outline" size="sm" disabled className="self-start">
+          {t('leaveReview')}
+        </Button>
+      ) : null}
+
+      <Button asChild variant="ghost" size="sm" className="self-start">
+        <Link href="/orders">{t('back')}</Link>
+      </Button>
+    </main>
+  );
+}

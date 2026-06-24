@@ -83,6 +83,27 @@
     "orderId": "Order ID",
     "total": "Total",
     "viewOrders": "View my orders",
-    "continueShopping": "Continue shopping"
+    "continueShopping": "Continue shopping",
+    "myOrders": "My orders",
+    "noOrders": "You have no orders yet",
+    "orderDate": "Order date",
+    "items": "{count} items",
+    "viewDetail": "View detail",
+    "shippingAddress": "Shipping address",
+    "timeline": "Status timeline",
+    "leaveReview": "Leave a review (coming soon)",
+    "subtotal": "Subtotal",
+    "discount": "Discount",
+    "error": "Couldn't load your orders",
+    "back": "Back to orders",
+    "status": {
+      "PENDING_PAYMENT": "Pending payment",
+      "PAID": "Paid",
+      "PROCESSING": "Processing",
+      "SHIPPED": "Shipped",
+      "DELIVERED": "Delivered",
+      "CANCELLED": "Cancelled",
+      "REFUNDED": "Refunded"
+    }
   }
 }

@@ -83,6 +83,27 @@
     "orderId": "Mã đơn hàng",
     "total": "Tổng cộng",
     "viewOrders": "Xem đơn hàng của tôi",
-    "continueShopping": "Tiếp tục mua sắm"
+    "continueShopping": "Tiếp tục mua sắm",
+    "myOrders": "Đơn hàng của tôi",
+    "noOrders": "Bạn chưa có đơn hàng nào",
+    "orderDate": "Ngày đặt",
+    "items": "{count} sản phẩm",
+    "viewDetail": "Xem chi tiết",
+    "shippingAddress": "Địa chỉ giao hàng",
+    "timeline": "Lịch sử trạng thái",
+    "leaveReview": "Viết đánh giá (sắp có)",
+    "subtotal": "Tạm tính",
+    "discount": "Giảm giá",
+    "error": "Không tải được đơn hàng",
+    "back": "Quay lại danh sách",
+    "status": {
+      "PENDING_PAYMENT": "Chờ thanh toán",
+      "PAID": "Đã thanh toán",
+      "PROCESSING": "Đang xử lý",
+      "SHIPPED": "Đang giao",
+      "DELIVERED": "Đã giao",
+      "CANCELLED": "Đã hủy",
+      "REFUNDED": "Đã hoàn tiền"
+    }
   }
 }

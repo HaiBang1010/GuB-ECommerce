@@ -1,10 +1,22 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 
+import { useAuthStore } from '@/stores/auth.store';
 import {
   createOrder,
   createPaymentIntent,
+  getMyOrders,
   getOrder,
 } from '@/lib/api/orders';
+
+// The current user's order history (newest first handled in the view).
+export function useMyOrders() {
+  const authLoading = useAuthStore((s) => s.isLoading);
+  return useQuery({
+    queryKey: ['orders'],
+    queryFn: getMyOrders,
+    enabled: !authLoading,
+  });
+}
 
 // The backend splits create-order and create-payment-intent, so chain them:
 // POST /orders -> POST /payments/intent. Returns the order + Stripe clientSecret.
