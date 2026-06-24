@@ -9,11 +9,24 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
 import { AuthenticatedUser } from '../../common/auth/authenticated-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { SupabaseAuthGuard } from '../iam/auth/supabase-auth.guard';
 import { CreateIntentDto } from './dto/create-intent.dto';
+import {
+  PaymentIntentResponseDto,
+  WebhookResponseDto,
+} from './dto/payment-response.dto';
 import { PaymentIntentResult, PaymentService } from './payment.service';
 
 // Minimal shape of the request after `rawBody: true` — the raw Buffer is what
@@ -30,6 +43,10 @@ export class PaymentController {
   // Signed-in user starts payment for their own order.
   @ApiOperation({ summary: 'Create/reuse a Stripe PaymentIntent for an order' })
   @ApiBearerAuth()
+  @ApiCreatedResponse({ type: PaymentIntentResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid token.' })
+  @ApiBadRequestResponse({ description: 'Order is not awaiting payment.' })
+  @ApiNotFoundResponse({ description: 'Order not found.' })
   @UseGuards(SupabaseAuthGuard)
   @Post('intent')
   @HttpCode(HttpStatus.CREATED)
@@ -46,6 +63,8 @@ export class PaymentController {
   @ApiOperation({
     summary: 'Stripe webhook (signature-verified, raw body — not JWT-guarded)',
   })
+  @ApiOkResponse({ type: WebhookResponseDto })
+  @ApiBadRequestResponse({ description: 'Missing body or invalid signature.' })
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
   webhook(

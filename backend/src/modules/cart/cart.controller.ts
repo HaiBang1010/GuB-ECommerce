@@ -10,10 +10,18 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { OptionalSupabaseAuthGuard } from '../iam/auth/optional-supabase-auth.guard';
 import { CurrentCartOwner } from './cart-owner.decorator';
 import { CartOwner, CartService, CartView } from './cart.service';
+import { CartViewDto } from './dto/cart-response.dto';
 import { AddCartItemDto } from './dto/add-cart-item.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
 
@@ -22,6 +30,9 @@ import { UpdateCartItemDto } from './dto/update-cart-item.dto';
 // owner is resolved from the X-Cart-Session header (see CurrentCartOwner).
 @ApiTags('cart')
 @ApiBearerAuth()
+@ApiBadRequestResponse({
+  description: 'Missing X-Cart-Session header (guest) or invalid body.',
+})
 @UseGuards(OptionalSupabaseAuthGuard)
 @Controller('cart')
 export class CartController {
@@ -32,6 +43,7 @@ export class CartController {
     description:
       'Works without auth for guests — send an X-Cart-Session header instead of a Bearer token.',
   })
+  @ApiOkResponse({ type: CartViewDto })
   @Get()
   get(@CurrentCartOwner() owner: CartOwner): Promise<CartView> {
     return this.cartService.getView(owner);
@@ -42,6 +54,7 @@ export class CartController {
     description:
       'Works without auth for guests — send an X-Cart-Session header instead of a Bearer token.',
   })
+  @ApiOkResponse({ type: CartViewDto })
   @Post('items')
   @HttpCode(HttpStatus.OK)
   add(
@@ -51,6 +64,9 @@ export class CartController {
     return this.cartService.addItem(owner, dto.variantId, dto.quantity);
   }
 
+  @ApiOperation({ summary: 'Set an item quantity' })
+  @ApiOkResponse({ type: CartViewDto })
+  @ApiNotFoundResponse({ description: 'Item is not in the cart.' })
   @Patch('items/:variantId')
   update(
     @CurrentCartOwner() owner: CartOwner,
@@ -60,6 +76,8 @@ export class CartController {
     return this.cartService.updateItem(owner, variantId, dto.quantity);
   }
 
+  @ApiOperation({ summary: 'Remove an item from the cart' })
+  @ApiOkResponse({ type: CartViewDto })
   @Delete('items/:variantId')
   @HttpCode(HttpStatus.OK)
   remove(
@@ -69,6 +87,8 @@ export class CartController {
     return this.cartService.removeItem(owner, variantId);
   }
 
+  @ApiOperation({ summary: 'Clear the cart' })
+  @ApiOkResponse({ type: CartViewDto })
   @Delete()
   @HttpCode(HttpStatus.OK)
   clear(@CurrentCartOwner() owner: CartOwner): Promise<CartView> {

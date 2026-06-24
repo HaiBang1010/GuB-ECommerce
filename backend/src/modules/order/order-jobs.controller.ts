@@ -6,9 +6,17 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBadRequestResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiSecurity,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { ReleaseExpiredDto } from './dto/release-expired.dto';
+import { ReleaseExpiredResultDto } from './dto/order-response.dto';
 import { OrderService } from './order.service';
 
 /**
@@ -19,6 +27,7 @@ import { OrderService } from './order.service';
  */
 @ApiTags('jobs')
 @ApiSecurity('admin-secret')
+@ApiUnauthorizedResponse({ description: 'Missing or invalid x-admin-secret header.' })
 @UseGuards(AdminGuard)
 @Controller('admin/jobs')
 export class OrderJobsController {
@@ -27,6 +36,8 @@ export class OrderJobsController {
   @ApiOperation({
     summary: 'Release stock of expired unpaid orders (UptimeRobot cron)',
   })
+  @ApiOkResponse({ type: ReleaseExpiredResultDto })
+  @ApiBadRequestResponse({ description: 'Validation failed.' })
   @Post('release-expired')
   @HttpCode(HttpStatus.OK)
   releaseExpired(
