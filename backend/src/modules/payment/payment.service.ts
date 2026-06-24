@@ -16,7 +16,9 @@ const CURRENCY = 'usd';
 
 export interface PaymentIntentResult {
   clientSecret: string;
-  paymentId: string;
+  // The GuB Payment record id (cuid) — NOT the Stripe pi_ id. The pi_ id stays
+  // server-side (Payment.stripePaymentIntentId) for reconciliation.
+  paymentRecordId: string;
 }
 
 @Injectable()
@@ -119,6 +121,9 @@ export class PaymentService {
     switch (event.type) {
       case 'payment_intent.succeeded': {
         const intent = event.data.object as Stripe.PaymentIntent;
+        // TODO: order is resolved via stripePaymentIntentId; metadata.orderId
+        // (set at PaymentIntent creation) is currently unused — consider it as a
+        // fallback if this lookup misses, or drop it to keep things lean.
         const payment = await tx.payment.findUnique({
           where: { stripePaymentIntentId: intent.id },
         });
@@ -154,11 +159,11 @@ export class PaymentService {
 
   private toResult(
     intent: Stripe.PaymentIntent,
-    paymentId: string,
+    paymentRecordId: string,
   ): PaymentIntentResult {
     if (!intent.client_secret) {
       throw new BadRequestException('Payment intent has no client secret.');
     }
-    return { clientSecret: intent.client_secret, paymentId };
+    return { clientSecret: intent.client_secret, paymentRecordId };
   }
 }

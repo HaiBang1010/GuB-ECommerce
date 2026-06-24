@@ -68,7 +68,7 @@ describe('PaymentService', () => {
 
       await expect(service.createIntentForOrder('u1', 'o1')).resolves.toEqual({
         clientSecret: 'cs_existing',
-        paymentId: 'pay1',
+        paymentRecordId: 'pay1',
       });
       expect(stripe.createPaymentIntent).not.toHaveBeenCalled();
     });
@@ -94,7 +94,7 @@ describe('PaymentService', () => {
           metadata: { orderId: 'o1' },
         }),
       );
-      expect(result).toEqual({ clientSecret: 'cs_new', paymentId: 'pay2' });
+      expect(result).toEqual({ clientSecret: 'cs_new', paymentRecordId: 'pay2' });
     });
   });
 

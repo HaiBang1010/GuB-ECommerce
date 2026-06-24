@@ -7,8 +7,11 @@ export class PaymentIntentResponseDto {
   })
   clientSecret!: string;
 
-  @ApiProperty({ example: 'clx1a2b3c4d5e6f7g8h9pay01' })
-  paymentId!: string;
+  @ApiProperty({
+    example: 'clx1a2b3c4d5e6f7g8h9pay01',
+    description: 'GuB Payment record id (cuid) — NOT the Stripe pi_ id.',
+  })
+  paymentRecordId!: string;
 }
 
 export class WebhookResponseDto {
