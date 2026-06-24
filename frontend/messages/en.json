@@ -1,5 +1,12 @@
 {
   "Home": {
-    "title": "Welcome to GuB"
+    "title": "Welcome to GuB",
+    "browse": "Browse products"
+  },
+  "Products": {
+    "title": "Products",
+    "empty": "No products yet.",
+    "error": "Couldn't load products. Please try again.",
+    "onSale": "Sale"
   }
 }

@@ -1,5 +1,12 @@
 {
   "Home": {
-    "title": "Chào mừng đến với GuB"
+    "title": "Chào mừng đến với GuB",
+    "browse": "Xem sản phẩm"
+  },
+  "Products": {
+    "title": "Sản phẩm",
+    "empty": "Chưa có sản phẩm nào.",
+    "error": "Không tải được sản phẩm. Vui lòng thử lại.",
+    "onSale": "Giảm giá"
   }
 }
