@@ -18,7 +18,7 @@ data model lives in [`prisma/schema.prisma`](./prisma/schema.prisma) and is docu
 
 ```
 src/modules/
-├── auth/          verify Supabase JWT, upsert User/Profile, RoleGuard            → schema: iam
+├── iam/           Supabase JWT guards, User/Profile upsert, RoleGuard, addresses → schema: iam
 ├── product/       Category, Product, Variant, Image, Collection/Tag, search      → schema: product
 ├── cart/          Cart/CartItem, guest-cart merge                                → schema: cart
 ├── order/         Order, OrderItem, OrderStatusHistory, stock reserve/release    → schema: ordering
@@ -80,6 +80,8 @@ updates order state by emitting an event / calling `order.service.markPaid()`.
 6. Stripe webhook `payment_intent.succeeded` → order becomes `PAID`, append `OrderStatusHistory`, emit a notification event.
 7. On payment failure / reservation timeout → **release stock** (4.4).
 
+> **Known gap (Phase 2):** `OrderService.createFromCart` snapshots the cart's *currently purchasable* lines and **silently skips** any line whose variant has since been archived / hidden, instead of failing the checkout. The frontend must **warn the user that an item was dropped** before they confirm. **TODO — frontend phase.**
+
 ### 4.2 Stripe webhook (must be idempotent)
 - Verify the signature with `STRIPE_WEBHOOK_SECRET`.
 - Look up the event id in the `StripeEvent` ledger. If present → return `200` immediately (no-op).
@@ -95,7 +97,7 @@ WHERE  "id" = $variantId AND "stockQty" >= $qty;
 ```
 Never read-then-write in separate statements (race window). Wrap the whole checkout in one transaction.
 
-> **Status (Phase 1):** `ProductVariant.stockQty` is a plain integer with **no concurrency control yet** — the variant slice only does ordinary reads/writes. The atomic decrement / time-boxed reservation above is **NOT implemented**; **Phase 2 (cart/checkout) must add it** before real checkout, otherwise concurrent buyers can oversell the last unit.
+> **Status (Phase 2): IMPLEMENTED.** Checkout decrements `stockQty` with the atomic `WHERE "stockQty" >= $qty` guard above, **inside the same transaction that creates the order** — `ProductVariantService.decrementForOrder(tx, …)` called from `OrderService.createFromCart`. 0 rows matched → `ConflictException` and the whole order rolls back (no oversell, no orphaned decrement). Stock is returned by `releaseForOrder(tx, …)` on cancel / expiry (§4.4). The chosen model is **atomic decrement**, not a time-boxed reservation table — so **no schema change was needed**.
 
 ### 4.4 Stock release
 Triggered by: payment failure, order cancellation, or reservation expiry (cron). Re-increment `stockQty` for each line. Make it idempotent (don't double-release).
@@ -154,7 +156,7 @@ preview feature; each model carries `@@schema("<module>")`.
 | `Order.userId → User`, `OrderItem.variantId → ProductVariant`, `Review.productId → Product`, `Payment.orderId → Order`, `Notification.userId → User`, … | **scalar id, no relation** | crosses module boundary → resolved via service calls, integrity enforced in code |
 
 ### 5.4 Notable constraints
-- `ProductVariant`: `@@unique([productId, size, color])` and unique `sku`. `stockQty` is the per-variant inventory — **no atomic guard yet** (see §4.3 status note).
+- `ProductVariant`: `@@unique([productId, size, color])` and unique `sku`. `stockQty` is the per-variant inventory, guarded by an **atomic decrement at checkout** (Phase 2 — see §4.3).
 - `ProductImage`: unique `publicId` (Cloudinary asset id), added by migration `20260623151010_add_product_image_public_id`; the row stores both the delivery `url` and the `publicId` used to delete the remote asset. Nullable `color` ties an image to a variant color (`null` = generic).
 - `Review`: `@@unique([userId, productId])` (one review per product per user) + unique `orderItemId` (proof of purchase). The "order must be `DELIVERED`" rule is enforced in the service.
 - `Payment`: unique `idempotencyKey` (no duplicate PaymentIntent) and unique `stripePaymentIntentId`.
@@ -189,10 +191,10 @@ description=C) with a GIN index, plus two `pg_trgm` GIN indexes on **accent-fold
 
 ## 6. Cron / scheduled jobs
 
-Jobs: birthday vouchers, abandoned-cart cleanup, stock-reservation expiry.
-- **Primary: `pg_cron` (Supabase)** — runs inside the DB, independent of Render's sleep state.
-- **Alternative: UptimeRobot / cron-job.org** hitting `POST /admin/jobs/*` with a secret header (`ADMIN_JOB_SECRET`).
-- Every job must be **idempotent** (cron can fire late or twice).
+Jobs: stock-reservation expiry (Phase 2, live); birthday vouchers, abandoned-cart cleanup (later).
+- **The DB is Neon, which has no `pg_cron`** (Supabase is Auth-only here) → the pg_cron-in-DB option does **not** apply; scheduling is **external**.
+- **UptimeRobot → `POST /admin/jobs/*`**, guarded by `AdminGuard` (`x-admin-secret` header = `ADMIN_API_SECRET`). Phase 2 ships `POST /admin/jobs/release-expired` (cancel unpaid orders past TTL + release stock); UptimeRobot calls it **~every 5 min**.
+- Every job must be **idempotent** (cron can fire late or twice) — `release-expired` flips status conditionally so a double-fire never double-restocks.
 
 ## 7. Health & keep-alive
 
@@ -201,10 +203,9 @@ minutes to keep the Render instance awake. (Keep-alive is UptimeRobot, **not** G
 
 ## 8. Security
 
-- All `/admin/*` endpoints are backend-enforced, not just hidden in the UI.
-  - **Target:** a `RoleGuard` (Supabase JWT + `Role.ADMIN`) once the auth module exists.
-  - **Current (auth deferred):** a temporary `AdminGuard` (`common/guards/admin.guard.ts`) compares an `x-admin-secret` header against `ADMIN_API_SECRET` in constant time and **fails closed** (500 if the env var is unset). Swap it for `RoleGuard` when auth lands.
-- Cron endpoints require the `ADMIN_JOB_SECRET` header.
+- All `/admin/*` endpoints are backend-enforced, not just hidden in the UI. Two guards, by caller type:
+  - **Humans → `RoleGuard`** (Phase 2): `SupabaseAuthGuard` (verify JWT, upsert user) then `RolesGuard` + `@Roles(Role.ADMIN)`. Gates the catalog admin controllers and `/admin/orders`.
+  - **Machines / cron → `AdminGuard`** (`common/guards/admin.guard.ts`): constant-time `x-admin-secret` vs `ADMIN_API_SECRET`, **fails closed** (500 if unset). Used for `/admin/jobs/*` (no Supabase session). **Retained on purpose — not dead code.**
 - Stripe secret key, Supabase service-role key, `ADMIN_API_SECRET`, `CLOUDINARY_API_SECRET`, and `DATABASE_URL` live only in backend env — never sent to the browser. Image uploads are signed server-side so the Cloudinary secret never reaches the client (§4.6).
 - Rate-limit review and chat write endpoints to mitigate spam.
 - Never log card data or secrets.
