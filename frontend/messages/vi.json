@@ -53,5 +53,36 @@
     "error": "Không tải được giỏ hàng.",
     "increase": "Tăng",
     "decrease": "Giảm"
+  },
+  "checkout": {
+    "title": "Thanh toán",
+    "shippingAddress": "Địa chỉ giao hàng",
+    "selectAddress": "Vui lòng chọn hoặc thêm địa chỉ",
+    "addAddress": "Thêm địa chỉ mới",
+    "saveAddress": "Lưu địa chỉ",
+    "cancel": "Hủy",
+    "fullName": "Họ tên",
+    "phone": "Số điện thoại",
+    "line1": "Địa chỉ",
+    "city": "Thành phố",
+    "country": "Quốc gia",
+    "required": "Bắt buộc",
+    "orderSummary": "Tóm tắt đơn hàng",
+    "total": "Tổng cộng",
+    "emptyCart": "Giỏ hàng trống",
+    "continueShopping": "Tiếp tục mua sắm",
+    "placeOrder": "Đặt hàng",
+    "processing": "Đang xử lý...",
+    "paymentError": "Thanh toán thất bại. Vui lòng thử lại.",
+    "payNow": "Thanh toán ngay"
+  },
+  "order": {
+    "confirmed": "Đặt hàng thành công!",
+    "processing": "Đang xử lý thanh toán...",
+    "failed": "Thanh toán không thành công",
+    "orderId": "Mã đơn hàng",
+    "total": "Tổng cộng",
+    "viewOrders": "Xem đơn hàng của tôi",
+    "continueShopping": "Tiếp tục mua sắm"
   }
 }

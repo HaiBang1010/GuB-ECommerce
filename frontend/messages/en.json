@@ -53,5 +53,36 @@
     "error": "Couldn't load your cart.",
     "increase": "Increase",
     "decrease": "Decrease"
+  },
+  "checkout": {
+    "title": "Checkout",
+    "shippingAddress": "Shipping address",
+    "selectAddress": "Please select or add an address",
+    "addAddress": "Add new address",
+    "saveAddress": "Save address",
+    "cancel": "Cancel",
+    "fullName": "Full name",
+    "phone": "Phone",
+    "line1": "Address",
+    "city": "City",
+    "country": "Country",
+    "required": "Required",
+    "orderSummary": "Order summary",
+    "total": "Total",
+    "emptyCart": "Your cart is empty",
+    "continueShopping": "Continue shopping",
+    "placeOrder": "Place order",
+    "processing": "Processing...",
+    "paymentError": "Payment failed. Please try again.",
+    "payNow": "Pay now"
+  },
+  "order": {
+    "confirmed": "Order confirmed!",
+    "processing": "Payment processing...",
+    "failed": "Payment failed",
+    "orderId": "Order ID",
+    "total": "Total",
+    "viewOrders": "View my orders",
+    "continueShopping": "Continue shopping"
   }
 }
