@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Roles } from '../../common/auth/roles.decorator';
 import { RolesGuard } from '../../common/auth/roles.guard';
@@ -18,6 +19,8 @@ import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { OrderService, OrderWithDetail } from './order.service';
 
 // Admin order management — Supabase JWT + ADMIN role (backend-enforced, not UI-only).
+@ApiTags('order')
+@ApiBearerAuth()
 @UseGuards(SupabaseAuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
 @Controller('admin/orders')
@@ -34,6 +37,7 @@ export class OrderAdminController {
     return this.orderService.getForAdmin(id);
   }
 
+  @ApiOperation({ summary: 'Advance fulfillment status (PAID->...->DELIVERED)' })
   @Post(':id/status')
   @HttpCode(HttpStatus.OK)
   updateStatus(

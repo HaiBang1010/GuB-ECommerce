@@ -8,6 +8,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthenticatedUser } from '../../common/auth/authenticated-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { SupabaseAuthGuard } from '../iam/auth/supabase-auth.guard';
@@ -16,11 +17,14 @@ import { OrderService, OrderWithDetail } from './order.service';
 
 // A signed-in user's own orders. Authentication only; every action is scoped to
 // the caller's userId in the service.
+@ApiTags('order')
+@ApiBearerAuth()
 @UseGuards(SupabaseAuthGuard)
 @Controller('orders')
 export class OrderController {
   constructor(private readonly orderService: OrderService) {}
 
+  @ApiOperation({ summary: 'Place an order from the cart' })
   @Post()
   @HttpCode(HttpStatus.CREATED)
   create(
@@ -43,6 +47,7 @@ export class OrderController {
     return this.orderService.getForUser(user.id, id);
   }
 
+  @ApiOperation({ summary: 'Cancel an unpaid order (releases stock)' })
   @Post(':id/cancel')
   @HttpCode(HttpStatus.OK)
   cancel(

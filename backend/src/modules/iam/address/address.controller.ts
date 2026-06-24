@@ -9,6 +9,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Address } from '@prisma/client';
 import { AuthenticatedUser } from '../../../common/auth/authenticated-user';
 import { CurrentUser } from '../../../common/auth/current-user.decorator';
@@ -19,11 +20,14 @@ import { UpdateAddressDto } from './dto/update-address.dto';
 
 // The signed-in user's own address book. Authentication only (any role); every
 // action is scoped to the caller's userId in the service.
+@ApiTags('iam')
+@ApiBearerAuth()
 @UseGuards(SupabaseAuthGuard)
 @Controller('addresses')
 export class AddressController {
   constructor(private readonly addressService: AddressService) {}
 
+  @ApiOperation({ summary: "List the current user's addresses" })
   @Get()
   list(@CurrentUser() user: AuthenticatedUser): Promise<Address[]> {
     return this.addressService.list(user.id);

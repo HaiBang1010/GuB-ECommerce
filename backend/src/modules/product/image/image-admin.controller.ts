@@ -11,6 +11,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ProductImage, Role } from '@prisma/client';
 import { Roles } from '../../../common/auth/roles.decorator';
 import { RolesGuard } from '../../../common/auth/roles.guard';
@@ -22,6 +23,8 @@ import { UpdateImageDto } from './dto/update-image.dto';
 import { ProductImageService } from './image.service';
 
 // Admin image management — Supabase JWT + ADMIN role (backend-enforced, not UI-only).
+@ApiTags('product')
+@ApiBearerAuth()
 @UseGuards(SupabaseAuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
 @Controller('admin/product-images')

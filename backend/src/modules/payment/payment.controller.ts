@@ -9,6 +9,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthenticatedUser } from '../../common/auth/authenticated-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { SupabaseAuthGuard } from '../iam/auth/supabase-auth.guard';
@@ -21,11 +22,14 @@ interface RawBodyRequest {
   rawBody?: Buffer;
 }
 
+@ApiTags('payment')
 @Controller('payments')
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
   // Signed-in user starts payment for their own order.
+  @ApiOperation({ summary: 'Create/reuse a Stripe PaymentIntent for an order' })
+  @ApiBearerAuth()
   @UseGuards(SupabaseAuthGuard)
   @Post('intent')
   @HttpCode(HttpStatus.CREATED)
@@ -39,6 +43,9 @@ export class PaymentController {
   // Stripe → backend. NOT JWT-guarded: authenticity comes from the signature,
   // verified against the RAW body. Always 200 on success (incl. idempotent
   // duplicates) so Stripe stops retrying.
+  @ApiOperation({
+    summary: 'Stripe webhook (signature-verified, raw body — not JWT-guarded)',
+  })
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
   webhook(

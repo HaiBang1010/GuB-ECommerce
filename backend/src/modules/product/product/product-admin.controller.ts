@@ -9,6 +9,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Product, Role } from '@prisma/client';
 import { Roles } from '../../../common/auth/roles.decorator';
 import { RolesGuard } from '../../../common/auth/roles.guard';
@@ -18,6 +19,8 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
 // Admin catalog management — Supabase JWT + ADMIN role (backend-enforced, not UI-only).
+@ApiTags('product')
+@ApiBearerAuth()
 @UseGuards(SupabaseAuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
 @Controller('admin/products')

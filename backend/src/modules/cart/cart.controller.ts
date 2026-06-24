@@ -10,6 +10,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { OptionalSupabaseAuthGuard } from '../iam/auth/optional-supabase-auth.guard';
 import { CurrentCartOwner } from './cart-owner.decorator';
 import { CartOwner, CartService, CartView } from './cart.service';
@@ -19,16 +20,28 @@ import { UpdateCartItemDto } from './dto/update-cart-item.dto';
 // Cart for guests AND signed-in users. OptionalSupabaseAuthGuard authenticates a
 // Bearer token if present; otherwise the request is treated as a guest and the
 // owner is resolved from the X-Cart-Session header (see CurrentCartOwner).
+@ApiTags('cart')
+@ApiBearerAuth()
 @UseGuards(OptionalSupabaseAuthGuard)
 @Controller('cart')
 export class CartController {
   constructor(private readonly cartService: CartService) {}
 
+  @ApiOperation({
+    summary: 'Get the cart',
+    description:
+      'Works without auth for guests — send an X-Cart-Session header instead of a Bearer token.',
+  })
   @Get()
   get(@CurrentCartOwner() owner: CartOwner): Promise<CartView> {
     return this.cartService.getView(owner);
   }
 
+  @ApiOperation({
+    summary: 'Add an item to the cart',
+    description:
+      'Works without auth for guests — send an X-Cart-Session header instead of a Bearer token.',
+  })
   @Post('items')
   @HttpCode(HttpStatus.OK)
   add(

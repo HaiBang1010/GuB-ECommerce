@@ -1,8 +1,10 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { ProductImage } from '@prisma/client';
 import { ProductImageService } from './image.service';
 
 // Public storefront read — images of a visible product, optionally by color.
+@ApiTags('product')
 @Controller('products/:slug/images')
 export class ImageController {
   constructor(private readonly imageService: ProductImageService) {}
