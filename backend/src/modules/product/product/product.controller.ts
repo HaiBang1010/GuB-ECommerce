@@ -1,5 +1,5 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Product } from '@prisma/client';
 import { ProductService } from './product.service';
 
@@ -13,6 +13,8 @@ export class ProductController {
   // Optional `?search=<query>` runs full-text + fuzzy search (combinable with
   // `category`). An empty/whitespace search falls back to the plain list.
   @ApiOperation({ summary: 'List products (optional ?category, ?search)' })
+  @ApiQuery({ name: 'category', required: false })
+  @ApiQuery({ name: 'search', required: false })
   @Get()
   list(
     @Query('category') categorySlug?: string,

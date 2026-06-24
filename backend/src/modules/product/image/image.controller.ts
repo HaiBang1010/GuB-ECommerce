@@ -1,5 +1,5 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ProductImage } from '@prisma/client';
 import { ProductImageService } from './image.service';
 
@@ -10,6 +10,7 @@ export class ImageController {
   constructor(private readonly imageService: ProductImageService) {}
 
   // `?color=Red` returns that color's images plus generic (untagged) ones.
+  @ApiQuery({ name: 'color', required: false })
   @Get()
   list(
     @Param('slug') slug: string,
