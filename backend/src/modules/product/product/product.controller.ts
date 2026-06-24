@@ -1,7 +1,14 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
-import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import {
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Product } from '@prisma/client';
 import { ProductService } from './product.service';
+import { ProductResponseDto } from './dto/product-response.dto';
 
 // Public storefront reads — no login required, archived content hidden.
 @ApiTags('product')
@@ -15,6 +22,7 @@ export class ProductController {
   @ApiOperation({ summary: 'List products (optional ?category, ?search)' })
   @ApiQuery({ name: 'category', required: false })
   @ApiQuery({ name: 'search', required: false })
+  @ApiOkResponse({ type: [ProductResponseDto] })
   @Get()
   list(
     @Query('category') categorySlug?: string,
@@ -26,6 +34,9 @@ export class ProductController {
     return this.productService.getActiveList(categorySlug);
   }
 
+  @ApiOperation({ summary: 'Active product by slug' })
+  @ApiOkResponse({ type: ProductResponseDto })
+  @ApiNotFoundResponse({ description: 'Product not found.' })
   @Get(':slug')
   getBySlug(@Param('slug') slug: string): Promise<Product> {
     return this.productService.getActiveBySlug(slug);
