@@ -13,7 +13,9 @@
       "Bash(git diff:*)",
       "Bash(git log:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Write(./.env.example)",
+      "Edit(./.env.example)"
     ],
     "ask": [
       "Bash(npm install:*)",
@@ -31,8 +33,6 @@
       "Edit(./**/.env.*)",
       "Write(./.env)",
       "Write(./**/.env)",
-      "Write(./.env.example)",
-      "Edit(./.env.example)",
       "Bash(npx prisma migrate reset:*)",
       "Bash(rm -rf:*)",
       "Bash(git push --force:*)"
