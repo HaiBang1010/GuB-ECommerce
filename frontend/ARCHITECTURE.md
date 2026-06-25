@@ -32,8 +32,10 @@ src/
 └── middleware.ts                 # i18n locale + Supabase session refresh + protect /checkout, /orders
 ```
 
-The admin route group (`/admin`) is **not built yet** — it lands Phase 3+. There is no `app/api/`
-BFF layer; the browser calls the NestJS backend directly (CORS-open in dev).
+The admin area lives in a `[locale]/(admin)/admin/` route group with its own shell; the storefront
+`Header` sits in a sibling `[locale]/(storefront)/` group (route groups are URL-transparent, so
+customer URLs are unchanged). See §10. There is no `app/api/` BFF layer; the browser calls the
+NestJS backend directly (CORS-open in dev).
 
 ## 3. State management
 
@@ -80,9 +82,10 @@ Purchased-only reviews surface in two existing pages (no new route):
   exposes only `userId`, no name) and a **"Store reply"** block when `adminReply` is present.
 
 Shared bits: `lib/api/reviews.ts` + `hooks/use-reviews.ts`, the net-new `components/star-rating.tsx`
-and `ui/textarea.tsx`, and the `reviews` i18n namespace. **Admin reply input is deferred** — there
-is no `/admin` route group or client-side role yet (the backend `RoleGuard` is the real gate); only
-the reply *display* ships now.
+and `ui/textarea.tsx`, and the `reviews` i18n namespace. The reply *display* (the "Store reply"
+block) ships for everyone; **admin reply input** now ships too — an inline box on product detail,
+shown to an admin under each review without a reply (`POST /admin/reviews/:id/reply`). It lives on
+the product page because there is no admin list-all-reviews endpoint. See §10.
 
 ## 9. Notifications (Phase 3)
 
@@ -94,3 +97,26 @@ via the `notification` i18n namespace — **never** a stored string — linking 
 marking itself read on select (`useMarkNotificationRead`), plus a "mark all read" action
 (`useMarkAllNotificationsRead`). Both mutations invalidate `['notifications']`. The backend is the
 producer (the single async path, backend §4.8); the frontend only reads + acks.
+
+## 10. Admin (Phase 3)
+
+The admin area is a `[locale]/(admin)/admin/` route group with its own client `AdminLayout` (an admin
+topbar + a sidebar: **Orders**, plus **Reviews/Catalog/Analytics** "coming soon" placeholders) —
+separate from the `[locale]/(storefront)/` group that renders the storefront `Header`. Route groups
+don't affect the URL, so every customer route is unchanged.
+
+**Role is the single source of truth from the backend.** `Providers` calls `GET /me` (which returns
+`iam.User.role`) on the initial session and on `SIGNED_IN`, storing `role` in the auth store (cleared
+on `SIGNED_OUT`); there is **no** Supabase-metadata role sync. `isAdmin(role)` gates the Header's
+Admin link and the layout. The client guard is a **convenience** — it waits for the auth store to
+settle, then redirects a non-admin. The real protection is twofold: `middleware.ts` requires a
+session to enter `/admin` (guests → login), and the backend **`RoleGuard`** rejects every `/admin/*`
+API call from a non-admin (403). A wrong client-side guess can never bypass it.
+
+**Orders** (`/admin/orders`): `useAdminOrders` lists every order (`GET /admin/orders`); each row shows
+id, userId (the payload carries no customer email — no cross-module JOIN), a status badge, the total,
+and a status-advance button (PAID→PROCESSING→SHIPPED→DELIVERED via `POST /admin/orders/:id/status`).
+The frontend only picks the next step; the backend enforces the legal transition.
+
+**Review reply** is inline on product detail (§8), not a dedicated admin page, because the backend
+exposes no admin list-all-reviews endpoint — only `POST /admin/reviews/:id/reply` (by review id).
