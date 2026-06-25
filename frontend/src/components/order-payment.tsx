@@ -15,8 +15,9 @@ import { Button } from '@/components/ui/button';
 // Load Stripe once, outside render (Stripe's recommendation).
 const stripePromise = getStripe();
 
-// Reusable Stripe Payment Element step. Used by both checkout (new order) and the
-// order detail page (pay-again). The clientSecret ALWAYS comes from the backend.
+// Reusable Stripe Payment Element step, rendered on the durable pay page
+// (/orders/[id]/pay). The clientSecret ALWAYS comes from the backend; a decline
+// keeps the buyer on this form to retry another card (no redirect, no cancel).
 export function OrderPayment({
   orderId,
   clientSecret,
@@ -33,6 +34,7 @@ export function OrderPayment({
 
 function PaymentForm({ orderId }: { orderId: string }) {
   const t = useTranslations('checkout');
+  const tPay = useTranslations('pay');
   const locale = useLocale();
   const stripe = useStripe();
   const elements = useElements();
@@ -52,8 +54,14 @@ function PaymentForm({ orderId }: { orderId: string }) {
     });
 
     // confirmPayment only returns here on an immediate error; success redirects.
+    // The buyer stays on the form — a declined/invalid card shows a clear retry
+    // hint (localized; Stripe's own message is English-only), everything else is
+    // treated as a system error. Same intent → unlimited retries.
     if (result.error) {
-      setError(result.error.message ?? t('paymentError'));
+      const declined =
+        result.error.type === 'card_error' ||
+        result.error.type === 'validation_error';
+      setError(declined ? tPay('cardDeclined') : t('paymentError'));
       setSubmitting(false);
     }
   }

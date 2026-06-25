@@ -87,7 +87,8 @@
     "heldStock": "Đã giữ {count} sản phẩm cho bạn — hoàn tất thanh toán để giữ đơn",
     "cancelOrder": "Hủy đơn",
     "orderCancelled": "Đơn hàng đã được hủy",
-    "alreadyPaid": "Đơn hàng đã được thanh toán"
+    "alreadyPaid": "Đơn hàng đã được thanh toán",
+    "cardDeclined": "Thẻ bị từ chối. Vui lòng thử thẻ khác."
   },
   "order": {
     "confirmed": "Đặt hàng thành công!",

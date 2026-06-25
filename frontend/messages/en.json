@@ -87,7 +87,8 @@
     "heldStock": "{count} items reserved for you — complete payment to keep your order",
     "cancelOrder": "Cancel order",
     "orderCancelled": "Order cancelled",
-    "alreadyPaid": "Order already paid"
+    "alreadyPaid": "Order already paid",
+    "cardDeclined": "Your card was declined. Please try another card."
   },
   "order": {
     "confirmed": "Order confirmed!",
