@@ -6,11 +6,14 @@ import { useLocale, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useProduct } from '@/hooks/use-product';
 import { useAddToCart } from '@/hooks/use-cart';
+import { useProductReviews } from '@/hooks/use-reviews';
 import { useCartStore } from '@/stores/cart.store';
+import { StarRating } from '@/components/star-rating';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { formatPriceCents } from '@/lib/money';
+import { formatDate, formatDateTime } from '@/lib/datetime';
 import type { ProductDetail, ProductVariant } from '@/lib/api/products';
 
 export function ProductDetailView({ slug }: { slug: string }) {
@@ -238,7 +241,81 @@ function DetailContent({ product }: { product: ProductDetail }) {
           {t('backToProducts')}
         </Link>
       </div>
+
+      {/* Reviews (full width, public read) */}
+      <ProductReviews productId={product.id} />
     </main>
+  );
+}
+
+function ProductReviews({ productId }: { productId: string }) {
+  const t = useTranslations('reviews');
+  const locale = useLocale();
+  const { isPending, isError, data } = useProductReviews(productId);
+
+  return (
+    <section className="flex flex-col gap-4 border-t pt-8 md:col-span-2">
+      <h2 className="text-xl font-semibold">{t('title')}</h2>
+
+      {isPending ? (
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-6 w-40" />
+          <Skeleton className="h-16 w-full" />
+        </div>
+      ) : isError || !data ? (
+        <p className="text-destructive text-sm">{t('error')}</p>
+      ) : data.summary.count === 0 ? (
+        <div className="flex items-center gap-2">
+          <StarRating value={0} readOnly />
+          <span className="text-muted-foreground text-sm">
+            {t('noReviews')}
+          </span>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-3">
+            <StarRating value={data.summary.average ?? 0} readOnly size={22} />
+            <span className="text-lg font-semibold">
+              {(data.summary.average ?? 0).toFixed(1)}
+            </span>
+            <span className="text-muted-foreground text-sm">
+              {t('reviewCount', { count: data.summary.count })}
+            </span>
+          </div>
+
+          <ul className="flex flex-col gap-4">
+            {data.items.map((r) => (
+              <li
+                key={r.id}
+                className="flex flex-col gap-1 border-b pb-4 last:border-b-0"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <StarRating value={r.rating} readOnly size={16} />
+                  <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs">
+                    {t('verifiedBuyer')}
+                  </span>
+                  <span className="text-muted-foreground text-xs">
+                    {formatDate(r.createdAt, locale)}
+                  </span>
+                </div>
+                {r.body ? <p className="text-sm">{r.body}</p> : null}
+                {r.adminReply ? (
+                  <div className="bg-muted/60 mt-1 rounded-md p-3">
+                    <p className="text-xs font-medium">{t('storeReply')}</p>
+                    <p className="text-sm">{r.adminReply}</p>
+                    {r.adminReplyAt ? (
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        {formatDateTime(r.adminReplyAt, locale)}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
   );
 }
 
