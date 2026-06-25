@@ -125,6 +125,25 @@
       "REFUNDED": "Đã hoàn tiền"
     }
   },
+  "reviews": {
+    "title": "Đánh giá",
+    "writeReview": "Viết đánh giá",
+    "editReview": "Sửa đánh giá",
+    "yourReview": "Đánh giá của bạn",
+    "rating": "Đánh giá",
+    "comment": "Nhận xét",
+    "commentPlaceholder": "Chia sẻ cảm nhận của bạn (không bắt buộc)",
+    "submit": "Gửi",
+    "cancel": "Hủy",
+    "noReviews": "Chưa có đánh giá",
+    "reviewCount": "{count} đánh giá",
+    "alreadyReviewed": "Bạn đã đánh giá sản phẩm này",
+    "verifiedBuyer": "Người mua đã xác thực",
+    "storeReply": "Phản hồi từ shop",
+    "submitted": "Đã gửi đánh giá",
+    "updated": "Đã cập nhật đánh giá",
+    "error": "Không gửi được đánh giá. Vui lòng thử lại."
+  },
   "nav": {
     "account": "Tài khoản",
     "myOrders": "Đơn hàng của tôi",

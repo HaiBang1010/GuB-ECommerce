@@ -125,6 +125,25 @@
       "REFUNDED": "Refunded"
     }
   },
+  "reviews": {
+    "title": "Reviews",
+    "writeReview": "Write a review",
+    "editReview": "Edit review",
+    "yourReview": "Your review",
+    "rating": "Rating",
+    "comment": "Comment",
+    "commentPlaceholder": "Share your thoughts (optional)",
+    "submit": "Submit",
+    "cancel": "Cancel",
+    "noReviews": "No reviews yet",
+    "reviewCount": "{count} reviews",
+    "alreadyReviewed": "You have already reviewed this product",
+    "verifiedBuyer": "Verified buyer",
+    "storeReply": "Store reply",
+    "submitted": "Review submitted",
+    "updated": "Review updated",
+    "error": "Couldn't submit your review. Please try again."
+  },
   "nav": {
     "account": "Account",
     "myOrders": "My orders",

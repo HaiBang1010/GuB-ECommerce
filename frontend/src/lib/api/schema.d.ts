@@ -844,6 +844,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a review for a purchased, delivered order item */
+        post: operations["ReviewController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reviews/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit your own review (rating / body) */
+        patch: operations["ReviewController_update"];
+        trace?: never;
+    };
+    "/products/{productId}/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a product's reviews with its rating summary */
+        get: operations["ProductReviewsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/reviews/{id}/reply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reply to a customer's review */
+        post: operations["ReviewAdminController_reply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1631,6 +1699,83 @@ export interface components {
         WebhookResponseDto: {
             /** @example true */
             received: boolean;
+        };
+        CreateReviewDto: {
+            /**
+             * @description The purchased order item being reviewed (proof of purchase).
+             * @example clx1a2b3c4d5e6f7g8h9oit01
+             */
+            orderItemId: string;
+            /** @example 5 */
+            rating: number;
+            /** @example Great fit, true to size. */
+            body?: string;
+        };
+        ReviewResponseDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9rev01 */
+            id: string;
+            /**
+             * @description Author user id.
+             * @example clx1a2b3c4d5e6f7g8h9usr01
+             */
+            userId: string;
+            /**
+             * @description Reviewed product id.
+             * @example clx1a2b3c4d5e6f7g8h9prd01
+             */
+            productId: string;
+            /**
+             * @description Order item this review proves was purchased.
+             * @example clx1a2b3c4d5e6f7g8h9oit01
+             */
+            orderItemId: string;
+            /** @example 5 */
+            rating: number;
+            /** @example Great fit, true to size. */
+            body: string | null;
+            /** @example null */
+            adminReply: string | null;
+            /**
+             * Format: date-time
+             * @example null
+             */
+            adminReplyAt: string | null;
+            /**
+             * Format: date-time
+             * @example 2026-06-25T00:00:00.000Z
+             */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @example 2026-06-25T00:00:00.000Z
+             */
+            updatedAt: string;
+        };
+        UpdateReviewDto: {
+            /** @example 4 */
+            rating?: number;
+            /** @example Updated: runs a bit small. */
+            body?: string;
+        };
+        ReviewSummaryDto: {
+            /**
+             * @description Average rating, or null when the product has no reviews.
+             * @example 4.5
+             */
+            average: number | null;
+            /**
+             * @description Number of reviews for the product.
+             * @example 12
+             */
+            count: number;
+        };
+        ProductReviewsResponseDto: {
+            summary: components["schemas"]["ReviewSummaryDto"];
+            items: components["schemas"]["ReviewResponseDto"][];
+        };
+        AdminReplyDto: {
+            /** @example Thanks for the feedback! Glad it fit well. */
+            reply: string;
         };
     };
     responses: never;
@@ -3751,13 +3896,6 @@ export interface operations {
                     "application/json": components["schemas"]["OrderResponseDto"];
                 };
             };
-            /** @description Only an unpaid order can be cancelled. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
             /** @description Missing or invalid token. */
             401: {
                 headers: {
@@ -3767,6 +3905,13 @@ export interface operations {
             };
             /** @description Order not found. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Only an unpaid order can be cancelled. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4006,6 +4151,177 @@ export interface operations {
             };
             /** @description Missing body or invalid signature. */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReviewController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateReviewDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewResponseDto"];
+                };
+            };
+            /** @description Validation failed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Order item not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Order not delivered, or product already reviewed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReviewController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateReviewDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewResponseDto"];
+                };
+            };
+            /** @description Validation failed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Review not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProductReviewsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                productId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductReviewsResponseDto"];
+                };
+            };
+        };
+    };
+    ReviewAdminController_reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReplyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewResponseDto"];
+                };
+            };
+            /** @description Validation failed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Review not found. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
