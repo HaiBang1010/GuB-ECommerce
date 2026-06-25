@@ -34,6 +34,12 @@ export class PaymentService {
    * Create (or reuse) a PaymentIntent for the caller's unpaid order and return
    * its client secret. Reusing the in-flight intent makes a double-click safe;
    * the deterministic idempotency key protects the Stripe side too.
+   *
+   * A declined intent (Payment FAILED) is reused too: Stripe leaves the intent at
+   * `requires_payment_method`, so the buyer can retry another card on the same
+   * order after a refresh. Creating a fresh Payment row here would instead collide
+   * on the unique stripePaymentIntentId / idempotencyKey (the idempotency key
+   * returns the SAME Stripe intent) — so we MUST reuse, not re-create.
    */
   async createIntentForOrder(
     userId: string,
@@ -45,12 +51,27 @@ export class PaymentService {
     }
 
     const existing = await this.prisma.payment.findFirst({
-      where: { orderId, status: PaymentStatus.REQUIRES_PAYMENT },
+      where: {
+        orderId,
+        stripePaymentIntentId: { not: null },
+        status: {
+          in: [PaymentStatus.REQUIRES_PAYMENT, PaymentStatus.FAILED],
+        },
+      },
+      orderBy: { createdAt: 'desc' },
     });
     if (existing?.stripePaymentIntentId) {
       const intent = await this.stripe.retrievePaymentIntent(
         existing.stripePaymentIntentId,
       );
+      // Reset a previously-declined payment to awaiting so its state stays honest
+      // while the buyer retries.
+      if (existing.status === PaymentStatus.FAILED) {
+        await this.prisma.payment.update({
+          where: { id: existing.id },
+          data: { status: PaymentStatus.REQUIRES_PAYMENT },
+        });
+      }
       return this.toResult(intent, existing.id);
     }
 
@@ -141,15 +162,16 @@ export class PaymentService {
           where: { stripePaymentIntentId: intent.id },
         });
         if (!payment) return; // unknown intent — recorded in the ledger, ignored
+        // ONLY mark the Payment FAILED — leave the order PENDING_PAYMENT so the
+        // buyer can retry another card on the same order/intent (durable pay page).
+        // A genuine abandonment is reclaimed by the TTL release-expired job, and
+        // the buyer can also cancel explicitly; we do NOT release stock on a single
+        // transient decline. The Stripe intent stays `requires_payment_method` and
+        // is reused on retry (see createIntentForOrder).
         await tx.payment.update({
           where: { id: payment.id },
           data: { status: PaymentStatus.FAILED },
         });
-        // Release stock immediately and cancel the order instead of holding it
-        // PENDING_PAYMENT until the TTL job: a declined card must not keep stock
-        // reserved. markPaymentFailed is idempotent (it no-ops on a non-pending
-        // order), so a re-delivered failed event never double-restocks.
-        await this.orders.markPaymentFailed(tx, payment.orderId);
         break;
       }
       default:

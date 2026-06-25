@@ -254,28 +254,6 @@ export class OrderService {
     }
   }
 
-  // Cross-module (in-process): cancel an unpaid order and release its stock from
-  // the payment webhook when the PaymentIntent fails. Runs inside the webhook's
-  // transaction. Symmetric with markPaid; reuses the same cancel-and-release core
-  // as the user-cancel and release-expired paths, so the three flows can never
-  // diverge. Idempotent: a duplicate failed event finds the order already
-  // CANCELLED (conditional flip count 0) and never double-restocks.
-  async markPaymentFailed(
-    tx: Prisma.TransactionClient,
-    orderId: string,
-  ): Promise<void> {
-    const order = await tx.order.findUnique({
-      where: { id: orderId },
-      include: { items: true },
-    });
-    // A PAID order (succeeded webhook won the race) or an already-CANCELLED one is
-    // left untouched; only an unpaid order releases stock.
-    if (!order || order.status !== OrderStatus.PENDING_PAYMENT) {
-      return;
-    }
-    await this.cancelAndReleaseTx(tx, order, 'Payment failed.');
-  }
-
   // ---------------------------------------------------------------------------
   // Internal helpers
   // ---------------------------------------------------------------------------
@@ -297,11 +275,10 @@ export class OrderService {
     });
   }
 
-  // The cancel-and-release core, working on a caller-supplied transaction so it
-  // can also run inside the payment webhook's transaction (markPaymentFailed).
-  // The conditional updateMany is the concurrency guard: only the caller that
-  // wins the status flip releases stock, so two overlapping cancels (user + cron,
-  // or cron + failed-payment webhook) never double-restock.
+  // The cancel-and-release core, working on a caller-supplied transaction. The
+  // conditional updateMany is the concurrency guard: only the caller that wins the
+  // status flip releases stock, so two overlapping cancels (user-cancel + the
+  // release-expired cron) never double-restock.
   private async cancelAndReleaseTx(
     tx: Prisma.TransactionClient,
     order: OrderWithItems,
