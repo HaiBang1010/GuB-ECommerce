@@ -11,8 +11,10 @@ import { ProductService } from '../product/product/product.service';
 type ReviewDelegate = {
   findFirst: jest.Mock;
   findUnique: jest.Mock;
+  findMany: jest.Mock;
   create: jest.Mock;
   update: jest.Mock;
+  aggregate: jest.Mock;
 };
 type OrdersMock = { getDeliveredOrderItemForUser: jest.Mock };
 type ProductsMock = { assertExists: jest.Mock };
@@ -28,8 +30,10 @@ describe('ReviewService', () => {
       review: {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
+        findMany: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        aggregate: jest.fn(),
       },
     };
     orders = { getDeliveredOrderItemForUser: jest.fn() };
@@ -189,6 +193,46 @@ describe('ReviewService', () => {
       expect(prisma.review.update).toHaveBeenCalledWith({
         where: { id: 'rev1' },
         data: { rating: 3 },
+      });
+    });
+  });
+
+  describe('getProductReviews', () => {
+    it('returns the rating summary and the items (newest first)', async () => {
+      const items = [{ id: 'rev2' }, { id: 'rev1' }];
+      prisma.review.findMany.mockResolvedValue(items);
+      prisma.review.aggregate.mockResolvedValue({
+        _avg: { rating: 4.5 },
+        _count: 2,
+      });
+
+      const result = await service.getProductReviews('p1');
+
+      expect(prisma.review.findMany).toHaveBeenCalledWith({
+        where: { productId: 'p1' },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(prisma.review.aggregate).toHaveBeenCalledWith({
+        where: { productId: 'p1' },
+        _avg: { rating: true },
+        _count: true,
+      });
+      expect(result).toEqual({
+        summary: { average: 4.5, count: 2 },
+        items,
+      });
+    });
+
+    it('reports a null average and zero count for a product with no reviews', async () => {
+      prisma.review.findMany.mockResolvedValue([]);
+      prisma.review.aggregate.mockResolvedValue({
+        _avg: { rating: null },
+        _count: 0,
+      });
+
+      await expect(service.getProductReviews('p-none')).resolves.toEqual({
+        summary: { average: null, count: 0 },
+        items: [],
       });
     });
   });

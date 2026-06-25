@@ -10,6 +10,13 @@ import { ProductService } from '../product/product/product.service';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
 
+// Storefront shape: a product's reviews plus its rating aggregate (average is null
+// when there are no reviews). Exported so a later product-detail slice can reuse it.
+export type ProductReviews = {
+  summary: { average: number | null; count: number };
+  items: Review[];
+};
+
 @Injectable()
 export class ReviewService {
   constructor(
@@ -92,5 +99,29 @@ export class ReviewService {
         ...(dto.body !== undefined ? { body: dto.body } : {}),
       },
     });
+  }
+
+  /**
+   * Public storefront read: a product's reviews (newest first) plus its rating
+   * aggregate. No product-existence check — an unknown product simply yields an
+   * empty list + null average, which keeps this hot read path off a cross-module
+   * call.
+   */
+  async getProductReviews(productId: string): Promise<ProductReviews> {
+    const [items, agg] = await Promise.all([
+      this.prisma.review.findMany({
+        where: { productId },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.review.aggregate({
+        where: { productId },
+        _avg: { rating: true },
+        _count: true,
+      }),
+    ]);
+    return {
+      summary: { average: agg._avg.rating, count: agg._count },
+      items,
+    };
   }
 }
