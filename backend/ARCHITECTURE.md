@@ -126,6 +126,23 @@ delete: remove the Cloudinary asset by `publicId` **first**, then the row; a rem
 logged but the row is still removed (no stranded rows). Images attach by `color` (`null` = generic
 / shared); the storefront returns a color's images **plus** the generic ones.
 
+### 4.7 Reviews (purchased-only) — Phase 3
+
+A review is allowed only for an order item the caller **owns** whose order is **DELIVERED**. The
+review module never queries the `ordering` tables: it calls
+`OrderService.getDeliveredOrderItemForUser(userId, orderItemId)` in-process, which returns just
+`{ id, productId }` (**404** when not owned/found, **409** when not yet delivered). `productId` is
+taken from that order-item **snapshot**, never trusted from the client (anti-forge), and validated
+via `ProductService.assertExists` (archived tolerated, so a review survives a later archive).
+Uniqueness — `@@unique([userId, productId])` (one review per product per user) + unique
+`orderItemId` — is pre-checked for a clean **409**, with a Prisma **P2002** catch as the race-safe
+backstop. `rating` is bounded **1..5** in the DTO **and** by a hand-written CHECK constraint
+(`20260625090000_add_review_rating_check`, applied with `migrate deploy`; the `init` migration
+scaffolded the column as plain `INTEGER`). Surface: `POST /reviews` (create), `PATCH /reviews/:id`
+(owner edit), public `GET /products/:productId/reviews` (reviews + `_avg`/`_count` aggregate, null
+average when none), `POST /admin/reviews/:id/reply` (ADMIN). **Rate-limiting is deferred** — the
+purchased-only + one-per-product gate already bounds review-create spam (§8).
+
 ## 5. Data model (Prisma)
 
 Full schema: [`prisma/schema.prisma`](./prisma/schema.prisma). It uses the `multiSchema`
@@ -214,7 +231,7 @@ minutes to keep the Render instance awake. (Keep-alive is UptimeRobot, **not** G
   - **Humans → `RoleGuard`** (Phase 2): `SupabaseAuthGuard` (verify JWT, upsert user) then `RolesGuard` + `@Roles(Role.ADMIN)`. Gates the catalog admin controllers and `/admin/orders`.
   - **Machines / cron → `AdminGuard`** (`common/guards/admin.guard.ts`): constant-time `x-admin-secret` vs `ADMIN_API_SECRET`, **fails closed** (500 if unset). Used for `/admin/jobs/*` (no Supabase session). **Retained on purpose — not dead code.**
 - Stripe secret key, Supabase service-role key, `ADMIN_API_SECRET`, `CLOUDINARY_API_SECRET`, and `DATABASE_URL` live only in backend env — never sent to the browser. Image uploads are signed server-side so the Cloudinary secret never reaches the client (§4.6).
-- Rate-limit review and chat write endpoints to mitigate spam.
+- Rate-limit review and chat write endpoints to mitigate spam. **(Phase 3: deferred for reviews — the purchased-only + `@@unique([userId,productId])` gate already bounds review-create spam; revisit with `@nestjs/throttler` when chat lands.)**
 - Never log card data or secrets.
 
 ## 9. API documentation (OpenAPI)
