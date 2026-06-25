@@ -49,6 +49,10 @@ export class NotificationService {
    * in-process handle so local dev still gets in-app notifications without a queue.
    */
   async publishOrderStatus(event: OrderStatusEvent): Promise<void> {
+    // Short-circuit non-notify statuses so we never publish a wasted QStash
+    // message (the consumer would skip it anyway). handleOrderStatusEvent guards
+    // again, for a direct consumer call.
+    if (!NOTIFY[event.status]) return;
     if (this.qstash.isPublishConfigured()) {
       await this.qstash.publish(event);
     } else {

@@ -21,6 +21,13 @@ export interface PaymentIntentResult {
   paymentRecordId: string;
 }
 
+// What a processed webhook changed, surfaced out of the DB transaction so the
+// caller can publish a notification event AFTER commit. `paidOrderId` is set only
+// when this delivery actually flipped the order to PAID.
+interface WebhookEffect {
+  paidOrderId?: string;
+}
+
 @Injectable()
 export class PaymentService {
   constructor(
@@ -118,13 +125,14 @@ export class PaymentService {
       throw new BadRequestException('Invalid webhook signature.');
     }
 
+    let effect: WebhookEffect;
     try {
-      await this.prisma.$transaction(async (tx) => {
+      effect = await this.prisma.$transaction(async (tx) => {
         // Insert FIRST — the unique id is the idempotency guard.
         await tx.stripeEvent.create({
           data: { id: event.id, type: event.type },
         });
-        await this.applyEvent(tx, event);
+        return this.applyEvent(tx, event);
       });
     } catch (error) {
       if (this.isDuplicate(error)) {
@@ -132,13 +140,21 @@ export class PaymentService {
       }
       throw error; // real failure → 5xx → Stripe retries
     }
+
+    // Publish the order-status event AFTER the transaction commits (never inside
+    // it) — only when THIS delivery actually flipped the order to PAID, so a
+    // redelivered succeeded event (which no-ops above or flips nothing) won't
+    // re-notify. Best-effort in OrderService — won't fail the webhook.
+    if (effect.paidOrderId) {
+      await this.orders.emitStatusEvent(effect.paidOrderId, OrderStatus.PAID);
+    }
     return { received: true };
   }
 
   private async applyEvent(
     tx: Prisma.TransactionClient,
     event: Stripe.Event,
-  ): Promise<void> {
+  ): Promise<WebhookEffect> {
     switch (event.type) {
       case 'payment_intent.succeeded': {
         const intent = event.data.object as Stripe.PaymentIntent;
@@ -148,20 +164,20 @@ export class PaymentService {
         const payment = await tx.payment.findUnique({
           where: { stripePaymentIntentId: intent.id },
         });
-        if (!payment) return; // unknown intent — recorded in the ledger, ignored
+        if (!payment) return {}; // unknown intent — recorded in the ledger, ignored
         await tx.payment.update({
           where: { id: payment.id },
           data: { status: PaymentStatus.SUCCEEDED },
         });
-        await this.orders.markPaid(tx, payment.orderId);
-        break;
+        const flipped = await this.orders.markPaid(tx, payment.orderId);
+        return flipped ? { paidOrderId: payment.orderId } : {};
       }
       case 'payment_intent.payment_failed': {
         const intent = event.data.object as Stripe.PaymentIntent;
         const payment = await tx.payment.findUnique({
           where: { stripePaymentIntentId: intent.id },
         });
-        if (!payment) return; // unknown intent — recorded in the ledger, ignored
+        if (!payment) return {}; // unknown intent — recorded in the ledger, ignored
         // ONLY mark the Payment FAILED — leave the order PENDING_PAYMENT so the
         // buyer can retry another card on the same order/intent (durable pay page).
         // A genuine abandonment is reclaimed by the TTL release-expired job, and
@@ -172,10 +188,10 @@ export class PaymentService {
           where: { id: payment.id },
           data: { status: PaymentStatus.FAILED },
         });
-        break;
+        return {};
       }
       default:
-        break; // recorded for idempotency; no domain effect
+        return {}; // recorded for idempotency; no domain effect
     }
   }
 

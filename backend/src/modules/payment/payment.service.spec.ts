@@ -25,6 +25,7 @@ describe('PaymentService', () => {
   let orders: {
     getForUser: jest.Mock;
     markPaid: jest.Mock;
+    emitStatusEvent: jest.Mock;
   };
   let service: PaymentService;
 
@@ -41,6 +42,7 @@ describe('PaymentService', () => {
     orders = {
       getForUser: jest.fn(),
       markPaid: jest.fn(),
+      emitStatusEvent: jest.fn(),
     };
     service = new PaymentService(
       prisma as unknown as PrismaService,
@@ -165,6 +167,7 @@ describe('PaymentService', () => {
       });
       const tx = txWith({});
       tx.payment.findUnique.mockResolvedValue({ id: 'pay1', orderId: 'o1' });
+      orders.markPaid.mockResolvedValue(true);
       prisma.$transaction.mockImplementation(
         (cb: (t: unknown) => unknown) => cb(tx),
       );
@@ -180,6 +183,25 @@ describe('PaymentService', () => {
         data: { status: 'SUCCEEDED' },
       });
       expect(orders.markPaid).toHaveBeenCalledWith(tx, 'o1');
+      // PAID event is published AFTER the transaction commits (only when flipped).
+      expect(orders.emitStatusEvent).toHaveBeenCalledWith('o1', 'PAID');
+    });
+
+    it('does NOT publish PAID when the succeeded event did not flip the order', async () => {
+      stripe.constructEvent.mockReturnValue({
+        id: 'evt_1b',
+        type: 'payment_intent.succeeded',
+        data: { object: { id: 'pi_1' } },
+      });
+      const tx = txWith({});
+      tx.payment.findUnique.mockResolvedValue({ id: 'pay1', orderId: 'o1' });
+      orders.markPaid.mockResolvedValue(false); // already PAID / not pending
+      prisma.$transaction.mockImplementation(
+        (cb: (t: unknown) => unknown) => cb(tx),
+      );
+
+      await service.handleWebhook(Buffer.from('{}'), 'sig');
+      expect(orders.emitStatusEvent).not.toHaveBeenCalled();
     });
 
     it('treats a duplicate event as a no-op (P2002 on the ledger)', async () => {

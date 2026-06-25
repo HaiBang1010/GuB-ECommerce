@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { CartModule } from '../cart/cart.module';
 import { ProductModule } from '../product/product.module';
+import { NotificationModule } from '../notification/notification.module';
 import { OrderAdminController } from './order-admin.controller';
 import { OrderJobsController } from './order-jobs.controller';
 import { OrderController } from './order.controller';
@@ -13,7 +14,7 @@ import { OrderService } from './order.service';
  * auth guards come from the global IamModule.
  */
 @Module({
-  imports: [ProductModule, CartModule],
+  imports: [ProductModule, CartModule, NotificationModule],
   controllers: [OrderController, OrderAdminController, OrderJobsController],
   providers: [OrderService],
   exports: [OrderService],

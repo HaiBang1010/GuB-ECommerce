@@ -6,6 +6,7 @@ import { CartService } from '../cart/cart.service';
 import { AddressService } from '../iam/address/address.service';
 import { ProductService } from '../product/product/product.service';
 import { ProductVariantService } from '../product/variant/variant.service';
+import { NotificationService } from '../notification/notification.service';
 
 function makeAddress(): Address {
   return {
@@ -51,6 +52,7 @@ describe('OrderService', () => {
   let addresses: { getOwnedActive: jest.Mock };
   let products: { getActiveByIds: jest.Mock };
   let variants: { decrementForOrder: jest.Mock; releaseForOrder: jest.Mock };
+  let notifications: { publishOrderStatus: jest.Mock };
   let service: OrderService;
 
   beforeEach(() => {
@@ -63,12 +65,14 @@ describe('OrderService', () => {
     addresses = { getOwnedActive: jest.fn() };
     products = { getActiveByIds: jest.fn() };
     variants = { decrementForOrder: jest.fn(), releaseForOrder: jest.fn() };
+    notifications = { publishOrderStatus: jest.fn() };
     service = new OrderService(
       prisma as unknown as PrismaService,
       cart as unknown as CartService,
       addresses as unknown as AddressService,
       products as unknown as ProductService,
       variants as unknown as ProductVariantService,
+      notifications as unknown as NotificationService,
     );
   });
 
@@ -318,6 +322,11 @@ describe('OrderService', () => {
         data: { orderId: 'o1', status: 'PROCESSING', note: 'packed' },
       });
       expect(result.status).toBe('PROCESSING');
+      // Publishes the status event post-commit (notify filtering lives in the
+      // notification service).
+      expect(notifications.publishOrderStatus).toHaveBeenCalledWith(
+        expect.objectContaining({ orderId: 'o1', status: 'PROCESSING' }),
+      );
     });
 
     it('rejects an illegal transition (PAID -> SHIPPED)', async () => {
@@ -378,7 +387,9 @@ describe('OrderService', () => {
         order: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         orderStatusHistory: { create: jest.fn() },
       };
-      await service.markPaid(tx as unknown as Prisma.TransactionClient, 'o1');
+      await expect(
+        service.markPaid(tx as unknown as Prisma.TransactionClient, 'o1'),
+      ).resolves.toBe(true);
       expect(tx.order.updateMany).toHaveBeenCalledWith({
         where: { id: 'o1', status: 'PENDING_PAYMENT' },
         data: { status: 'PAID' },
@@ -388,13 +399,43 @@ describe('OrderService', () => {
       });
     });
 
-    it('is a no-op when the order is not pending (count 0)', async () => {
+    it('is a no-op (returns false) when the order is not pending (count 0)', async () => {
       const tx = {
         order: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
         orderStatusHistory: { create: jest.fn() },
       };
-      await service.markPaid(tx as unknown as Prisma.TransactionClient, 'o1');
+      await expect(
+        service.markPaid(tx as unknown as Prisma.TransactionClient, 'o1'),
+      ).resolves.toBe(false);
       expect(tx.orderStatusHistory.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('emitStatusEvent', () => {
+    it('publishes the status event with the resolved userId', async () => {
+      prisma.order.findUnique.mockResolvedValue({ userId: 'u1' });
+      await service.emitStatusEvent('o1', 'SHIPPED' as never);
+      expect(notifications.publishOrderStatus).toHaveBeenCalledWith({
+        orderId: 'o1',
+        userId: 'u1',
+        status: 'SHIPPED',
+      });
+    });
+
+    it('swallows a missing order (never throws)', async () => {
+      prisma.order.findUnique.mockResolvedValue(null);
+      await expect(
+        service.emitStatusEvent('missing', 'SHIPPED' as never),
+      ).resolves.toBeUndefined();
+      expect(notifications.publishOrderStatus).not.toHaveBeenCalled();
+    });
+
+    it('swallows a publish failure (never throws)', async () => {
+      prisma.order.findUnique.mockResolvedValue({ userId: 'u1' });
+      notifications.publishOrderStatus.mockRejectedValue(new Error('queue down'));
+      await expect(
+        service.emitStatusEvent('o1', 'DELIVERED' as never),
+      ).resolves.toBeUndefined();
     });
   });
 

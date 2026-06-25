@@ -13,6 +13,7 @@ import {
   ProductVariantService,
   StockChange,
 } from '../product/variant/variant.service';
+import { NotificationService } from '../notification/notification.service';
 
 // Default window after which an unpaid order is auto-cancelled and its stock
 // released (the release-expired job; ARCHITECTURE §5.6 / §6).
@@ -46,6 +47,8 @@ export class OrderService {
     private readonly addresses: AddressService,
     private readonly products: ProductService,
     private readonly variants: ProductVariantService,
+    // The single async path: status changes are published here post-commit.
+    private readonly notifications: NotificationService,
   ) {}
 
   /**
@@ -243,7 +246,7 @@ export class OrderService {
         `Cannot change an order from ${order.status} to ${next}.`,
       );
     }
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const flip = await tx.order.updateMany({
         where: { id: orderId, status: order.status },
         data: { status: next },
@@ -259,12 +262,41 @@ export class OrderService {
         include: { items: true, statusHistory: true },
       });
     });
+    // Publish AFTER commit (never inside the txn) — the notification module filters
+    // to the notify-worthy statuses (SHIPPED/DELIVERED here).
+    await this.emitStatusEvent(orderId, next);
+    return result;
+  }
+
+  // Best-effort publish of an order-status event to the notification module (the
+  // single async path). MUST run AFTER the relevant transaction commits and MUST
+  // never break the order flow — any failure (queue/db) is swallowed.
+  async emitStatusEvent(orderId: string, status: OrderStatus): Promise<void> {
+    try {
+      const order = await this.prisma.order.findUnique({
+        where: { id: orderId },
+        select: { userId: true },
+      });
+      if (!order) return;
+      await this.notifications.publishOrderStatus({
+        orderId,
+        userId: order.userId,
+        status,
+      });
+    } catch {
+      // Swallow — notifications are non-critical to the order lifecycle.
+    }
   }
 
   // Cross-module (in-process): mark an order PAID from the payment webhook. Runs
   // inside the webhook's transaction. The conditional flip makes it idempotent —
   // a duplicate succeeded event finds the order already PAID and does nothing.
-  async markPaid(tx: Prisma.TransactionClient, orderId: string): Promise<void> {
+  // Returns whether THIS call flipped the order, so the webhook can publish the
+  // PAID event exactly once, AFTER the transaction commits.
+  async markPaid(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+  ): Promise<boolean> {
     const flip = await tx.order.updateMany({
       where: { id: orderId, status: OrderStatus.PENDING_PAYMENT },
       data: { status: OrderStatus.PAID },
@@ -273,7 +305,9 @@ export class OrderService {
       await tx.orderStatusHistory.create({
         data: { orderId, status: OrderStatus.PAID },
       });
+      return true;
     }
+    return false;
   }
 
   // ---------------------------------------------------------------------------
