@@ -86,6 +86,7 @@ updates order state by emitting an event / calling `order.service.markPaid()`.
 - Verify the signature with `STRIPE_WEBHOOK_SECRET` (against the RAW body).
 - In ONE transaction, **INSERT the event id into the `StripeEvent` ledger FIRST**, then apply the effect (Payment → SUCCEEDED, Order → PAID). The unique `id` is the idempotency guard: a duplicate delivery hits `P2002` and the whole transaction is skipped → `200` no-op. A genuine failure rolls back (event NOT recorded) and 5xx-s so Stripe retries.
 - The backend may be asleep when the webhook arrives → Stripe retries; insert-first makes processing **exactly-once**.
+- **`payment_intent.payment_failed`** is handled in the **same ledger transaction**: mark the `Payment` `FAILED`, then `OrderService.markPaymentFailed` **cancels the order + releases its stock immediately** (§4.4) rather than waiting for the TTL job. Idempotent on three levels — the `StripeEvent` ledger, the conditional `PENDING_PAYMENT → CANCELLED` flip, and the unique `Payment` id — so a re-delivered failed event never double-restocks.
 - **Verified e2e:** a re-sent `payment_intent.succeeded` left the order `PAID` once, no duplicated timeline, stock unchanged.
 
 ### 4.3 Atomic stock decrement
@@ -97,10 +98,17 @@ WHERE  "id" = $variantId AND "stockQty" >= $qty;
 ```
 Never read-then-write in separate statements (race window). Wrap the whole checkout in one transaction.
 
-> **Status (Phase 2): IMPLEMENTED.** Checkout decrements `stockQty` with the atomic `WHERE "stockQty" >= $qty` guard above, **inside the same transaction that creates the order** — `ProductVariantService.decrementForOrder(tx, …)` called from `OrderService.createFromCart`. 0 rows matched → `ConflictException` and the whole order rolls back (no oversell, no orphaned decrement). Stock is returned by `releaseForOrder(tx, …)` on cancel / expiry (§4.4). The chosen model is **atomic decrement**, not a time-boxed reservation table — so **no schema change was needed**. **Verified e2e:** a real `quantity > stock` order was rejected and stock never went negative.
+> **Status (Phase 2): IMPLEMENTED.** Checkout decrements `stockQty` with the atomic `WHERE "stockQty" >= $qty` guard above, **inside the same transaction that creates the order** — `ProductVariantService.decrementForOrder(tx, …)` called from `OrderService.createFromCart`. It collects **every** insufficient line (not just the first) and throws a **structured 409** (`OutOfStockErrorDto`: `{ code: 'OUT_OF_STOCK', items: [{ variantId, available }] }`) so the storefront can name each short item; the whole order rolls back (no oversell, no orphaned decrement). Stock is returned by `releaseForOrder(tx, …)` on cancel / failure / expiry (§4.4). The chosen model is **atomic decrement**, not a time-boxed reservation table — so **no schema change was needed**. **Verified e2e:** a real `quantity > stock` order was rejected and stock never went negative.
 
 ### 4.4 Stock release
 Triggered by: payment failure, order cancellation, or reservation expiry (cron). Re-increment `stockQty` for each line. Make it idempotent (don't double-release).
+
+> **Status (Phase 2): IMPLEMENTED — one shared core.** `OrderService.cancelAndReleaseTx(tx, order, note)` does the conditional `PENDING_PAYMENT → CANCELLED` flip + `releaseForOrder` + a history note, reused by all three triggers:
+> - **failed-payment webhook** — `markPaymentFailed` (note `"Payment failed."`, §4.2),
+> - **user cancel** — `POST /orders/:id/cancel` (owner-only, idempotent on an already-cancelled order, **409** if not `PENDING_PAYMENT`, note `"Cancelled by user."`),
+> - **TTL job** — `releaseExpired` (note `"Stock released."`, §6).
+>
+> The conditional flip is the idempotency guard: only the caller that wins the `PENDING_PAYMENT → CANCELLED` transition restocks, so overlapping triggers (user + cron, webhook + cron) never double-release.
 
 ### 4.5 Auth sync
 `SupabaseJwtGuard` verifies the JWT. On first sight of a user id, **upsert** `User` (+ empty `Profile`). `User.id` equals the Supabase Auth UUID.
