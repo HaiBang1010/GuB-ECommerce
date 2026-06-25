@@ -38,7 +38,6 @@ export function ProductDetailView({ slug }: { slug: string }) {
 function DetailContent({ product }: { product: ProductDetail }) {
   const locale = useLocale();
   const t = useTranslations('product');
-  const tCart = useTranslations('cart');
   const addToCart = useAddToCart();
   const setSnapshot = useCartStore((s) => s.setSnapshot);
 
@@ -231,9 +230,6 @@ function DetailContent({ product }: { product: ProductDetail }) {
         >
           {addToCartLabel}
         </Button>
-        {addToCart.isSuccess ? (
-          <p className="text-muted-foreground text-sm">{tCart('addedToCart')}</p>
-        ) : null}
 
         <Link
           href="/products"

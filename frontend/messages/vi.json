@@ -52,7 +52,8 @@
     "addedToCart": "Đã thêm vào giỏ",
     "error": "Không tải được giỏ hàng.",
     "increase": "Tăng",
-    "decrease": "Giảm"
+    "decrease": "Giảm",
+    "maxQuantityReached": "Đã đạt số lượng tối đa trong kho"
   },
   "checkout": {
     "title": "Thanh toán",
@@ -96,6 +97,8 @@
     "discount": "Giảm giá",
     "error": "Không tải được đơn hàng",
     "back": "Quay lại danh sách",
+    "completePayment": "Hoàn tất thanh toán",
+    "payError": "Không thể tạo thanh toán",
     "status": {
       "PENDING_PAYMENT": "Chờ thanh toán",
       "PAID": "Đã thanh toán",
@@ -105,5 +108,12 @@
       "CANCELLED": "Đã hủy",
       "REFUNDED": "Đã hoàn tiền"
     }
+  },
+  "nav": {
+    "account": "Tài khoản",
+    "myOrders": "Đơn hàng của tôi",
+    "vouchers": "Voucher",
+    "reviews": "Đánh giá",
+    "comingSoon": "Sắp có"
   }
 }

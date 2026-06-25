@@ -75,6 +75,11 @@ export function OrdersListView() {
                       {formatPriceCents(o.totalCents)}
                     </span>
                   </div>
+                  {o.status === 'PENDING_PAYMENT' ? (
+                    <div className="text-primary mt-2 text-sm font-medium">
+                      {t('completePayment')} →
+                    </div>
+                  ) : null}
                 </Link>
               </li>
             );

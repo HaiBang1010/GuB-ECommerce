@@ -52,7 +52,8 @@
     "addedToCart": "Added to cart",
     "error": "Couldn't load your cart.",
     "increase": "Increase",
-    "decrease": "Decrease"
+    "decrease": "Decrease",
+    "maxQuantityReached": "Maximum available quantity reached"
   },
   "checkout": {
     "title": "Checkout",
@@ -96,6 +97,8 @@
     "discount": "Discount",
     "error": "Couldn't load your orders",
     "back": "Back to orders",
+    "completePayment": "Complete payment",
+    "payError": "Could not start payment",
     "status": {
       "PENDING_PAYMENT": "Pending payment",
       "PAID": "Paid",
@@ -105,5 +108,12 @@
       "CANCELLED": "Cancelled",
       "REFUNDED": "Refunded"
     }
+  },
+  "nav": {
+    "account": "Account",
+    "myOrders": "My orders",
+    "vouchers": "Vouchers",
+    "reviews": "Reviews",
+    "comingSoon": "Coming soon"
   }
 }

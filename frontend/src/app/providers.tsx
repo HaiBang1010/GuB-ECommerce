@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from 'sonner';
 
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth.store';
@@ -70,6 +71,9 @@ export function Providers({ children }: { children: ReactNode }) {
   }, [setUser, setLoading]);
 
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      {children}
+      <Toaster position="top-center" richColors />
+    </QueryClientProvider>
   );
 }

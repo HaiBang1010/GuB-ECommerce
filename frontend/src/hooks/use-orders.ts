@@ -30,6 +30,15 @@ export function useCreateOrder() {
   });
 }
 
+// Re-create/reuse the Stripe PaymentIntent for an existing PENDING_PAYMENT order
+// (pay-again). The backend reuses the in-flight intent and 400s if the order is
+// no longer awaiting payment.
+export function useCreatePaymentIntent() {
+  return useMutation({
+    mutationFn: (orderId: string) => createPaymentIntent(orderId),
+  });
+}
+
 // Polls while the order is still PENDING_PAYMENT (the webhook may lag behind the
 // client confirm), stopping once it flips — and caps polling so a stuck order
 // doesn't poll forever (~12s).

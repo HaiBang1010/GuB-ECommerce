@@ -1,10 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { toast } from 'sonner';
 
 import { Link } from '@/i18n/navigation';
-import { useOrder } from '@/hooks/use-orders';
+import { useCreatePaymentIntent, useOrder } from '@/hooks/use-orders';
 import { OrderStatusBadge } from '@/components/order-status-badge';
+import { OrderPayment } from '@/components/order-payment';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -15,6 +18,15 @@ export function OrderDetailView({ orderId }: { orderId: string }) {
   const t = useTranslations('order');
   const locale = useLocale();
   const order = useOrder(orderId);
+  const payIntent = useCreatePaymentIntent();
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+
+  function handlePayAgain() {
+    payIntent.mutate(orderId, {
+      onSuccess: (res) => setClientSecret(res.clientSecret),
+      onError: () => toast.error(t('payError')),
+    });
+  }
 
   if (order.isPending) {
     return (
@@ -61,6 +73,21 @@ export function OrderDetailView({ orderId }: { orderId: string }) {
       <p className="text-muted-foreground text-sm">
         {t('orderDate')}: {formatDate(o.createdAt, locale)}
       </p>
+
+      {/* Pay-again for a stuck PENDING_PAYMENT order */}
+      {o.status === 'PENDING_PAYMENT' ? (
+        clientSecret ? (
+          <OrderPayment orderId={o.id} clientSecret={clientSecret} />
+        ) : (
+          <Button
+            onClick={handlePayAgain}
+            disabled={payIntent.isPending}
+            className="self-start"
+          >
+            {t('completePayment')}
+          </Button>
+        )
+      ) : null}
 
       {/* Shipping address (snapshot) */}
       <section className="flex flex-col gap-1">

@@ -5,15 +5,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useLocale, useTranslations } from 'next-intl';
-import {
-  Elements,
-  PaymentElement,
-  useElements,
-  useStripe,
-} from '@stripe/react-stripe-js';
 
 import { Link } from '@/i18n/navigation';
-import { getStripe } from '@/lib/stripe';
+import { OrderPayment } from '@/components/order-payment';
 import { useAddresses, useCreateAddress } from '@/hooks/use-addresses';
 import { useCart } from '@/hooks/use-cart';
 import { useCreateOrder } from '@/hooks/use-orders';
@@ -23,9 +17,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatPriceCents } from '@/lib/money';
-
-// Load Stripe once, outside render (Stripe's recommendation).
-const stripePromise = getStripe();
 
 const addressSchema = z.object({
   fullName: z.string().min(1),
@@ -207,9 +198,7 @@ export function CheckoutView() {
             </div>
 
             {clientSecret && orderId ? (
-              <Elements stripe={stripePromise} options={{ clientSecret }}>
-                <CheckoutPaymentForm orderId={orderId} />
-              </Elements>
+              <OrderPayment orderId={orderId} clientSecret={clientSecret} />
             ) : (
               <>
                 <Button
@@ -261,47 +250,5 @@ function SummaryLine({
       </span>
       <span>{formatPriceCents(lineCents)}</span>
     </li>
-  );
-}
-
-function CheckoutPaymentForm({ orderId }: { orderId: string }) {
-  const t = useTranslations('checkout');
-  const locale = useLocale();
-  const stripe = useStripe();
-  const elements = useElements();
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  async function handlePay() {
-    if (!stripe || !elements) return;
-    setSubmitting(true);
-    setError(null);
-
-    const result = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: `${window.location.origin}/${locale}/orders/${orderId}/confirmation`,
-      },
-    });
-
-    // confirmPayment only returns here on an immediate error; success redirects.
-    if (result.error) {
-      setError(result.error.message ?? t('paymentError'));
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      <PaymentElement />
-      {error ? <p className="text-destructive text-sm">{error}</p> : null}
-      <Button
-        size="lg"
-        onClick={handlePay}
-        disabled={!stripe || !elements || submitting}
-      >
-        {submitting ? t('processing') : t('payNow')}
-      </Button>
-    </div>
   );
 }
