@@ -153,9 +153,10 @@ export class OrderService {
       return this.getForUser(userId, orderId); // idempotent
     }
     if (order.status !== OrderStatus.PENDING_PAYMENT) {
-      throw new BadRequestException('Only an unpaid order can be cancelled.');
+      // 409: the order is in a state (PAID, shipped, ...) that can't be cancelled.
+      throw new ConflictException('Only an unpaid order can be cancelled.');
     }
-    return this.cancelAndRelease(order);
+    return this.cancelAndRelease(order, 'Cancelled by user.');
   }
 
   /**
@@ -281,12 +282,14 @@ export class OrderService {
 
   // Flip PENDING_PAYMENT -> CANCELLED and release stock, opening its own
   // transaction. Used by the user-cancel and release-expired paths, which return
-  // the refreshed order detail.
+  // the refreshed order detail. The note distinguishes the trigger in the
+  // timeline (user-cancel vs the TTL job).
   private async cancelAndRelease(
     order: OrderWithItems,
+    note = 'Stock released.',
   ): Promise<OrderWithDetail> {
     return this.prisma.$transaction(async (tx) => {
-      await this.cancelAndReleaseTx(tx, order, 'Stock released.');
+      await this.cancelAndReleaseTx(tx, order, note);
       return tx.order.findUniqueOrThrow({
         where: { id: order.id },
         include: { items: true, statusHistory: true },

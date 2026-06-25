@@ -177,7 +177,7 @@ describe('OrderService', () => {
       );
     });
 
-    it('rejects cancelling a non-pending order', async () => {
+    it('rejects cancelling a non-pending order with 409', async () => {
       prisma.order.findUnique.mockResolvedValue({
         id: 'o1',
         userId: 'u1',
@@ -185,7 +185,7 @@ describe('OrderService', () => {
         items: [],
       });
       await expect(service.cancel('u1', 'o1')).rejects.toBeInstanceOf(
-        BadRequestException,
+        ConflictException,
       );
     });
 
@@ -218,6 +218,9 @@ describe('OrderService', () => {
       expect(variants.releaseForOrder).toHaveBeenCalledWith(txMock, [
         { variantId: 'v1', quantity: 2 },
       ]);
+      expect(txMock.orderStatusHistory.create).toHaveBeenCalledWith({
+        data: { orderId: 'o1', status: 'CANCELLED', note: 'Cancelled by user.' },
+      });
       expect(result.status).toBe('CANCELLED');
     });
 

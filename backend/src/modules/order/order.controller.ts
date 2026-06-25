@@ -74,7 +74,7 @@ export class OrderController {
 
   @ApiOperation({ summary: 'Cancel an unpaid order (releases stock)' })
   @ApiOkResponse({ type: OrderResponseDto })
-  @ApiBadRequestResponse({ description: 'Only an unpaid order can be cancelled.' })
+  @ApiConflictResponse({ description: 'Only an unpaid order can be cancelled.' })
   @ApiNotFoundResponse({ description: 'Order not found.' })
   @Post(':id/cancel')
   @HttpCode(HttpStatus.OK)
