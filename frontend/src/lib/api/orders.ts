@@ -31,11 +31,11 @@ export function createPaymentIntent(
 }
 
 // GET /orders/:id — one of the user's orders (includes items + statusHistory).
-export function getOrder(id: string): Promise<Order> {
-  return apiFetch<Order>(`/orders/${encodeURIComponent(id)}`);
+export function getOrder(id: string, signal?: AbortSignal): Promise<Order> {
+  return apiFetch<Order>(`/orders/${encodeURIComponent(id)}`, { signal });
 }
 
 // GET /orders — the current user's order history (bare array).
-export function getMyOrders(): Promise<Order[]> {
-  return apiFetch<Order[]>('/orders');
+export function getMyOrders(signal?: AbortSignal): Promise<Order[]> {
+  return apiFetch<Order[]>('/orders', { signal });
 }

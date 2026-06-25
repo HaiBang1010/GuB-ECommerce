@@ -5,8 +5,8 @@ export type Address = components['schemas']['AddressResponseDto'];
 export type CreateAddressInput = components['schemas']['CreateAddressDto'];
 
 // GET /addresses — current user's address book (auth required).
-export function getAddresses(): Promise<Address[]> {
-  return apiFetch<Address[]>('/addresses');
+export function getAddresses(signal?: AbortSignal): Promise<Address[]> {
+  return apiFetch<Address[]>('/addresses', { signal });
 }
 
 // POST /addresses — create an address (auth required).

@@ -18,7 +18,9 @@ export function useCart() {
   const authLoading = useAuthStore((s) => s.isLoading);
   return useQuery({
     queryKey: ['cart'],
-    queryFn: getCart,
+    queryFn: ({ signal }) => getCart(signal),
+    // Guest-enabled on purpose: the server cart works for guests via the
+    // X-Cart-Session header, so this must NOT require a user.
     enabled: !authLoading,
   });
 }

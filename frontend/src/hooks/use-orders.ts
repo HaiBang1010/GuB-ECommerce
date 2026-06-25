@@ -11,10 +11,11 @@ import {
 // The current user's order history (newest first handled in the view).
 export function useMyOrders() {
   const authLoading = useAuthStore((s) => s.isLoading);
+  const user = useAuthStore((s) => s.user);
   return useQuery({
     queryKey: ['orders'],
-    queryFn: getMyOrders,
-    enabled: !authLoading,
+    queryFn: ({ signal }) => getMyOrders(signal),
+    enabled: !authLoading && !!user,
   });
 }
 
@@ -43,9 +44,12 @@ export function useCreatePaymentIntent() {
 // client confirm), stopping once it flips — and caps polling so a stuck order
 // doesn't poll forever (~12s).
 export function useOrder(id: string) {
+  const authLoading = useAuthStore((s) => s.isLoading);
+  const user = useAuthStore((s) => s.user);
   return useQuery({
     queryKey: ['order', id],
-    queryFn: () => getOrder(id),
+    queryFn: ({ signal }) => getOrder(id, signal),
+    enabled: !authLoading && !!user,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       if (status && status !== 'PENDING_PAYMENT') return false;

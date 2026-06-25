@@ -37,7 +37,24 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     }
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  } catch (err) {
+    // The request was cancelled because the component unmounted / the page
+    // navigated away (e.g. a guard redirect). Re-throw the AbortError so TanStack
+    // Query treats it as a cancellation, NOT a surfaced error.
+    if (
+      init?.signal?.aborted ||
+      (err instanceof DOMException && err.name === 'AbortError')
+    ) {
+      throw err;
+    }
+    // A genuine network failure (e.g. backend unreachable) — surface it as a
+    // handled ApiError so the UI shows an error state instead of an uncaught
+    // "Failed to fetch" TypeError.
+    throw new ApiError(0, 'Network error: could not reach the API.', err);
+  }
 
   if (!res.ok) {
     const body: unknown = await res.json().catch(() => undefined);

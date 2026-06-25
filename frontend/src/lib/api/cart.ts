@@ -18,8 +18,8 @@ const jsonHeaders = () => ({
 });
 
 // GET /cart — works for guest (X-Cart-Session) or user (Bearer).
-export function getCart(): Promise<CartView> {
-  return apiFetch<CartView>('/cart', { headers: sessionHeaders() });
+export function getCart(signal?: AbortSignal): Promise<CartView> {
+  return apiFetch<CartView>('/cart', { headers: sessionHeaders(), signal });
 }
 
 // POST /cart/items — quantity is an INCREMENT (accumulates server-side).

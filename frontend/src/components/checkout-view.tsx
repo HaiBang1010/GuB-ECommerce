@@ -11,6 +11,7 @@ import { OrderPayment } from '@/components/order-payment';
 import { useAddresses, useCreateAddress } from '@/hooks/use-addresses';
 import { useCart } from '@/hooks/use-cart';
 import { useCreateOrder } from '@/hooks/use-orders';
+import { useAuthStore } from '@/stores/auth.store';
 import { useCartStore } from '@/stores/cart.store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,6 +30,27 @@ type AddressValues = z.infer<typeof addressSchema>;
 const ADDRESS_FIELDS = ['fullName', 'phone', 'line1', 'city', 'country'] as const;
 
 export function CheckoutView() {
+  // Don't mount the data-fetching content until the session has settled. For a
+  // guest the middleware redirects to login; rendering null here means no
+  // auth-required query fires during that brief pre-redirect mount.
+  const authReady = !useAuthStore((s) => s.isLoading);
+  const user = useAuthStore((s) => s.user);
+
+  if (!authReady) return <CheckoutSkeleton />;
+  if (!user) return null;
+  return <CheckoutContent />;
+}
+
+function CheckoutSkeleton() {
+  return (
+    <main className="mx-auto grid max-w-5xl gap-8 px-4 py-8 md:grid-cols-2">
+      <Skeleton className="h-64 w-full" />
+      <Skeleton className="h-64 w-full" />
+    </main>
+  );
+}
+
+function CheckoutContent() {
   const t = useTranslations('checkout');
 
   const addresses = useAddresses();

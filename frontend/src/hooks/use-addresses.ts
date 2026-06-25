@@ -9,10 +9,13 @@ import {
 
 export function useAddresses() {
   const authLoading = useAuthStore((s) => s.isLoading);
+  const user = useAuthStore((s) => s.user);
   return useQuery({
     queryKey: ['addresses'],
-    queryFn: getAddresses,
-    enabled: !authLoading,
+    queryFn: ({ signal }) => getAddresses(signal),
+    // Auth-required: only fetch once the session has settled AND a user exists,
+    // so a guest's brief mount (before a guard redirect) never fires it.
+    enabled: !authLoading && !!user,
   });
 }
 
