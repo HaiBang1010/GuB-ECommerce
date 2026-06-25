@@ -78,7 +78,7 @@ updates order state by emitting an event / calling `order.service.markPaid()`.
 4. `payment.service` creates a Stripe PaymentIntent (`amount` = `order.totalCents`; **currency hard-locked to `usd`** — cents map 1:1 only for 2-decimal currencies, a zero-decimal one like VND/JPY would need conversion) with an `idempotencyKey`; order is `PENDING_PAYMENT`.
 5. Return the `clientSecret` to the frontend; the browser confirms payment.
 6. Stripe webhook `payment_intent.succeeded` → order becomes `PAID`, append `OrderStatusHistory`, emit a notification event.
-7. On payment failure / reservation timeout → **release stock** (4.4).
+7. On a card decline the order stays `PENDING_PAYMENT` for a retry; stock is released only on **order cancellation** (user/admin) or **reservation timeout** (§4.4).
 
 > **Known gap (Phase 2):** `OrderService.createFromCart` snapshots the cart's *currently purchasable* lines and **silently skips** any line whose variant has since been archived / hidden, instead of failing the checkout. The frontend must **warn the user that an item was dropped** before they confirm. **TODO — frontend phase.**
 
@@ -86,7 +86,7 @@ updates order state by emitting an event / calling `order.service.markPaid()`.
 - Verify the signature with `STRIPE_WEBHOOK_SECRET` (against the RAW body).
 - In ONE transaction, **INSERT the event id into the `StripeEvent` ledger FIRST**, then apply the effect (Payment → SUCCEEDED, Order → PAID). The unique `id` is the idempotency guard: a duplicate delivery hits `P2002` and the whole transaction is skipped → `200` no-op. A genuine failure rolls back (event NOT recorded) and 5xx-s so Stripe retries.
 - The backend may be asleep when the webhook arrives → Stripe retries; insert-first makes processing **exactly-once**.
-- **`payment_intent.payment_failed`** is handled in the **same ledger transaction**: mark the `Payment` `FAILED`, then `OrderService.markPaymentFailed` **cancels the order + releases its stock immediately** (§4.4) rather than waiting for the TTL job. Idempotent on three levels — the `StripeEvent` ledger, the conditional `PENDING_PAYMENT → CANCELLED` flip, and the unique `Payment` id — so a re-delivered failed event never double-restocks.
+- **`payment_intent.payment_failed`** only marks the `Payment` `FAILED` and **leaves the order `PENDING_PAYMENT`** so the buyer can retry another card on the same order. The Stripe intent stays `requires_payment_method`, and `createIntentForOrder` reuses it (re-querying a `REQUIRES_PAYMENT` **or** `FAILED` payment and `retrievePaymentIntent`-ing it) so a refresh of the durable pay page recovers the card field instead of creating a colliding new intent. Stock is reclaimed by the TTL `release-expired` job or an explicit cancel — **not** on a single decline. Idempotent via the `StripeEvent` ledger (a re-delivered failed event is a P2002 no-op). *(This deliberately reversed the earlier cancel-on-fail: a transient decline ≠ abandonment.)*
 - **Verified e2e:** a re-sent `payment_intent.succeeded` left the order `PAID` once, no duplicated timeline, stock unchanged.
 
 ### 4.3 Atomic stock decrement
@@ -98,17 +98,16 @@ WHERE  "id" = $variantId AND "stockQty" >= $qty;
 ```
 Never read-then-write in separate statements (race window). Wrap the whole checkout in one transaction.
 
-> **Status (Phase 2): IMPLEMENTED.** Checkout decrements `stockQty` with the atomic `WHERE "stockQty" >= $qty` guard above, **inside the same transaction that creates the order** — `ProductVariantService.decrementForOrder(tx, …)` called from `OrderService.createFromCart`. It collects **every** insufficient line (not just the first) and throws a **structured 409** (`OutOfStockErrorDto`: `{ code: 'OUT_OF_STOCK', items: [{ variantId, available }] }`) so the storefront can name each short item; the whole order rolls back (no oversell, no orphaned decrement). Stock is returned by `releaseForOrder(tx, …)` on cancel / failure / expiry (§4.4). The chosen model is **atomic decrement**, not a time-boxed reservation table — so **no schema change was needed**. **Verified e2e:** a real `quantity > stock` order was rejected and stock never went negative.
+> **Status (Phase 2): IMPLEMENTED.** Checkout decrements `stockQty` with the atomic `WHERE "stockQty" >= $qty` guard above, **inside the same transaction that creates the order** — `ProductVariantService.decrementForOrder(tx, …)` called from `OrderService.createFromCart`. It collects **every** insufficient line (not just the first) and throws a **structured 409** (`OutOfStockErrorDto`: `{ code: 'OUT_OF_STOCK', items: [{ variantId, available }] }`) so the storefront can name each short item; the whole order rolls back (no oversell, no orphaned decrement). Stock is returned by `releaseForOrder(tx, …)` on cancel / expiry (§4.4). The chosen model is **atomic decrement**, not a time-boxed reservation table — so **no schema change was needed**. **Verified e2e:** a real `quantity > stock` order was rejected and stock never went negative.
 
 ### 4.4 Stock release
-Triggered by: payment failure, order cancellation, or reservation expiry (cron). Re-increment `stockQty` for each line. Make it idempotent (don't double-release).
+Triggered by: order cancellation (user/admin) or reservation expiry (cron) — **not** a single payment decline (§4.2). Re-increment `stockQty` for each line. Make it idempotent (don't double-release).
 
-> **Status (Phase 2): IMPLEMENTED — one shared core.** `OrderService.cancelAndReleaseTx(tx, order, note)` does the conditional `PENDING_PAYMENT → CANCELLED` flip + `releaseForOrder` + a history note, reused by all three triggers:
-> - **failed-payment webhook** — `markPaymentFailed` (note `"Payment failed."`, §4.2),
+> **Status (Phase 2): IMPLEMENTED — one shared core.** `OrderService.cancelAndReleaseTx(tx, order, note)` does the conditional `PENDING_PAYMENT → CANCELLED` flip + `releaseForOrder` + a history note, reused by both release triggers:
 > - **user cancel** — `POST /orders/:id/cancel` (owner-only, idempotent on an already-cancelled order, **409** if not `PENDING_PAYMENT`, note `"Cancelled by user."`),
 > - **TTL job** — `releaseExpired` (note `"Stock released."`, §6).
 >
-> The conditional flip is the idempotency guard: only the caller that wins the `PENDING_PAYMENT → CANCELLED` transition restocks, so overlapping triggers (user + cron, webhook + cron) never double-release.
+> A card decline does **not** release here — the `payment_intent.payment_failed` webhook only marks the Payment FAILED and leaves the order payable (§4.2). The conditional flip is the idempotency guard: only the caller that wins the `PENDING_PAYMENT → CANCELLED` transition restocks, so overlapping triggers (user + cron) never double-release.
 
 ### 4.5 Auth sync
 `SupabaseJwtGuard` verifies the JWT. On first sight of a user id, **upsert** `User` (+ empty `Profile`). `User.id` equals the Supabase Auth UUID.
