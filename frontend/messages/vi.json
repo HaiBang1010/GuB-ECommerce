@@ -82,6 +82,13 @@
     "outOfStockError": "{name} chỉ còn {count} trong kho",
     "reviewCartStock": "Một số sản phẩm vượt tồn kho — vui lòng xem lại giỏ hàng."
   },
+  "pay": {
+    "title": "Thanh toán đơn hàng",
+    "heldStock": "Đã giữ {count} sản phẩm cho bạn — hoàn tất thanh toán để giữ đơn",
+    "cancelOrder": "Hủy đơn",
+    "orderCancelled": "Đơn hàng đã được hủy",
+    "alreadyPaid": "Đơn hàng đã được thanh toán"
+  },
   "order": {
     "confirmed": "Đặt hàng thành công!",
     "processing": "Đang xử lý thanh toán...",
@@ -104,6 +111,9 @@
     "back": "Quay lại danh sách",
     "completePayment": "Hoàn tất thanh toán",
     "payError": "Không thể tạo thanh toán",
+    "cancelConfirm": "Bạn chắc chắn muốn hủy đơn này?",
+    "cancelled": "Đã hủy đơn hàng",
+    "cancelError": "Không hủy được đơn hàng",
     "status": {
       "PENDING_PAYMENT": "Chờ thanh toán",
       "PAID": "Đã thanh toán",

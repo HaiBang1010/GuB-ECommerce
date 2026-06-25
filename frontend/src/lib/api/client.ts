@@ -22,6 +22,18 @@ export class ApiError extends Error {
   }
 }
 
+// A request can be aborted at the connection stage (caught by fetch's reject) OR
+// mid-body-read (res.json() rejects) — when a query is cancelled on tab-switch /
+// unmount. Either must be re-thrown raw so TanStack Query treats it as a
+// cancellation instead of letting it surface as an uncaught runtime error.
+function isAbort(err: unknown, signal?: AbortSignal | null): boolean {
+  return (
+    signal?.aborted === true ||
+    (err instanceof DOMException && err.name === 'AbortError') ||
+    (err instanceof Error && err.name === 'AbortError')
+  );
+}
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set('Accept', 'application/json');
@@ -37,32 +49,35 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     }
   }
 
-  let res: Response;
   try {
-    res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
-  } catch (err) {
-    // The request was cancelled because the component unmounted / the page
-    // navigated away (e.g. a guard redirect). Re-throw the AbortError so TanStack
-    // Query treats it as a cancellation, NOT a surfaced error.
-    if (
-      init?.signal?.aborted ||
-      (err instanceof DOMException && err.name === 'AbortError')
-    ) {
-      throw err;
+    const res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+
+    if (!res.ok) {
+      let body: unknown;
+      try {
+        body = await res.json();
+      } catch (parseErr) {
+        // Distinguish a cancelled body read (re-throw) from a genuinely
+        // non-JSON error body (treat as no body).
+        if (isAbort(parseErr, init?.signal)) throw parseErr;
+        body = undefined;
+      }
+      const message =
+        (body as { message?: string } | undefined)?.message ??
+        `Request to ${path} failed (HTTP ${res.status})`;
+      throw new ApiError(res.status, message, body);
     }
+
+    return (await res.json()) as T;
+  } catch (err) {
+    // A cancellation (connection or body read) — re-throw raw so TanStack Query
+    // swallows it as a cancellation rather than an error.
+    if (isAbort(err, init?.signal)) throw err;
+    // Already a shaped HTTP error — pass it through untouched.
+    if (err instanceof ApiError) throw err;
     // A genuine network failure (e.g. backend unreachable) — surface it as a
     // handled ApiError so the UI shows an error state instead of an uncaught
     // "Failed to fetch" TypeError.
     throw new ApiError(0, 'Network error: could not reach the API.', err);
   }
-
-  if (!res.ok) {
-    const body: unknown = await res.json().catch(() => undefined);
-    const message =
-      (body as { message?: string } | undefined)?.message ??
-      `Request to ${path} failed (HTTP ${res.status})`;
-    throw new ApiError(res.status, message, body);
-  }
-
-  return res.json() as Promise<T>;
 }

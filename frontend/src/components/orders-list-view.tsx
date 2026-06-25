@@ -58,11 +58,11 @@ export function OrdersListView() {
           {data.map((o) => {
             const count = o.items.reduce((sum, i) => sum + i.quantity, 0);
             return (
-              <li key={o.id}>
-                <Link
-                  href={`/orders/${o.id}`}
-                  className="hover:bg-accent block rounded-md border p-4 transition-colors"
-                >
+              <li
+                key={o.id}
+                className="rounded-md border transition-colors hover:bg-accent"
+              >
+                <Link href={`/orders/${o.id}`} className="block p-4">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium">#{o.id.slice(-8)}</span>
                     <OrderStatusBadge status={o.status} />
@@ -75,12 +75,15 @@ export function OrdersListView() {
                       {formatPriceCents(o.totalCents)}
                     </span>
                   </div>
-                  {o.status === 'PENDING_PAYMENT' ? (
-                    <div className="text-primary mt-2 text-sm font-medium">
-                      {t('completePayment')} →
-                    </div>
-                  ) : null}
                 </Link>
+                {o.status === 'PENDING_PAYMENT' ? (
+                  <Link
+                    href={`/orders/${o.id}/pay`}
+                    className="text-primary block px-4 pb-3 text-sm font-medium"
+                  >
+                    {t('completePayment')} →
+                  </Link>
+                ) : null}
               </li>
             );
           })}

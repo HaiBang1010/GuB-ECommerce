@@ -82,6 +82,13 @@
     "outOfStockError": "{name} — only {count} left in stock",
     "reviewCartStock": "Some items exceed available stock — please review your cart."
   },
+  "pay": {
+    "title": "Complete payment",
+    "heldStock": "{count} items reserved for you — complete payment to keep your order",
+    "cancelOrder": "Cancel order",
+    "orderCancelled": "Order cancelled",
+    "alreadyPaid": "Order already paid"
+  },
   "order": {
     "confirmed": "Order confirmed!",
     "processing": "Payment processing...",
@@ -104,6 +111,9 @@
     "back": "Back to orders",
     "completePayment": "Complete payment",
     "payError": "Could not start payment",
+    "cancelConfirm": "Cancel this order?",
+    "cancelled": "Order cancelled",
+    "cancelError": "Couldn't cancel the order",
     "status": {
       "PENDING_PAYMENT": "Pending payment",
       "PAID": "Paid",

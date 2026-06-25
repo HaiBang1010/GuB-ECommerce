@@ -1,13 +1,11 @@
 'use client';
 
-import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
-import { Link } from '@/i18n/navigation';
-import { useCreatePaymentIntent, useOrder } from '@/hooks/use-orders';
+import { Link, useRouter } from '@/i18n/navigation';
+import { useCancelOrder, useOrder } from '@/hooks/use-orders';
 import { OrderStatusBadge } from '@/components/order-status-badge';
-import { OrderPayment } from '@/components/order-payment';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -16,15 +14,20 @@ import { formatDate, formatDateTime } from '@/lib/datetime';
 
 export function OrderDetailView({ orderId }: { orderId: string }) {
   const t = useTranslations('order');
+  const tPay = useTranslations('pay');
   const locale = useLocale();
+  const router = useRouter();
   const order = useOrder(orderId);
-  const payIntent = useCreatePaymentIntent();
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const cancel = useCancelOrder();
 
-  function handlePayAgain() {
-    payIntent.mutate(orderId, {
-      onSuccess: (res) => setClientSecret(res.clientSecret),
-      onError: () => toast.error(t('payError')),
+  function handleCancel() {
+    if (!window.confirm(t('cancelConfirm'))) return;
+    cancel.mutate(orderId, {
+      onSuccess: () => {
+        toast.success(t('cancelled'));
+        router.push('/orders');
+      },
+      onError: () => toast.error(t('cancelError')),
     });
   }
 
@@ -74,19 +77,20 @@ export function OrderDetailView({ orderId }: { orderId: string }) {
         {t('orderDate')}: {formatDate(o.createdAt, locale)}
       </p>
 
-      {/* Pay-again for a stuck PENDING_PAYMENT order */}
+      {/* Pay or cancel a stuck PENDING_PAYMENT order — payment lives on /pay */}
       {o.status === 'PENDING_PAYMENT' ? (
-        clientSecret ? (
-          <OrderPayment orderId={o.id} clientSecret={clientSecret} />
-        ) : (
-          <Button
-            onClick={handlePayAgain}
-            disabled={payIntent.isPending}
-            className="self-start"
-          >
-            {t('completePayment')}
+        <div className="flex gap-3">
+          <Button asChild>
+            <Link href={`/orders/${o.id}/pay`}>{t('completePayment')}</Link>
           </Button>
-        )
+          <Button
+            variant="ghost"
+            disabled={cancel.isPending}
+            onClick={handleCancel}
+          >
+            {tPay('cancelOrder')}
+          </Button>
+        </div>
       ) : null}
 
       {/* Shipping address (snapshot) */}

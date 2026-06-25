@@ -47,6 +47,14 @@ export function getOrder(id: string, signal?: AbortSignal): Promise<Order> {
   return apiFetch<Order>(`/orders/${encodeURIComponent(id)}`, { signal });
 }
 
+// POST /orders/:id/cancel — cancel an unpaid order; releases stock. Owner-only,
+// idempotent on an already-cancelled order, 409 if the order is no longer PENDING.
+export function cancelOrder(id: string): Promise<Order> {
+  return apiFetch<Order>(`/orders/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST',
+  });
+}
+
 // GET /orders — the current user's order history (bare array).
 export function getMyOrders(signal?: AbortSignal): Promise<Order[]> {
   return apiFetch<Order[]>('/orders', { signal });

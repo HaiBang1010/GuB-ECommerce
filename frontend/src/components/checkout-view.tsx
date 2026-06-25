@@ -6,8 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useLocale, useTranslations } from 'next-intl';
 
-import { Link } from '@/i18n/navigation';
-import { OrderPayment } from '@/components/order-payment';
+import { Link, useRouter } from '@/i18n/navigation';
 import { useAddresses, useCreateAddress } from '@/hooks/use-addresses';
 import { useCart } from '@/hooks/use-cart';
 import { useCreateOrder } from '@/hooks/use-orders';
@@ -55,6 +54,7 @@ function CheckoutSkeleton() {
 function CheckoutContent() {
   const t = useTranslations('checkout');
   const locale = useLocale();
+  const router = useRouter();
   const snapshots = useCartStore((s) => s.snapshots);
 
   const addresses = useAddresses();
@@ -66,8 +66,6 @@ function CheckoutContent() {
     null,
   );
   const [showForm, setShowForm] = useState(false);
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [orderId, setOrderId] = useState<string | null>(null);
 
   const form = useForm<AddressValues>({
     resolver: zodResolver(addressSchema),
@@ -95,11 +93,10 @@ function CheckoutContent() {
 
   function handlePlaceOrder() {
     if (!selectedAddressId) return;
+    // The order is placed (stock reserved) here; payment happens on the durable
+    // pay page, so the buyer never loses the card field on a tab-switch/refresh.
     createOrder.mutate(selectedAddressId, {
-      onSuccess: ({ order, clientSecret: cs }) => {
-        setOrderId(order.id);
-        setClientSecret(cs);
-      },
+      onSuccess: (order) => router.push(`/orders/${order.id}/pay`),
     });
   }
 
@@ -245,48 +242,44 @@ function CheckoutContent() {
               <span>{formatPriceCents(cart.data?.subtotalCents ?? 0)}</span>
             </div>
 
-            {clientSecret && orderId ? (
-              <OrderPayment orderId={orderId} clientSecret={clientSecret} />
-            ) : (
-              <>
-                {hasStockIssue ? (
+            <>
+              {hasStockIssue ? (
+                <p className="text-destructive text-sm">
+                  {t('reviewCartStock')}{' '}
+                  <Link href="/cart" className="underline">
+                    {t('title')}
+                  </Link>
+                </p>
+              ) : null}
+              <Button
+                size="lg"
+                disabled={!canPlaceOrder}
+                onClick={handlePlaceOrder}
+              >
+                {createOrder.isPending ? t('processing') : t('placeOrder')}
+              </Button>
+              {createOrder.isError ? (
+                outOfStockItems ? (
+                  <div className="flex flex-col gap-1">
+                    {outOfStockItems.map((it) => (
+                      <p
+                        key={it.variantId}
+                        className="text-destructive text-sm"
+                      >
+                        {t('outOfStockError', {
+                          name: nameForVariant(it.variantId),
+                          count: it.available,
+                        })}
+                      </p>
+                    ))}
+                  </div>
+                ) : (
                   <p className="text-destructive text-sm">
-                    {t('reviewCartStock')}{' '}
-                    <Link href="/cart" className="underline">
-                      {t('title')}
-                    </Link>
+                    {t('paymentError')}
                   </p>
-                ) : null}
-                <Button
-                  size="lg"
-                  disabled={!canPlaceOrder}
-                  onClick={handlePlaceOrder}
-                >
-                  {createOrder.isPending ? t('processing') : t('placeOrder')}
-                </Button>
-                {createOrder.isError ? (
-                  outOfStockItems ? (
-                    <div className="flex flex-col gap-1">
-                      {outOfStockItems.map((it) => (
-                        <p
-                          key={it.variantId}
-                          className="text-destructive text-sm"
-                        >
-                          {t('outOfStockError', {
-                            name: nameForVariant(it.variantId),
-                            count: it.available,
-                          })}
-                        </p>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-destructive text-sm">
-                      {t('paymentError')}
-                    </p>
-                  )
-                ) : null}
-              </>
-            )}
+                )
+              ) : null}
+            </>
           </>
         )}
       </section>

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/auth.store';
 import { ApiError } from '@/lib/api/client';
 import {
+  cancelOrder,
   createOrder,
   createPaymentIntent,
   getMyOrders,
@@ -20,16 +21,13 @@ export function useMyOrders() {
   });
 }
 
-// The backend splits create-order and create-payment-intent, so chain them:
-// POST /orders -> POST /payments/intent. Returns the order + Stripe clientSecret.
+// POST /orders — places the order (stock is reserved here). The Stripe intent is
+// created lazily on the durable pay page, so checkout just returns the order and
+// navigates there.
 export function useCreateOrder() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (addressId: string) => {
-      const order = await createOrder(addressId);
-      const intent = await createPaymentIntent(order.id);
-      return { order, clientSecret: intent.clientSecret };
-    },
+    mutationFn: (addressId: string) => createOrder(addressId),
     // A 409 means stock ran out between viewing the cart and placing the order;
     // refresh the cart so the stock-sync UI reflects the new live quantities.
     onError: (err) => {
@@ -40,12 +38,29 @@ export function useCreateOrder() {
   });
 }
 
-// Re-create/reuse the Stripe PaymentIntent for an existing PENDING_PAYMENT order
-// (pay-again). The backend reuses the in-flight intent and 400s if the order is
-// no longer awaiting payment.
-export function useCreatePaymentIntent() {
+// Restore (or create) the Stripe PaymentIntent for a PENDING_PAYMENT order. Modelled
+// as a query so the durable pay page recovers the clientSecret on mount/refresh; the
+// backend reuses the in-flight intent (idempotent). Gated by `enabled` to the
+// PENDING state, since the backend 400s otherwise. No retry: a 400 won't fix itself.
+export function usePaymentIntent(orderId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['payment-intent', orderId],
+    queryFn: () => createPaymentIntent(orderId),
+    enabled,
+    staleTime: Infinity,
+    retry: false,
+  });
+}
+
+// Cancel an unpaid order (releases stock). Refresh the affected order + the list.
+export function useCancelOrder() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: (orderId: string) => createPaymentIntent(orderId),
+    mutationFn: (orderId: string) => cancelOrder(orderId),
+    onSuccess: (_data, orderId) => {
+      void qc.invalidateQueries({ queryKey: ['order', orderId] });
+      void qc.invalidateQueries({ queryKey: ['orders'] });
+    },
   });
 }
 
