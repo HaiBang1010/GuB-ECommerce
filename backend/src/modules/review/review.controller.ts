@@ -1,10 +1,18 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiNotFoundResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
@@ -15,6 +23,7 @@ import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { SupabaseAuthGuard } from '../iam/auth/supabase-auth.guard';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { ReviewResponseDto } from './dto/review-response.dto';
+import { UpdateReviewDto } from './dto/update-review.dto';
 import { ReviewService } from './review.service';
 
 // Authenticated review actions; every write is scoped to the caller's userId in
@@ -42,5 +51,18 @@ export class ReviewController {
     @Body() dto: CreateReviewDto,
   ): Promise<Review> {
     return this.reviewService.create(user.id, dto);
+  }
+
+  @ApiOperation({ summary: 'Edit your own review (rating / body)' })
+  @ApiOkResponse({ type: ReviewResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failed.' })
+  @ApiNotFoundResponse({ description: 'Review not found.' })
+  @Patch(':id')
+  update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateReviewDto,
+  ): Promise<Review> {
+    return this.reviewService.updateOwn(user.id, id, dto);
   }
 }

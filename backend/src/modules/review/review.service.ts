@@ -1,9 +1,14 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, Review } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrderService } from '../order/order.service';
 import { ProductService } from '../product/product/product.service';
 import { CreateReviewDto } from './dto/create-review.dto';
+import { UpdateReviewDto } from './dto/update-review.dto';
 
 @Injectable()
 export class ReviewService {
@@ -62,5 +67,30 @@ export class ReviewService {
       }
       throw err;
     }
+  }
+
+  /**
+   * Edit the caller's own review. Only the rating/body are mutable (the
+   * proof-of-purchase link is immutable); only the provided fields are written,
+   * and `updatedAt` is bumped by Prisma. Ownership failure is 404 (owner idiom).
+   */
+  async updateOwn(
+    userId: string,
+    reviewId: string,
+    dto: UpdateReviewDto,
+  ): Promise<Review> {
+    const review = await this.prisma.review.findUnique({
+      where: { id: reviewId },
+    });
+    if (!review || review.userId !== userId) {
+      throw new NotFoundException('Review not found.');
+    }
+    return this.prisma.review.update({
+      where: { id: reviewId },
+      data: {
+        ...(dto.rating !== undefined ? { rating: dto.rating } : {}),
+        ...(dto.body !== undefined ? { body: dto.body } : {}),
+      },
+    });
   }
 }

@@ -8,7 +8,12 @@ import { ProductService } from '../product/product/product.service';
 // The prisma mock exposes ONLY the `review` delegate: any stray query to another
 // module's table (order/product/orderItem) throws, enforcing the schema boundary
 // structurally. Cross-module collaborators are their own minimal mocks.
-type ReviewDelegate = { findFirst: jest.Mock; create: jest.Mock };
+type ReviewDelegate = {
+  findFirst: jest.Mock;
+  findUnique: jest.Mock;
+  create: jest.Mock;
+  update: jest.Mock;
+};
 type OrdersMock = { getDeliveredOrderItemForUser: jest.Mock };
 type ProductsMock = { assertExists: jest.Mock };
 
@@ -19,7 +24,14 @@ describe('ReviewService', () => {
   let service: ReviewService;
 
   beforeEach(() => {
-    prisma = { review: { findFirst: jest.fn(), create: jest.fn() } };
+    prisma = {
+      review: {
+        findFirst: jest.fn(),
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+      },
+    };
     orders = { getDeliveredOrderItemForUser: jest.fn() };
     products = { assertExists: jest.fn() };
     service = new ReviewService(
@@ -132,6 +144,52 @@ describe('ReviewService', () => {
       await expect(
         service.create('u1', { orderItemId: 'oi1', rating: 5 }),
       ).rejects.toBeInstanceOf(ConflictException);
+    });
+  });
+
+  describe('updateOwn', () => {
+    it('throws NotFound for a review owned by someone else', async () => {
+      prisma.review.findUnique.mockResolvedValue({ id: 'rev1', userId: 'other' });
+      await expect(
+        service.updateOwn('u1', 'rev1', { rating: 4 }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.review.update).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFound for a missing review', async () => {
+      prisma.review.findUnique.mockResolvedValue(null);
+      await expect(
+        service.updateOwn('u1', 'missing', { rating: 4 }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('updates rating and body for the owner', async () => {
+      prisma.review.findUnique.mockResolvedValue({ id: 'rev1', userId: 'u1' });
+      const updated = { id: 'rev1', userId: 'u1', rating: 4, body: 'Smaller' };
+      prisma.review.update.mockResolvedValue(updated);
+
+      const result = await service.updateOwn('u1', 'rev1', {
+        rating: 4,
+        body: 'Smaller',
+      });
+
+      expect(prisma.review.update).toHaveBeenCalledWith({
+        where: { id: 'rev1' },
+        data: { rating: 4, body: 'Smaller' },
+      });
+      expect(result).toBe(updated);
+    });
+
+    it('writes only the provided fields (partial update)', async () => {
+      prisma.review.findUnique.mockResolvedValue({ id: 'rev1', userId: 'u1' });
+      prisma.review.update.mockResolvedValue({ id: 'rev1' });
+
+      await service.updateOwn('u1', 'rev1', { rating: 3 });
+
+      expect(prisma.review.update).toHaveBeenCalledWith({
+        where: { id: 'rev1' },
+        data: { rating: 3 },
+      });
     });
   });
 });
