@@ -4,6 +4,7 @@ import { AddressService } from './address/address.service';
 import { OptionalSupabaseAuthGuard } from './auth/optional-supabase-auth.guard';
 import { SupabaseAuthGuard } from './auth/supabase-auth.guard';
 import { SupabaseJwtService } from './auth/supabase-jwt.service';
+import { UserController } from './user/user.controller';
 import { UserService } from './user/user.service';
 
 /**
@@ -17,7 +18,7 @@ import { UserService } from './user/user.service';
  */
 @Global()
 @Module({
-  controllers: [AddressController],
+  controllers: [AddressController, UserController],
   providers: [
     UserService,
     AddressService,
