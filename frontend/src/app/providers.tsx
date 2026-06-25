@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth.store';
 import { useCartStore } from '@/stores/cart.store';
 import { mergeCart } from '@/lib/api/cart';
+import { getMe } from '@/lib/api/me';
 
 // Client-only provider tree. The locale layout is a server component, so context
 // providers (TanStack Query) and the auth-session bridge live here.
@@ -27,6 +28,7 @@ export function Providers({ children }: { children: ReactNode }) {
   );
 
   const setUser = useAuthStore((s) => s.setUser);
+  const setRole = useAuthStore((s) => s.setRole);
   const setLoading = useAuthStore((s) => s.setLoading);
 
   // Mirror the Supabase session into the auth store: read it once on mount, then
@@ -35,10 +37,28 @@ export function Providers({ children }: { children: ReactNode }) {
     const supabase = createClient();
     let active = true;
 
+    // Resolve the app role from the backend (reads iam.User.role) — the single
+    // source of truth. Best-effort: a failure leaves role null, so the UI just
+    // hides admin affordances (the backend RoleGuard is the real gate).
+    const syncRole = (hasSession: boolean) => {
+      if (!hasSession) {
+        setRole(null);
+        return;
+      }
+      void getMe()
+        .then((me) => {
+          if (active) setRole(me.role);
+        })
+        .catch(() => {
+          if (active) setRole(null);
+        });
+    };
+
     void supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
       setUser(data.session?.user ?? null);
       setLoading(false);
+      syncRole(!!data.session);
     });
 
     const {
@@ -48,6 +68,7 @@ export function Providers({ children }: { children: ReactNode }) {
       setLoading(false);
 
       if (event === 'SIGNED_IN') {
+        syncRole(true);
         // Fold the guest cart (X-Cart-Session) into the user cart, then start a
         // fresh empty guest session. mergeCart no-ops when there's no guest cart,
         // so a repeated SIGNED_IN (e.g. token refresh) is harmless.
@@ -59,6 +80,7 @@ export function Providers({ children }: { children: ReactNode }) {
           });
       }
       if (event === 'SIGNED_OUT') {
+        setRole(null);
         useCartStore.getState().clear();
         void queryClient.invalidateQueries({ queryKey: ['cart'] });
       }
@@ -68,7 +90,7 @@ export function Providers({ children }: { children: ReactNode }) {
       active = false;
       subscription.unsubscribe();
     };
-  }, [setUser, setLoading]);
+  }, [setUser, setRole, setLoading, queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>

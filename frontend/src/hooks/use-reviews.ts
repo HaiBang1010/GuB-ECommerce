@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
+  adminReplyToReview,
   createReview,
   getProductReviews,
   updateReview,
+  type AdminReplyBody,
   type CreateReviewBody,
   type UpdateReviewBody,
 } from '@/lib/api/reviews';
@@ -36,6 +38,19 @@ export function useUpdateReview() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: UpdateReviewBody }) =>
       updateReview(id, body),
+    onSuccess: (data) => {
+      void qc.invalidateQueries({ queryKey: ['reviews', data.productId] });
+    },
+  });
+}
+
+// Admin: post a store reply to a review. Refresh that product's review list so the
+// reply renders and the inline form disappears.
+export function useAdminReplyToReview() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: AdminReplyBody }) =>
+      adminReplyToReview(id, body),
     onSuccess: (data) => {
       void qc.invalidateQueries({ queryKey: ['reviews', data.productId] });
     },

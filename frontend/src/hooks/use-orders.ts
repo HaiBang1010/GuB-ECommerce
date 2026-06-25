@@ -3,12 +3,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/auth.store';
 import { ApiError } from '@/lib/api/client';
 import {
+  adminUpdateOrderStatus,
   cancelOrder,
   createOrder,
   createPaymentIntent,
+  getAdminOrders,
   getMyOrders,
   getOrder,
 } from '@/lib/api/orders';
+import type { OrderStatus, UpdateOrderStatusBody } from '@/lib/api/orders';
 
 // The current user's order history (newest first handled in the view).
 export function useMyOrders() {
@@ -60,6 +63,30 @@ export function useCancelOrder() {
     onSuccess: (_data, orderId) => {
       void qc.invalidateQueries({ queryKey: ['order', orderId] });
       void qc.invalidateQueries({ queryKey: ['orders'] });
+    },
+  });
+}
+
+// Admin: every order (optionally filtered by status). Gated to a logged-in user;
+// the backend RoleGuard rejects non-admins (the admin shell also guards the UI).
+export function useAdminOrders(status?: OrderStatus) {
+  const authLoading = useAuthStore((s) => s.isLoading);
+  const user = useAuthStore((s) => s.user);
+  return useQuery({
+    queryKey: ['admin', 'orders', status ?? 'all'],
+    queryFn: ({ signal }) => getAdminOrders(status, signal),
+    enabled: !authLoading && !!user,
+  });
+}
+
+// Admin: advance an order's fulfillment status. Refresh the admin list on success.
+export function useAdminUpdateOrderStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: UpdateOrderStatusBody }) =>
+      adminUpdateOrderStatus(id, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'orders'] });
     },
   });
 }

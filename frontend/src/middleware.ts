@@ -6,8 +6,10 @@ import { refreshSession } from './lib/supabase/middleware';
 
 const handleI18nRouting = createMiddleware(routing);
 
-// Locale-prefixed routes that require a logged-in user.
-const PROTECTED = /^\/(vi|en)\/(checkout|orders)(\/|$)/;
+// Locale-prefixed routes that require a logged-in user. /admin only needs a
+// session here (middleware can't see the role); the ADMIN check is the layout
+// guard + the backend RoleGuard on every /admin/* API call.
+const PROTECTED = /^\/(vi|en)\/(checkout|orders|admin)(\/|$)/;
 
 export default async function middleware(request: NextRequest) {
   // 1) next-intl owns locale routing and the base response.

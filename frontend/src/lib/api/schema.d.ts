@@ -611,6 +611,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the current user (id, email, role, basic profile) */
+        get: operations["UserController_me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/cart": {
         parameters: {
             query?: never;
@@ -1523,6 +1540,32 @@ export interface components {
             country?: string;
             /** @example 700000 */
             postalCode?: string;
+        };
+        MeResponseDto: {
+            /**
+             * @description Supabase Auth user id.
+             * @example clx1a2b3c4d5e6f7g8h9usr01
+             */
+            id: string;
+            /** @example user@example.com */
+            email: string;
+            /**
+             * @example CUSTOMER
+             * @enum {string}
+             */
+            role: "CUSTOMER" | "ADMIN";
+            /** @example Nguyễn Văn A */
+            name: string | null;
+            /**
+             * Format: date-time
+             * @example null
+             */
+            birthday: string | null;
+            /**
+             * Format: date-time
+             * @example 2026-06-01T00:00:00.000Z
+             */
+            createdAt: string;
         };
         CartItemViewDto: {
             /** @example clx1a2b3c4d5e6f7g8h9var01 */
@@ -3699,6 +3742,32 @@ export interface operations {
             };
             /** @description Address not found. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    UserController_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

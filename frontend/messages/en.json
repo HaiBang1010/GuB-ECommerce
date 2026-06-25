@@ -147,6 +147,7 @@
   "nav": {
     "account": "Account",
     "myOrders": "My orders",
+    "admin": "Admin",
     "vouchers": "Vouchers",
     "reviews": "Reviews",
     "comingSoon": "Coming soon"
@@ -158,5 +159,30 @@
     "orderPaid": "Order #{orderId} paid",
     "orderShipped": "Order #{orderId} is on the way",
     "orderDelivered": "Order #{orderId} delivered"
+  },
+  "admin": {
+    "title": "GuB Admin",
+    "orders": "Orders",
+    "reviews": "Reviews",
+    "catalog": "Catalog",
+    "analytics": "Analytics",
+    "comingSoon": "Coming soon",
+    "loading": "Loading...",
+    "unauthorized": "Unauthorized",
+    "logout": "Sign out",
+    "orderId": "Order",
+    "user": "Customer",
+    "statusColumn": "Status",
+    "total": "Total",
+    "action": "Action",
+    "noOrders": "No orders",
+    "error": "Couldn't load orders",
+    "advanceTo": "Advance to {status}",
+    "statusUpdated": "Order status updated",
+    "updateError": "Couldn't update the order",
+    "reply": "Reply",
+    "replyPlaceholder": "Write a reply to this review",
+    "replied": "Reply sent",
+    "replyError": "Couldn't send the reply"
   }
 }

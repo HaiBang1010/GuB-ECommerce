@@ -7,6 +7,7 @@ import { Link } from '@/i18n/navigation';
 import { useAuthStore } from '@/stores/auth.store';
 import { useCart } from '@/hooks/use-cart';
 import { createClient } from '@/lib/supabase/client';
+import { isAdmin } from '@/lib/auth/is-admin';
 import { NotificationBell } from '@/components/notification-bell';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,6 +24,7 @@ export function Header() {
   const tNav = useTranslations('nav');
   const tCart = useTranslations('cart');
   const user = useAuthStore((s) => s.user);
+  const role = useAuthStore((s) => s.role);
   const isLoading = useAuthStore((s) => s.isLoading);
   const { data: cart } = useCart();
 
@@ -72,6 +74,11 @@ export function Header() {
                 <DropdownMenuItem asChild>
                   <Link href="/orders">{tNav('myOrders')}</Link>
                 </DropdownMenuItem>
+                {isAdmin(role) ? (
+                  <DropdownMenuItem asChild>
+                    <Link href="/admin/orders">{tNav('admin')}</Link>
+                  </DropdownMenuItem>
+                ) : null}
                 <DropdownMenuItem disabled>
                   {tNav('vouchers')}
                   <span className="text-muted-foreground text-xs">

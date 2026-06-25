@@ -147,6 +147,7 @@
   "nav": {
     "account": "Tài khoản",
     "myOrders": "Đơn hàng của tôi",
+    "admin": "Quản trị",
     "vouchers": "Voucher",
     "reviews": "Đánh giá",
     "comingSoon": "Sắp có"
@@ -158,5 +159,30 @@
     "orderPaid": "Đơn #{orderId} đã thanh toán",
     "orderShipped": "Đơn #{orderId} đang được giao",
     "orderDelivered": "Đơn #{orderId} đã giao"
+  },
+  "admin": {
+    "title": "GuB Admin",
+    "orders": "Đơn hàng",
+    "reviews": "Đánh giá",
+    "catalog": "Danh mục",
+    "analytics": "Thống kê",
+    "comingSoon": "Sắp có",
+    "loading": "Đang tải...",
+    "unauthorized": "Không có quyền truy cập",
+    "logout": "Đăng xuất",
+    "orderId": "Đơn",
+    "user": "Khách hàng",
+    "statusColumn": "Trạng thái",
+    "total": "Tổng cộng",
+    "action": "Thao tác",
+    "noOrders": "Chưa có đơn hàng",
+    "error": "Không tải được đơn hàng",
+    "advanceTo": "Chuyển sang {status}",
+    "statusUpdated": "Đã cập nhật trạng thái đơn",
+    "updateError": "Không cập nhật được đơn hàng",
+    "reply": "Phản hồi",
+    "replyPlaceholder": "Viết phản hồi cho đánh giá này",
+    "replied": "Đã gửi phản hồi",
+    "replyError": "Không gửi được phản hồi"
   }
 }

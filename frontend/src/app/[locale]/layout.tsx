@@ -5,7 +5,6 @@ import { setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { Providers } from "@/app/providers";
-import { Header } from "@/components/header";
 import "../globals.css";
 
 export const metadata: Metadata = {
@@ -37,10 +36,9 @@ export default async function LocaleLayout({
     <html lang={locale} suppressHydrationWarning>
       <body>
         <NextIntlClientProvider>
-          <Providers>
-            <Header />
-            {children}
-          </Providers>
+          {/* Providers (TanStack Query + Supabase session/role bridge) wrap BOTH
+              route groups — (storefront) renders the Header, (admin) its own shell. */}
+          <Providers>{children}</Providers>
         </NextIntlClientProvider>
       </body>
     </html>

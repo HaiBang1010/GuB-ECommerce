@@ -9,6 +9,8 @@ export type OrderStatus = Order['status'];
 export type PaymentIntentResult =
   components['schemas']['PaymentIntentResponseDto'];
 export type OutOfStockError = components['schemas']['OutOfStockErrorDto'];
+export type UpdateOrderStatusBody =
+  components['schemas']['UpdateOrderStatusDto'];
 
 // Narrow an ApiError body (status 409) to the structured out-of-stock payload so
 // the checkout view can tell a stock conflict apart from a real payment failure.
@@ -58,4 +60,27 @@ export function cancelOrder(id: string): Promise<Order> {
 // GET /orders — the current user's order history (bare array).
 export function getMyOrders(signal?: AbortSignal): Promise<Order[]> {
   return apiFetch<Order[]>('/orders', { signal });
+}
+
+// GET /admin/orders — every order (optionally filtered by status). ADMIN-only on
+// the backend (RoleGuard). Payload exposes only userId, not customer email.
+export function getAdminOrders(
+  status?: OrderStatus,
+  signal?: AbortSignal,
+): Promise<Order[]> {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : '';
+  return apiFetch<Order[]>(`/admin/orders${qs}`, { signal });
+}
+
+// POST /admin/orders/:id/status — advance fulfillment (PAID→PROCESSING→SHIPPED→
+// DELIVERED). The backend enforces the legal transition; an illegal step 400s.
+export function adminUpdateOrderStatus(
+  id: string,
+  body: UpdateOrderStatusBody,
+): Promise<Order> {
+  return apiFetch<Order>(`/admin/orders/${encodeURIComponent(id)}/status`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 }
