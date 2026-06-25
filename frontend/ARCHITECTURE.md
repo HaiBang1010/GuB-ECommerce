@@ -65,3 +65,21 @@ BFF layer; the browser calls the NestJS backend directly (CORS-open in dev).
 - Product pages: SSR/SSG for SEO (Phase 7). Images: use `next/image`, webp format.
 - Visitor analytics: **Vercel Web Analytics** (not inferred from order data).
 - Admin charts: Recharts, data from the backend's aggregate API.
+
+## 8. Reviews (Phase 3)
+
+Purchased-only reviews surface in two existing pages (no new route):
+- **Order detail** (`components/order-detail-view.tsx`) — a `DELIVERED` order renders a
+  write/edit review block **per distinct product** (the backend allows one review per product,
+  not per line item). The user's existing review is found by matching their id against the
+  product's public review list (`useProductReviews`), since the order payload carries no review
+  back-reference. Interactive `StarRating` + `Textarea`; `useCreateReview` / `useUpdateReview`
+  invalidate `['reviews', productId]`.
+- **Product detail** (`components/product-detail-view.tsx`) — a public rating summary
+  (half-star average + count) and review list, each with a **"Verified buyer"** badge (the API
+  exposes only `userId`, no name) and a **"Store reply"** block when `adminReply` is present.
+
+Shared bits: `lib/api/reviews.ts` + `hooks/use-reviews.ts`, the net-new `components/star-rating.tsx`
+and `ui/textarea.tsx`, and the `reviews` i18n namespace. **Admin reply input is deferred** — there
+is no `/admin` route group or client-side role yet (the backend `RoleGuard` is the real gate); only
+the reply *display* ships now.
