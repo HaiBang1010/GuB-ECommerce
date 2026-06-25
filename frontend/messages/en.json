@@ -150,5 +150,13 @@
     "vouchers": "Vouchers",
     "reviews": "Reviews",
     "comingSoon": "Coming soon"
+  },
+  "notification": {
+    "title": "Notifications",
+    "markAllRead": "Mark all read",
+    "noNotifications": "No notifications",
+    "orderPaid": "Order #{orderId} paid",
+    "orderShipped": "Order #{orderId} is on the way",
+    "orderDelivered": "Order #{orderId} delivered"
   }
 }

@@ -7,6 +7,7 @@ import { Link } from '@/i18n/navigation';
 import { useAuthStore } from '@/stores/auth.store';
 import { useCart } from '@/hooks/use-cart';
 import { createClient } from '@/lib/supabase/client';
+import { NotificationBell } from '@/components/notification-bell';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -52,6 +53,8 @@ export function Header() {
               </span>
             ) : null}
           </Link>
+
+          {!isLoading && user ? <NotificationBell /> : null}
 
           {isLoading ? null : user ? (
             <DropdownMenu>

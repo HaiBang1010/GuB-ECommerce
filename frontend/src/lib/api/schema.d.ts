@@ -810,6 +810,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the current user's notifications + unread count */
+        get: operations["NotificationController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Mark a notification read */
+        patch: operations["NotificationController_markRead"];
+        trace?: never;
+    };
+    "/notifications/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark all the user's notifications read */
+        post: operations["NotificationController_markAllRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/consume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** QStash consumer (signature-verified, raw body — not JWT-guarded) */
+        post: operations["NotificationConsumerController_consume"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/payments/intent": {
         parameters: {
             query?: never;
@@ -1676,6 +1744,63 @@ export interface components {
              * @example 3
              */
             released: number;
+        };
+        NotificationPayloadDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9ord01 */
+            orderId?: string;
+        };
+        NotificationResponseDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9ntf01 */
+            id: string;
+            /**
+             * @description Recipient user id.
+             * @example clx1a2b3c4d5e6f7g8h9usr01
+             */
+            userId: string;
+            /**
+             * @description Discriminator the UI maps to text.
+             * @example ORDER_SHIPPED
+             */
+            type: string;
+            payload: components["schemas"]["NotificationPayloadDto"] | null;
+            /** @example null */
+            title: string | null;
+            /** @example null */
+            body: string | null;
+            /**
+             * @example BOTH
+             * @enum {string}
+             */
+            channel: "IN_APP" | "EMAIL" | "BOTH";
+            /**
+             * Format: date-time
+             * @example null
+             */
+            readAt: string | null;
+            /**
+             * Format: date-time
+             * @example 2026-06-26T00:00:00.000Z
+             */
+            createdAt: string;
+        };
+        NotificationListResponseDto: {
+            items: components["schemas"]["NotificationResponseDto"][];
+            /**
+             * @description Number of unread notifications.
+             * @example 2
+             */
+            unreadCount: number;
+        };
+        MarkAllReadResponseDto: {
+            /**
+             * @description Number of notifications marked read.
+             * @example 3
+             */
+            updated: number;
+        };
+        ConsumeResponseDto: {
+            /** @example true */
+            received: boolean;
         };
         CreateIntentDto: {
             /**
@@ -4079,6 +4204,121 @@ export interface operations {
             };
             /** @description Missing or invalid x-admin-secret header. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    NotificationController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationListResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    NotificationController_markRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Notification not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    NotificationController_markAllRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkAllReadResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    NotificationConsumerController_consume: {
+        parameters: {
+            query?: never;
+            header: {
+                "upstash-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsumeResponseDto"];
+                };
+            };
+            /** @description Missing body or invalid signature. */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

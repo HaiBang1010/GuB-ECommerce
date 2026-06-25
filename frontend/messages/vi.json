@@ -150,5 +150,13 @@
     "vouchers": "Voucher",
     "reviews": "Đánh giá",
     "comingSoon": "Sắp có"
+  },
+  "notification": {
+    "title": "Thông báo",
+    "markAllRead": "Đánh dấu đã đọc tất cả",
+    "noNotifications": "Chưa có thông báo",
+    "orderPaid": "Đơn #{orderId} đã thanh toán",
+    "orderShipped": "Đơn #{orderId} đang được giao",
+    "orderDelivered": "Đơn #{orderId} đã giao"
   }
 }
