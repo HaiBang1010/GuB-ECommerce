@@ -59,7 +59,9 @@ Per-app details: [`backend/README.md`](./backend/README.md) · [`frontend/README
 
 `DATABASE_URL` (Neon) · `SUPABASE_URL` · `SUPABASE_ANON_KEY` · `SUPABASE_SERVICE_ROLE_KEY` ·
 `STRIPE_TEST_KEY` · `STRIPE_WEBHOOK_SECRET` · `STRIPE_PUBLISHABLE_KEY` ·
-`UPSTASH_QSTASH_TOKEN` · `RESEND_API_KEY` · `ADMIN_JOB_SECRET` (for cron to call admin endpoints).
+`QSTASH_TOKEN` · `QSTASH_CURRENT_SIGNING_KEY` · `QSTASH_NEXT_SIGNING_KEY` · `QSTASH_CONSUMER_URL` (order→notification queue: publish + verify the consumer) ·
+`RESEND_API_KEY` · `RESEND_FROM` (transactional email) · `APP_PUBLIC_URL` (email link base) · `ADMIN_JOB_SECRET` (for cron to call admin endpoints).
+All notification vars are **optional locally** — without them order-status changes still create in-app notifications (in-process) and skip email.
 
 ## Deploy
 

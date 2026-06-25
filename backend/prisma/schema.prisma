@@ -369,13 +369,29 @@ model Notification {
   id        String    @id @default(cuid())
   userId    String // cross-module scalar → iam.User.id
   type      String // e.g. "ORDER_SHIPPED", "VOUCHER_GRANTED"
-  title     String
-  body      String
+  // Structured, language-neutral payload (e.g. { orderId }). The frontend renders
+  // the user-facing text from `type` + `payload` via i18n — we never store vi/en
+  // strings. `title`/`body` stay for non-structured / future notifications.
+  payload   Json?
+  title     String?
+  body      String?
   channel   Channel   @default(IN_APP)
   readAt    DateTime?
   createdAt DateTime  @default(now())
 
   @@index([userId, readAt])
+  @@schema("notification")
+}
+
+// Queue idempotency ledger: a processed QStash delivery is recorded here. The
+// consumer inserts the id FIRST inside the transaction → a redelivery (or a
+// double-emit) hits the unique-id constraint (P2002) and is a 200 no-op. The id
+// is a DETERMINISTIC dedup key ("<orderId>:<status>"), not the QStash messageId,
+// so the same logical event collapses to one notification regardless of retries.
+model QStashEvent {
+  id         String   @id
+  receivedAt DateTime @default(now())
+
   @@schema("notification")
 }
 
