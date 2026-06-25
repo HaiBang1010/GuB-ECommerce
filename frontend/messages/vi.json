@@ -53,7 +53,10 @@
     "error": "Không tải được giỏ hàng.",
     "increase": "Tăng",
     "decrease": "Giảm",
-    "maxQuantityReached": "Đã đạt số lượng tối đa trong kho"
+    "maxQuantityReached": "Đã đạt số lượng tối đa trong kho",
+    "onlyNLeft": "Chỉ còn {count} sản phẩm",
+    "outOfStock": "Hết hàng",
+    "quantityAdjusted": "Đã điều chỉnh số lượng theo tồn kho"
   },
   "checkout": {
     "title": "Thanh toán",
@@ -75,7 +78,9 @@
     "placeOrder": "Đặt hàng",
     "processing": "Đang xử lý...",
     "paymentError": "Thanh toán thất bại. Vui lòng thử lại.",
-    "payNow": "Thanh toán ngay"
+    "payNow": "Thanh toán ngay",
+    "outOfStockError": "{name} chỉ còn {count} trong kho",
+    "reviewCartStock": "Một số sản phẩm vượt tồn kho — vui lòng xem lại giỏ hàng."
   },
   "order": {
     "confirmed": "Đặt hàng thành công!",

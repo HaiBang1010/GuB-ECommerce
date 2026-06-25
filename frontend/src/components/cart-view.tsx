@@ -1,6 +1,8 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { toast } from 'sonner';
 
 import { Link } from '@/i18n/navigation';
 import {
@@ -17,6 +19,29 @@ import type { CartItemView } from '@/lib/api/cart';
 export function CartView() {
   const t = useTranslations('cart');
   const cart = useCart();
+  const { mutate: capQuantity } = useUpdateCartItem();
+  const cappedRef = useRef<Set<string>>(new Set());
+
+  const cartItems = cart.data?.items;
+
+  // Stock can drop after an item is already in the cart. Cap any over-stock line
+  // down to the live quantity (one toast for the whole batch). A 0-stock line is
+  // left for the buyer to Remove — it can't be capped to a valid quantity (>= 1).
+  useEffect(() => {
+    if (!cartItems) return;
+    const overStock = cartItems.filter(
+      (i) =>
+        i.stockQty >= 1 &&
+        i.quantity > i.stockQty &&
+        !cappedRef.current.has(i.variantId),
+    );
+    if (overStock.length === 0) return;
+    for (const i of overStock) {
+      cappedRef.current.add(i.variantId);
+      capQuantity({ variantId: i.variantId, quantity: i.stockQty });
+    }
+    toast.info(t('quantityAdjusted'));
+  }, [cartItems, capQuantity, t]);
 
   if (cart.isPending) {
     return (
@@ -41,6 +66,9 @@ export function CartView() {
   }
 
   const items = cart.data.items;
+  // A 0-stock line can never be ordered (the backend would 409), so block
+  // checkout until the buyer removes it.
+  const hasOutOfStock = items.some((i) => i.stockQty === 0);
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
@@ -69,9 +97,13 @@ export function CartView() {
               <Button asChild variant="outline">
                 <Link href="/products">{t('continueShopping')}</Link>
               </Button>
-              <Button asChild>
-                <Link href="/checkout">{t('checkout')}</Link>
-              </Button>
+              {hasOutOfStock ? (
+                <Button disabled>{t('checkout')}</Button>
+              ) : (
+                <Button asChild>
+                  <Link href="/checkout">{t('checkout')}</Link>
+                </Button>
+              )}
             </div>
           </div>
         </>
@@ -94,6 +126,8 @@ function CartLine({ item }: { item: CartItemView }) {
     : item.sku;
   const busy = update.isPending || remove.isPending;
   const atMax = item.quantity >= item.stockQty;
+  const outOfStock = item.stockQty === 0;
+  const overStock = item.stockQty >= 1 && item.quantity > item.stockQty;
 
   return (
     <li className="flex gap-4 border-b pb-4">
@@ -124,12 +158,22 @@ function CartLine({ item }: { item: CartItemView }) {
         </span>
         <span className="text-sm">{formatPriceCents(item.unitPriceCents)}</span>
 
+        {outOfStock ? (
+          <span className="text-destructive text-sm font-medium">
+            {t('outOfStock')}
+          </span>
+        ) : overStock ? (
+          <span className="text-destructive text-sm">
+            {t('onlyNLeft', { count: item.stockQty })}
+          </span>
+        ) : null}
+
         <div className="mt-1 flex items-center gap-2">
           <div className="flex items-center rounded-md border">
             <button
               type="button"
               aria-label={t('decrease')}
-              disabled={busy || item.quantity <= 1}
+              disabled={busy || item.quantity <= 1 || outOfStock}
               onClick={() =>
                 update.mutate({
                   variantId: item.variantId,
@@ -144,7 +188,7 @@ function CartLine({ item }: { item: CartItemView }) {
             <button
               type="button"
               aria-label={t('increase')}
-              disabled={busy || atMax}
+              disabled={busy || atMax || outOfStock}
               onClick={() =>
                 update.mutate({
                   variantId: item.variantId,

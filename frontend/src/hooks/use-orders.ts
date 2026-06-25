@@ -1,6 +1,7 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuthStore } from '@/stores/auth.store';
+import { ApiError } from '@/lib/api/client';
 import {
   createOrder,
   createPaymentIntent,
@@ -22,11 +23,19 @@ export function useMyOrders() {
 // The backend splits create-order and create-payment-intent, so chain them:
 // POST /orders -> POST /payments/intent. Returns the order + Stripe clientSecret.
 export function useCreateOrder() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (addressId: string) => {
       const order = await createOrder(addressId);
       const intent = await createPaymentIntent(order.id);
       return { order, clientSecret: intent.clientSecret };
+    },
+    // A 409 means stock ran out between viewing the cart and placing the order;
+    // refresh the cart so the stock-sync UI reflects the new live quantities.
+    onError: (err) => {
+      if (err instanceof ApiError && err.status === 409) {
+        void qc.invalidateQueries({ queryKey: ['cart'] });
+      }
     },
   });
 }

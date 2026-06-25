@@ -1562,6 +1562,29 @@ export interface components {
             items: components["schemas"]["OrderItemDto"][];
             statusHistory: components["schemas"]["OrderStatusHistoryDto"][];
         };
+        OutOfStockItemDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9var01 */
+            variantId: string;
+            /**
+             * @description Units currently in stock.
+             * @example 0
+             */
+            available: number;
+        };
+        OutOfStockErrorDto: {
+            /** @example 409 */
+            statusCode: number;
+            /** @example Conflict */
+            error: string;
+            /** @example Insufficient stock for one or more items. */
+            message: string;
+            /**
+             * @example OUT_OF_STOCK
+             * @enum {string}
+             */
+            code: "OUT_OF_STOCK";
+            items: components["schemas"]["OutOfStockItemDto"][];
+        };
         UpdateOrderStatusDto: {
             /**
              * @description Next fulfillment status (PAID->PROCESSING->SHIPPED->DELIVERED).
@@ -3662,6 +3685,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description One or more items are out of stock. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutOfStockErrorDto"];
+                };
             };
         };
     };

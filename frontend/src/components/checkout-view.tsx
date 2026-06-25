@@ -11,6 +11,8 @@ import { OrderPayment } from '@/components/order-payment';
 import { useAddresses, useCreateAddress } from '@/hooks/use-addresses';
 import { useCart } from '@/hooks/use-cart';
 import { useCreateOrder } from '@/hooks/use-orders';
+import { ApiError } from '@/lib/api/client';
+import { isOutOfStockError } from '@/lib/api/orders';
 import { useAuthStore } from '@/stores/auth.store';
 import { useCartStore } from '@/stores/cart.store';
 import { Button } from '@/components/ui/button';
@@ -52,6 +54,8 @@ function CheckoutSkeleton() {
 
 function CheckoutContent() {
   const t = useTranslations('checkout');
+  const locale = useLocale();
+  const snapshots = useCartStore((s) => s.snapshots);
 
   const addresses = useAddresses();
   const cart = useCart();
@@ -101,8 +105,30 @@ function CheckoutContent() {
 
   const items = cart.data?.items ?? [];
   const cartEmpty = !cart.isPending && items.length === 0;
+  // Any line whose quantity exceeds live stock (covers a 0-stock item too) blocks
+  // checkout — the buyer must fix it in the cart first.
+  const hasStockIssue = items.some((i) => i.quantity > i.stockQty);
   const canPlaceOrder =
-    selectedAddressId !== null && items.length > 0 && !createOrder.isPending;
+    selectedAddressId !== null &&
+    items.length > 0 &&
+    !hasStockIssue &&
+    !createOrder.isPending;
+
+  // Distinguish an out-of-stock 409 (stock ran out while paying) from a real
+  // payment error, and resolve each failing variant's display name from the cart
+  // snapshot store so the message can read "<name> — only N left".
+  const orderError = createOrder.error;
+  const outOfStockItems =
+    orderError instanceof ApiError &&
+    orderError.status === 409 &&
+    isOutOfStockError(orderError.body)
+      ? orderError.body.items
+      : null;
+  const nameForVariant = (variantId: string): string => {
+    const snap = snapshots[variantId];
+    if (!snap) return variantId;
+    return locale === 'vi' ? snap.nameVi : snap.nameEn;
+  };
 
   return (
     <main className="mx-auto grid max-w-5xl gap-8 px-4 py-8 md:grid-cols-2">
@@ -223,6 +249,14 @@ function CheckoutContent() {
               <OrderPayment orderId={orderId} clientSecret={clientSecret} />
             ) : (
               <>
+                {hasStockIssue ? (
+                  <p className="text-destructive text-sm">
+                    {t('reviewCartStock')}{' '}
+                    <Link href="/cart" className="underline">
+                      {t('title')}
+                    </Link>
+                  </p>
+                ) : null}
                 <Button
                   size="lg"
                   disabled={!canPlaceOrder}
@@ -231,7 +265,25 @@ function CheckoutContent() {
                   {createOrder.isPending ? t('processing') : t('placeOrder')}
                 </Button>
                 {createOrder.isError ? (
-                  <p className="text-destructive text-sm">{t('paymentError')}</p>
+                  outOfStockItems ? (
+                    <div className="flex flex-col gap-1">
+                      {outOfStockItems.map((it) => (
+                        <p
+                          key={it.variantId}
+                          className="text-destructive text-sm"
+                        >
+                          {t('outOfStockError', {
+                            name: nameForVariant(it.variantId),
+                            count: it.available,
+                          })}
+                        </p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-destructive text-sm">
+                      {t('paymentError')}
+                    </p>
+                  )
                 ) : null}
               </>
             )}

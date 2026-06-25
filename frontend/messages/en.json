@@ -53,7 +53,10 @@
     "error": "Couldn't load your cart.",
     "increase": "Increase",
     "decrease": "Decrease",
-    "maxQuantityReached": "Maximum available quantity reached"
+    "maxQuantityReached": "Maximum available quantity reached",
+    "onlyNLeft": "Only {count} left",
+    "outOfStock": "Out of stock",
+    "quantityAdjusted": "Quantity adjusted to available stock"
   },
   "checkout": {
     "title": "Checkout",
@@ -75,7 +78,9 @@
     "placeOrder": "Place order",
     "processing": "Processing...",
     "paymentError": "Payment failed. Please try again.",
-    "payNow": "Pay now"
+    "payNow": "Pay now",
+    "outOfStockError": "{name} — only {count} left in stock",
+    "reviewCartStock": "Some items exceed available stock — please review your cart."
   },
   "order": {
     "confirmed": "Order confirmed!",
