@@ -44,6 +44,7 @@ function viewItem(overrides: Record<string, unknown> = {}) {
 describe('OrderService', () => {
   let prisma: {
     order: { findUnique: jest.Mock; findMany: jest.Mock };
+    orderItem: { findUnique: jest.Mock };
     $transaction: jest.Mock;
   };
   let cart: { getView: jest.Mock; clear: jest.Mock };
@@ -55,6 +56,7 @@ describe('OrderService', () => {
   beforeEach(() => {
     prisma = {
       order: { findUnique: jest.fn(), findMany: jest.fn() },
+      orderItem: { findUnique: jest.fn() },
       $transaction: jest.fn(),
     };
     cart = { getView: jest.fn(), clear: jest.fn() };
@@ -246,6 +248,48 @@ describe('OrderService', () => {
 
       await service.cancel('u1', 'o1');
       expect(variants.releaseForOrder).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getDeliveredOrderItemForUser', () => {
+    it('returns {id, productId} for an owned, delivered order item', async () => {
+      prisma.orderItem.findUnique.mockResolvedValue({
+        id: 'oi1',
+        productId: 'p1',
+        order: { userId: 'u1', status: 'DELIVERED' },
+      });
+      await expect(
+        service.getDeliveredOrderItemForUser('u1', 'oi1'),
+      ).resolves.toEqual({ id: 'oi1', productId: 'p1' });
+    });
+
+    it('throws NotFound for a missing order item', async () => {
+      prisma.orderItem.findUnique.mockResolvedValue(null);
+      await expect(
+        service.getDeliveredOrderItemForUser('u1', 'missing'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('throws NotFound when the order item belongs to someone else', async () => {
+      prisma.orderItem.findUnique.mockResolvedValue({
+        id: 'oi1',
+        productId: 'p1',
+        order: { userId: 'other', status: 'DELIVERED' },
+      });
+      await expect(
+        service.getDeliveredOrderItemForUser('u1', 'oi1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('throws Conflict when the order is not delivered yet', async () => {
+      prisma.orderItem.findUnique.mockResolvedValue({
+        id: 'oi1',
+        productId: 'p1',
+        order: { userId: 'u1', status: 'PAID' },
+      });
+      await expect(
+        service.getDeliveredOrderItemForUser('u1', 'oi1'),
+      ).rejects.toBeInstanceOf(ConflictException);
     });
   });
 

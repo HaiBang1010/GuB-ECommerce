@@ -140,6 +140,28 @@ export class OrderService {
     return order;
   }
 
+  // Cross-module (in-process): proof-of-purchase lookup for the review module.
+  // Returns only the minimal fact a review needs (never leaks the whole order):
+  // the order item is reviewable iff it belongs to the caller AND its order is
+  // DELIVERED. Ownership failures are 404 (owner idiom); a not-yet-delivered
+  // order is 409. OrderItem -> Order is a real @relation (same `ordering` schema).
+  async getDeliveredOrderItemForUser(
+    userId: string,
+    orderItemId: string,
+  ): Promise<{ id: string; productId: string }> {
+    const item = await this.prisma.orderItem.findUnique({
+      where: { id: orderItemId },
+      include: { order: true },
+    });
+    if (!item || item.order.userId !== userId) {
+      throw new NotFoundException('Order item not found.');
+    }
+    if (item.order.status !== OrderStatus.DELIVERED) {
+      throw new ConflictException('Order is not delivered yet.');
+    }
+    return { id: item.id, productId: item.productId };
+  }
+
   // User cancels their own unpaid order; stock is released.
   async cancel(userId: string, orderId: string): Promise<OrderWithDetail> {
     const order = await this.prisma.order.findUnique({
