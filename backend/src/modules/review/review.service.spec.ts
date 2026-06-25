@@ -236,4 +236,31 @@ describe('ReviewService', () => {
       });
     });
   });
+
+  describe('reply', () => {
+    it('throws NotFound for an unknown review', async () => {
+      prisma.review.findUnique.mockResolvedValue(null);
+      await expect(
+        service.reply('missing', { reply: 'Thanks' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.review.update).not.toHaveBeenCalled();
+    });
+
+    it('sets the admin reply and stamps a reply time', async () => {
+      prisma.review.findUnique.mockResolvedValue({ id: 'rev1' });
+      const replied = { id: 'rev1', adminReply: 'Thanks' };
+      prisma.review.update.mockResolvedValue(replied);
+
+      const result = await service.reply('rev1', { reply: 'Thanks' });
+
+      expect(prisma.review.update).toHaveBeenCalledWith({
+        where: { id: 'rev1' },
+        data: expect.objectContaining({
+          adminReply: 'Thanks',
+          adminReplyAt: expect.any(Date),
+        }),
+      });
+      expect(result).toBe(replied);
+    });
+  });
 });

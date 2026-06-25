@@ -7,6 +7,7 @@ import { Prisma, Review } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrderService } from '../order/order.service';
 import { ProductService } from '../product/product/product.service';
+import { AdminReplyDto } from './dto/admin-reply.dto';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
 
@@ -123,5 +124,20 @@ export class ReviewService {
       summary: { average: agg._avg.rating, count: agg._count },
       items,
     };
+  }
+
+  // Admin (ADMIN-guarded at the controller): attach/replace the admin reply on a
+  // review and stamp the reply time. 404 when the review does not exist.
+  async reply(reviewId: string, dto: AdminReplyDto): Promise<Review> {
+    const review = await this.prisma.review.findUnique({
+      where: { id: reviewId },
+    });
+    if (!review) {
+      throw new NotFoundException('Review not found.');
+    }
+    return this.prisma.review.update({
+      where: { id: reviewId },
+      data: { adminReply: dto.reply, adminReplyAt: new Date() },
+    });
   }
 }
