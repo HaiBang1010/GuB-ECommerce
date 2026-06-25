@@ -22,7 +22,11 @@ describe('PaymentService', () => {
     retrievePaymentIntent: jest.Mock;
     constructEvent: jest.Mock;
   };
-  let orders: { getForUser: jest.Mock; markPaid: jest.Mock };
+  let orders: {
+    getForUser: jest.Mock;
+    markPaid: jest.Mock;
+    markPaymentFailed: jest.Mock;
+  };
   let service: PaymentService;
 
   beforeEach(() => {
@@ -35,7 +39,11 @@ describe('PaymentService', () => {
       retrievePaymentIntent: jest.fn(),
       constructEvent: jest.fn(),
     };
-    orders = { getForUser: jest.fn(), markPaid: jest.fn() };
+    orders = {
+      getForUser: jest.fn(),
+      markPaid: jest.fn(),
+      markPaymentFailed: jest.fn(),
+    };
     service = new PaymentService(
       prisma as unknown as PrismaService,
       stripe as unknown as StripeService,
@@ -163,23 +171,60 @@ describe('PaymentService', () => {
       expect(orders.markPaid).not.toHaveBeenCalled();
     });
 
-    it('marks payment FAILED (order left pending) on payment_failed', async () => {
+    it('marks payment FAILED and releases the order on payment_failed', async () => {
       stripe.constructEvent.mockReturnValue({
         id: 'evt_2',
         type: 'payment_intent.payment_failed',
         data: { object: { id: 'pi_1' } },
       });
       const tx = txWith({});
+      tx.payment.findUnique.mockResolvedValue({ id: 'pay1', orderId: 'o1' });
       prisma.$transaction.mockImplementation(
         (cb: (t: unknown) => unknown) => cb(tx),
       );
 
       await service.handleWebhook(Buffer.from('{}'), 'sig');
-      expect(tx.payment.updateMany).toHaveBeenCalledWith({
-        where: { stripePaymentIntentId: 'pi_1' },
+      expect(tx.payment.update).toHaveBeenCalledWith({
+        where: { id: 'pay1' },
         data: { status: 'FAILED' },
       });
+      expect(orders.markPaymentFailed).toHaveBeenCalledWith(tx, 'o1');
       expect(orders.markPaid).not.toHaveBeenCalled();
+    });
+
+    it('ignores a payment_failed for an unknown intent', async () => {
+      stripe.constructEvent.mockReturnValue({
+        id: 'evt_3',
+        type: 'payment_intent.payment_failed',
+        data: { object: { id: 'pi_unknown' } },
+      });
+      const tx = txWith({});
+      tx.payment.findUnique.mockResolvedValue(null);
+      prisma.$transaction.mockImplementation(
+        (cb: (t: unknown) => unknown) => cb(tx),
+      );
+
+      await expect(
+        service.handleWebhook(Buffer.from('{}'), 'sig'),
+      ).resolves.toEqual({ received: true });
+      expect(tx.payment.update).not.toHaveBeenCalled();
+      expect(orders.markPaymentFailed).not.toHaveBeenCalled();
+    });
+
+    it('treats a duplicate payment_failed event as a no-op (P2002)', async () => {
+      stripe.constructEvent.mockReturnValue({
+        id: 'evt_2',
+        type: 'payment_intent.payment_failed',
+        data: { object: { id: 'pi_1' } },
+      });
+      prisma.$transaction.mockImplementation(() => {
+        throw p2002();
+      });
+
+      await expect(
+        service.handleWebhook(Buffer.from('{}'), 'sig'),
+      ).resolves.toEqual({ received: true });
+      expect(orders.markPaymentFailed).not.toHaveBeenCalled();
     });
   });
 });

@@ -351,6 +351,92 @@ describe('OrderService', () => {
     });
   });
 
+  describe('markPaymentFailed', () => {
+    it('cancels the pending order, releases stock, and notes the reason', async () => {
+      const tx = {
+        order: {
+          findUnique: jest.fn().mockResolvedValue({
+            id: 'o1',
+            status: 'PENDING_PAYMENT',
+            items: [{ variantId: 'v1', quantity: 2 }],
+          }),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+        orderStatusHistory: { create: jest.fn() },
+      };
+      variants.releaseForOrder.mockResolvedValue(undefined);
+
+      await service.markPaymentFailed(
+        tx as unknown as Prisma.TransactionClient,
+        'o1',
+      );
+
+      expect(tx.order.updateMany).toHaveBeenCalledWith({
+        where: { id: 'o1', status: 'PENDING_PAYMENT' },
+        data: { status: 'CANCELLED' },
+      });
+      expect(variants.releaseForOrder).toHaveBeenCalledWith(tx, [
+        { variantId: 'v1', quantity: 2 },
+      ]);
+      expect(tx.orderStatusHistory.create).toHaveBeenCalledWith({
+        data: { orderId: 'o1', status: 'CANCELLED', note: 'Payment failed.' },
+      });
+    });
+
+    it('is an idempotent no-op when the order is already CANCELLED', async () => {
+      const tx = {
+        order: {
+          findUnique: jest.fn().mockResolvedValue({
+            id: 'o1',
+            status: 'CANCELLED',
+            items: [{ variantId: 'v1', quantity: 2 }],
+          }),
+          updateMany: jest.fn(),
+        },
+        orderStatusHistory: { create: jest.fn() },
+      };
+      await service.markPaymentFailed(
+        tx as unknown as Prisma.TransactionClient,
+        'o1',
+      );
+      expect(tx.order.updateMany).not.toHaveBeenCalled();
+      expect(variants.releaseForOrder).not.toHaveBeenCalled();
+    });
+
+    it('does not touch a PAID order', async () => {
+      const tx = {
+        order: {
+          findUnique: jest
+            .fn()
+            .mockResolvedValue({ id: 'o1', status: 'PAID', items: [] }),
+          updateMany: jest.fn(),
+        },
+        orderStatusHistory: { create: jest.fn() },
+      };
+      await service.markPaymentFailed(
+        tx as unknown as Prisma.TransactionClient,
+        'o1',
+      );
+      expect(tx.order.updateMany).not.toHaveBeenCalled();
+      expect(variants.releaseForOrder).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op when the order is missing', async () => {
+      const tx = {
+        order: {
+          findUnique: jest.fn().mockResolvedValue(null),
+          updateMany: jest.fn(),
+        },
+        orderStatusHistory: { create: jest.fn() },
+      };
+      await service.markPaymentFailed(
+        tx as unknown as Prisma.TransactionClient,
+        'missing',
+      );
+      expect(variants.releaseForOrder).not.toHaveBeenCalled();
+    });
+  });
+
   describe('releaseExpired', () => {
     it('cancels every expired order and reports the count', async () => {
       prisma.order.findMany.mockResolvedValue([

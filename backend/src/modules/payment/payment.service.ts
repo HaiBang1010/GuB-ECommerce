@@ -137,12 +137,19 @@ export class PaymentService {
       }
       case 'payment_intent.payment_failed': {
         const intent = event.data.object as Stripe.PaymentIntent;
-        // Leave the order PENDING_PAYMENT so the buyer can retry; the
-        // release-expired job reclaims stock if they never succeed.
-        await tx.payment.updateMany({
+        const payment = await tx.payment.findUnique({
           where: { stripePaymentIntentId: intent.id },
+        });
+        if (!payment) return; // unknown intent — recorded in the ledger, ignored
+        await tx.payment.update({
+          where: { id: payment.id },
           data: { status: PaymentStatus.FAILED },
         });
+        // Release stock immediately and cancel the order instead of holding it
+        // PENDING_PAYMENT until the TTL job: a declined card must not keep stock
+        // reserved. markPaymentFailed is idempotent (it no-ops on a non-pending
+        // order), so a re-delivered failed event never double-restocks.
+        await this.orders.markPaymentFailed(tx, payment.orderId);
         break;
       }
       default:

@@ -253,43 +253,77 @@ export class OrderService {
     }
   }
 
+  // Cross-module (in-process): cancel an unpaid order and release its stock from
+  // the payment webhook when the PaymentIntent fails. Runs inside the webhook's
+  // transaction. Symmetric with markPaid; reuses the same cancel-and-release core
+  // as the user-cancel and release-expired paths, so the three flows can never
+  // diverge. Idempotent: a duplicate failed event finds the order already
+  // CANCELLED (conditional flip count 0) and never double-restocks.
+  async markPaymentFailed(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+  ): Promise<void> {
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      include: { items: true },
+    });
+    // A PAID order (succeeded webhook won the race) or an already-CANCELLED one is
+    // left untouched; only an unpaid order releases stock.
+    if (!order || order.status !== OrderStatus.PENDING_PAYMENT) {
+      return;
+    }
+    await this.cancelAndReleaseTx(tx, order, 'Payment failed.');
+  }
+
   // ---------------------------------------------------------------------------
   // Internal helpers
   // ---------------------------------------------------------------------------
 
-  // Flip PENDING_PAYMENT -> CANCELLED and release stock in one transaction. The
-  // conditional updateMany is the concurrency guard: only the caller that wins
-  // the status flip releases stock, so two overlapping cancels (user + cron)
-  // never double-restock.
+  // Flip PENDING_PAYMENT -> CANCELLED and release stock, opening its own
+  // transaction. Used by the user-cancel and release-expired paths, which return
+  // the refreshed order detail.
   private async cancelAndRelease(
     order: OrderWithItems,
   ): Promise<OrderWithDetail> {
     return this.prisma.$transaction(async (tx) => {
-      const flip = await tx.order.updateMany({
-        where: { id: order.id, status: OrderStatus.PENDING_PAYMENT },
-        data: { status: OrderStatus.CANCELLED },
-      });
-      if (flip.count === 1) {
-        await this.variants.releaseForOrder(
-          tx,
-          order.items.map((i) => ({
-            variantId: i.variantId,
-            quantity: i.quantity,
-          })),
-        );
-        await tx.orderStatusHistory.create({
-          data: {
-            orderId: order.id,
-            status: OrderStatus.CANCELLED,
-            note: 'Stock released.',
-          },
-        });
-      }
+      await this.cancelAndReleaseTx(tx, order, 'Stock released.');
       return tx.order.findUniqueOrThrow({
         where: { id: order.id },
         include: { items: true, statusHistory: true },
       });
     });
+  }
+
+  // The cancel-and-release core, working on a caller-supplied transaction so it
+  // can also run inside the payment webhook's transaction (markPaymentFailed).
+  // The conditional updateMany is the concurrency guard: only the caller that
+  // wins the status flip releases stock, so two overlapping cancels (user + cron,
+  // or cron + failed-payment webhook) never double-restock.
+  private async cancelAndReleaseTx(
+    tx: Prisma.TransactionClient,
+    order: OrderWithItems,
+    note: string,
+  ): Promise<void> {
+    const flip = await tx.order.updateMany({
+      where: { id: order.id, status: OrderStatus.PENDING_PAYMENT },
+      data: { status: OrderStatus.CANCELLED },
+    });
+    if (flip.count === 1) {
+      await this.variants.releaseForOrder(
+        tx,
+        order.items.map((i) => ({
+          variantId: i.variantId,
+          quantity: i.quantity,
+        })),
+      );
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: order.id,
+          status: OrderStatus.CANCELLED,
+          note,
+        },
+      });
+    }
   }
 
   // Immutable copy of the shipping address (not a foreign key) so the order
