@@ -83,3 +83,14 @@ Shared bits: `lib/api/reviews.ts` + `hooks/use-reviews.ts`, the net-new `compone
 and `ui/textarea.tsx`, and the `reviews` i18n namespace. **Admin reply input is deferred** — there
 is no `/admin` route group or client-side role yet (the backend `RoleGuard` is the real gate); only
 the reply *display* ships now.
+
+## 9. Notifications (Phase 3)
+
+A bell in the header (`components/notification-bell.tsx`), shown for logged-in users only.
+`useNotifications` (`hooks/use-notifications.ts`) fetches the list + `unreadCount`, gated by the
+auth store and polling every 60s (no realtime until Phase 6). The badge shows the unread count; the
+shadcn `DropdownMenu` lists items, each rendering its text from the structured `type` + `payload.orderId`
+via the `notification` i18n namespace — **never** a stored string — linking to `/orders/[id]` and
+marking itself read on select (`useMarkNotificationRead`), plus a "mark all read" action
+(`useMarkAllNotificationsRead`). Both mutations invalidate `['notifications']`. The backend is the
+producer (the single async path, backend §4.8); the frontend only reads + acks.

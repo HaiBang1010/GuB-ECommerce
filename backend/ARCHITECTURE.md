@@ -143,6 +143,46 @@ scaffolded the column as plain `INTEGER`). Surface: `POST /reviews` (create), `P
 average when none), `POST /admin/reviews/:id/reply` (ADMIN). **Rate-limiting is deferred** — the
 purchased-only + one-per-product gate already bounds review-create spam (§8).
 
+### 4.8 Notifications (the one async path) — Phase 3
+
+The **only** asynchronous path in the system. On an order status change the order
+module publishes an event **after the transaction commits** (never inside it) and
+**best-effort** — `OrderService.emitStatusEvent` swallows any failure so a queue
+hiccup never breaks placing/paying/fulfilling. Producers: `updateStatus` (SHIPPED/
+DELIVERED) and the payment webhook (PAID, only when `markPaid` actually flipped, and
+not on the P2002 duplicate path).
+
+```
+order.service ──emitStatusEvent({orderId,userId,status})──▶ NotificationService.publishOrderStatus
+   ├─ QStash configured → QStash.publish ──(HTTP + Upstash-Signature)──▶ POST /notifications/consume
+   └─ not configured (local dev) → handleOrderStatusEvent IN-PROCESS  (in-app only, email skipped)
+consume → verify signature (jose) → handleOrderStatusEvent → ledger insert → Notification(BOTH) → Resend email
+```
+
+- **Idempotent.** `handleOrderStatusEvent` inserts a `notification.QStashEvent` row
+  **first** inside the transaction; the id is the **deterministic** dedup key
+  `"<orderId>:<status>"`, so a QStash redelivery (or a double-emit) hits **P2002** and
+  is a no-op — mirroring the StripeEvent ledger (§4.2). Email is sent **outside** the
+  transaction (best-effort; a Resend failure won't roll back the in-app notification).
+- **No cycle.** The event carries `userId`, so the consumer never calls `OrderService`
+  → `NotificationModule` imports no `OrderModule` (only `OrderModule` → `NotificationModule`,
+  one-way). The email address is resolved via the global `UserService.findById`.
+- **Notify map.** `PAID` / `SHIPPED` / `DELIVERED` → `type` `ORDER_PAID|ORDER_SHIPPED|
+  ORDER_DELIVERED`, channel BOTH. Other statuses are skipped (the producer short-circuits
+  so QStash never gets a wasted message).
+- **Structured, not localized.** `Notification.payload` (`{ orderId }`) + `type` are stored;
+  `title`/`body` are nullable and unused for order events — the frontend renders text via
+  i18n. Email subject/body are generated in English at send time, never stored.
+- **No SDKs.** `QStashService` (publish + verify) and `ResendService` (send) use the
+  providers' **REST APIs via `fetch`**, and the signature is a JWT verified with the
+  existing `jose` dep — avoiding the ESM/CommonJS friction of `@upstash/qstash`/`resend`.
+  Publish + email **degrade** (skip) when env is unset; the consumer's signature verify
+  **fails closed**. The consumer route mirrors the Stripe webhook: raw body, no DTO, no
+  guard, `@HttpCode(200)`, signature-or-400.
+- **Env:** `QSTASH_TOKEN`, `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY`,
+  `QSTASH_CONSUMER_URL`, `RESEND_API_KEY`, `RESEND_FROM`, `APP_PUBLIC_URL` — all optional
+  locally. Full QStash→email e2e needs deployment (a public consumer URL) + real keys.
+
 ## 5. Data model (Prisma)
 
 Full schema: [`prisma/schema.prisma`](./prisma/schema.prisma). It uses the `multiSchema`
