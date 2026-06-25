@@ -23,6 +23,16 @@ export interface StockChange {
   quantity: number;
 }
 
+// Discriminator on the 409 body so the storefront can tell an out-of-stock
+// rejection apart from a payment failure. Mirrored by OutOfStockErrorDto.
+export const OUT_OF_STOCK_CODE = 'OUT_OF_STOCK';
+
+// One variant that couldn't be fully reserved + how many are actually left.
+export interface OutOfStockItem {
+  variantId: string;
+  available: number;
+}
+
 @Injectable()
 export class ProductVariantService {
   constructor(
@@ -219,16 +229,35 @@ export class ProductVariantService {
     tx: Prisma.TransactionClient,
     items: StockChange[],
   ): Promise<void> {
+    // Apply every atomic decrement, collecting the items that can't be satisfied
+    // (rather than throwing on the first). The thrown transaction rolls back any
+    // decrements that DID apply, so atomicity holds while the error can name the
+    // full failing set + each variant's available quantity for the storefront.
+    const insufficient: OutOfStockItem[] = [];
     for (const { variantId, quantity } of items) {
       const result = await tx.productVariant.updateMany({
         where: { id: variantId, archivedAt: null, stockQty: { gte: quantity } },
         data: { stockQty: { decrement: quantity } },
       });
       if (result.count !== 1) {
-        throw new ConflictException(
-          'Insufficient stock for one or more items.',
-        );
+        const variant = await tx.productVariant.findUnique({
+          where: { id: variantId },
+          select: { stockQty: true },
+        });
+        insufficient.push({ variantId, available: variant?.stockQty ?? 0 });
       }
+    }
+    if (insufficient.length > 0) {
+      // Structured body so the storefront can distinguish out-of-stock from a
+      // payment error and show "<name> — only N left". Shape mirrors
+      // OutOfStockErrorDto (order module) — keep the two in sync.
+      throw new ConflictException({
+        statusCode: 409,
+        error: 'Conflict',
+        message: 'Insufficient stock for one or more items.',
+        code: OUT_OF_STOCK_CODE,
+        items: insufficient,
+      });
     }
   }
 

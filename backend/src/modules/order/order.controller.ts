@@ -11,6 +11,7 @@ import {
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConflictResponse,
   ApiCreatedResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
@@ -23,6 +24,7 @@ import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { SupabaseAuthGuard } from '../iam/auth/supabase-auth.guard';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderResponseDto } from './dto/order-response.dto';
+import { OutOfStockErrorDto } from './dto/out-of-stock-error.dto';
 import { OrderService, OrderWithDetail } from './order.service';
 
 // A signed-in user's own orders. Authentication only; every action is scoped to
@@ -39,6 +41,10 @@ export class OrderController {
   @ApiCreatedResponse({ type: OrderResponseDto })
   @ApiBadRequestResponse({ description: 'Cart is empty or items unavailable.' })
   @ApiNotFoundResponse({ description: 'Address not found.' })
+  @ApiConflictResponse({
+    type: OutOfStockErrorDto,
+    description: 'One or more items are out of stock.',
+  })
   @Post()
   @HttpCode(HttpStatus.CREATED)
   create(

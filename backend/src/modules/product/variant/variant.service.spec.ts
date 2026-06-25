@@ -393,15 +393,59 @@ describe('ProductVariantService', () => {
       });
     });
 
-    it('throws Conflict when stock is insufficient (0 rows matched)', async () => {
+    it('throws a structured Conflict naming each out-of-stock variant + available qty', async () => {
       const tx = {
-        productVariant: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+        productVariant: {
+          updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+          findUnique: jest.fn().mockResolvedValue({ stockQty: 1 }),
+        },
       };
-      await expect(
-        service.decrementForOrder(tx as unknown as Prisma.TransactionClient, [
+      const promise = service.decrementForOrder(
+        tx as unknown as Prisma.TransactionClient,
+        [{ variantId: 'v1', quantity: 5 }],
+      );
+      await expect(promise).rejects.toBeInstanceOf(ConflictException);
+      await promise.catch((err: ConflictException) => {
+        expect(err.getResponse()).toEqual({
+          statusCode: 409,
+          error: 'Conflict',
+          message: 'Insufficient stock for one or more items.',
+          code: 'OUT_OF_STOCK',
+          items: [{ variantId: 'v1', available: 1 }],
+        });
+      });
+    });
+
+    it('reports every failing item, not just the first', async () => {
+      const tx = {
+        productVariant: {
+          updateMany: jest
+            .fn()
+            .mockResolvedValueOnce({ count: 0 }) // v1 short
+            .mockResolvedValueOnce({ count: 1 }) // v2 ok
+            .mockResolvedValueOnce({ count: 0 }), // v3 short
+          findUnique: jest
+            .fn()
+            .mockResolvedValueOnce({ stockQty: 2 })
+            .mockResolvedValueOnce({ stockQty: 0 }),
+        },
+      };
+      const promise = service.decrementForOrder(
+        tx as unknown as Prisma.TransactionClient,
+        [
           { variantId: 'v1', quantity: 5 },
-        ]),
-      ).rejects.toBeInstanceOf(ConflictException);
+          { variantId: 'v2', quantity: 1 },
+          { variantId: 'v3', quantity: 3 },
+        ],
+      );
+      await promise.catch((err: ConflictException) => {
+        const body = err.getResponse() as { items: unknown };
+        expect(body.items).toEqual([
+          { variantId: 'v1', available: 2 },
+          { variantId: 'v3', available: 0 },
+        ]);
+      });
+      await expect(promise).rejects.toBeInstanceOf(ConflictException);
     });
   });
 
