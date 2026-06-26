@@ -67,14 +67,18 @@ export function useCancelOrder() {
   });
 }
 
-// Admin: every order (optionally filtered by status). Gated to a logged-in user;
-// the backend RoleGuard rejects non-admins (the admin shell also guards the UI).
-export function useAdminOrders(status?: OrderStatus) {
+// Admin: every order, with optional multi-status filter + search. Gated to a
+// logged-in user; the backend RoleGuard rejects non-admins (the admin shell also
+// guards the UI). Statuses are sorted in the key so cache hits are order-stable.
+export function useAdminOrders(statuses?: OrderStatus[], search?: string) {
   const authLoading = useAuthStore((s) => s.isLoading);
   const user = useAuthStore((s) => s.user);
+  const sorted = [...(statuses ?? [])].sort();
+  const term = search?.trim() ?? '';
   return useQuery({
-    queryKey: ['admin', 'orders', status ?? 'all'],
-    queryFn: ({ signal }) => getAdminOrders(status, signal),
+    queryKey: ['admin', 'orders', { statuses: sorted, search: term }],
+    queryFn: ({ signal }) =>
+      getAdminOrders({ statuses: sorted, search: term }, signal),
     enabled: !authLoading && !!user,
   });
 }

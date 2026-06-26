@@ -766,7 +766,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List all orders (optional ?status) */
+        /** List all orders (optional multi ?status, ?search) + customer info */
         get: operations["OrderAdminController_list"];
         put?: never;
         post?: never;
@@ -1763,6 +1763,61 @@ export interface components {
              */
             code: "OUT_OF_STOCK";
             items: components["schemas"]["OutOfStockItemDto"][];
+        };
+        CustomerSummaryDto: {
+            /** @example user@example.com */
+            email: string;
+            /** @example Nguyễn Văn A */
+            name: string | null;
+        };
+        OrderAdminResponseDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9ord01 */
+            id: string;
+            /** @example clx1a2b3c4d5e6f7g8h9usr01 */
+            userId: string;
+            /**
+             * @example PENDING_PAYMENT
+             * @enum {string}
+             */
+            status: "PENDING_PAYMENT" | "PAID" | "PROCESSING" | "SHIPPED" | "DELIVERED" | "CANCELLED" | "REFUNDED";
+            /**
+             * @description Items subtotal, USD cents.
+             * @example 2400
+             */
+            subtotalCents: number;
+            /**
+             * @description Discount applied, USD cents.
+             * @example 0
+             */
+            discountCents: number;
+            /**
+             * @description Amount charged, USD cents.
+             * @example 2400
+             */
+            totalCents: number;
+            /** @example null */
+            voucherId: string | null;
+            /** @example null */
+            voucherCode: string | null;
+            shippingAddress: components["schemas"]["ShippingAddressSnapshotDto"];
+            /**
+             * Format: date-time
+             * @example 2026-06-01T00:00:00.000Z
+             */
+            placedAt: string | null;
+            /**
+             * Format: date-time
+             * @example 2026-06-01T00:00:00.000Z
+             */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @example 2026-06-01T00:00:00.000Z
+             */
+            updatedAt: string;
+            items: components["schemas"]["OrderItemDto"][];
+            statusHistory: components["schemas"]["OrderStatusHistoryDto"][];
+            customer: components["schemas"]["CustomerSummaryDto"] | null;
         };
         UpdateOrderStatusDto: {
             /**
@@ -4116,7 +4171,10 @@ export interface operations {
     OrderAdminController_list: {
         parameters: {
             query?: {
-                status?: "PENDING_PAYMENT" | "PAID" | "PROCESSING" | "SHIPPED" | "DELIVERED" | "CANCELLED" | "REFUNDED";
+                /** @description Filter by one or more statuses — repeat ?status= or comma-separated. */
+                status?: ("PENDING_PAYMENT" | "PAID" | "PROCESSING" | "SHIPPED" | "DELIVERED" | "CANCELLED" | "REFUNDED")[];
+                /** @description Search by order id, customer name or email. */
+                search?: string;
             };
             header?: never;
             path?: never;
@@ -4129,7 +4187,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OrderResponseDto"][];
+                    "application/json": components["schemas"]["OrderAdminResponseDto"][];
                 };
             };
             /** @description Missing or invalid token. */

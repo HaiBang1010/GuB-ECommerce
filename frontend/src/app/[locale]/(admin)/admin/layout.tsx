@@ -2,6 +2,7 @@
 
 import { useEffect, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
+import { ArrowLeft } from 'lucide-react';
 
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { useAuthStore } from '@/stores/auth.store';
@@ -74,6 +75,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             {t('title')}
           </Link>
           <div className="flex items-center gap-3">
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/">
+                <ArrowLeft className="size-4" />
+                {t('backToShop')}
+              </Link>
+            </Button>
             {user?.email ? (
               <span className="text-muted-foreground max-w-[12rem] truncate text-sm">
                 {user.email}

@@ -2,6 +2,8 @@ import { apiFetch } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 
 export type Order = components['schemas']['OrderResponseDto'];
+// Admin list row = order + enriched customer summary (email/name).
+export type AdminOrder = components['schemas']['OrderAdminResponseDto'];
 export type OrderItem = components['schemas']['OrderItemDto'];
 export type OrderStatusHistory =
   components['schemas']['OrderStatusHistoryDto'];
@@ -62,14 +64,18 @@ export function getMyOrders(signal?: AbortSignal): Promise<Order[]> {
   return apiFetch<Order[]>('/orders', { signal });
 }
 
-// GET /admin/orders — every order (optionally filtered by status). ADMIN-only on
-// the backend (RoleGuard). Payload exposes only userId, not customer email.
+// GET /admin/orders — every order, with optional multi-status filter + unified
+// search (order id / customer name / email), each row enriched with customer
+// info. ADMIN-only on the backend (RoleGuard). Statuses repeat as ?status=A&status=B.
 export function getAdminOrders(
-  status?: OrderStatus,
+  params: { statuses?: OrderStatus[]; search?: string } = {},
   signal?: AbortSignal,
-): Promise<Order[]> {
-  const qs = status ? `?status=${encodeURIComponent(status)}` : '';
-  return apiFetch<Order[]>(`/admin/orders${qs}`, { signal });
+): Promise<AdminOrder[]> {
+  const qs = new URLSearchParams();
+  params.statuses?.forEach((s) => qs.append('status', s));
+  if (params.search?.trim()) qs.set('search', params.search.trim());
+  const q = qs.toString();
+  return apiFetch<AdminOrder[]>(`/admin/orders${q ? `?${q}` : ''}`, { signal });
 }
 
 // POST /admin/orders/:id/status — advance fulfillment (PAID→PROCESSING→SHIPPED→
