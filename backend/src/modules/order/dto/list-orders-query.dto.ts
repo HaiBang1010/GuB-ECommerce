@@ -4,9 +4,12 @@ import { Transform } from 'class-transformer';
 import {
   IsArray,
   IsEnum,
+  IsInt,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
 } from 'class-validator';
 
 // Normalize the ?status param to an array. The global ValidationPipe has
@@ -20,6 +23,13 @@ function toStatusArray(value: unknown): OrderStatus[] | undefined {
     .flatMap((v) => String(v).split(','))
     .map((s) => s.trim())
     .filter((s) => s !== '') as OrderStatus[];
+}
+
+// Query params arrive as strings (no implicit conversion) — coerce to a number so
+// @IsInt validates it; a non-numeric value becomes NaN and is rejected (400).
+function toInt(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  return Number(value);
 }
 
 export class ListOrdersQueryDto {
@@ -45,4 +55,21 @@ export class ListOrdersQueryDto {
   @IsString()
   @MaxLength(100)
   search?: string;
+
+  // 1-based page number (default 1).
+  @ApiPropertyOptional({ minimum: 1, default: 1, example: 1 })
+  @IsOptional()
+  @Transform(({ value }) => toInt(value))
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  // Rows per page (default 10, capped at 100).
+  @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 10, example: 10 })
+  @IsOptional()
+  @Transform(({ value }) => toInt(value))
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  pageSize?: number;
 }

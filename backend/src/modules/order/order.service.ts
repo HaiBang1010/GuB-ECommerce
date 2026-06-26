@@ -43,6 +43,14 @@ export type OrderAdminWithCustomer = OrderWithDetail & {
   customer: { email: string; name: string | null } | null;
 };
 
+// One page of admin orders. `total` is the count over the same filter/search.
+export type PaginatedAdminOrders = {
+  items: OrderAdminWithCustomer[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 type OrderWithItems = Order & { items: OrderItem[] };
 
 @Injectable()
@@ -227,7 +235,9 @@ export class OrderService {
   async listForAdmin(filters: {
     statuses?: OrderStatus[];
     search?: string;
-  }): Promise<OrderAdminWithCustomer[]> {
+    page?: number;
+    pageSize?: number;
+  }): Promise<PaginatedAdminOrders> {
     const where: Prisma.OrderWhereInput = {};
     if (filters.statuses?.length) {
       where.status = { in: filters.statuses };
@@ -243,24 +253,33 @@ export class OrderService {
       ];
     }
 
-    const orders = await this.prisma.order.findMany({
-      where,
-      include: { items: true, statusHistory: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    const page = filters.page ?? 1;
+    const pageSize = filters.pageSize ?? 10;
+    // count + page share the same `where`, so `total` reflects the filtered set.
+    const [total, orders] = await Promise.all([
+      this.prisma.order.count({ where }),
+      this.prisma.order.findMany({
+        where,
+        include: { items: true, statusHistory: true },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
 
     // Batch-resolve customers (no N+1, no JOIN) and map onto the page.
     const userIds = [...new Set(orders.map((o) => o.userId))];
     const byId = new Map(
       (await this.users.findManyByIds(userIds)).map((u) => [u.id, u]),
     );
-    return orders.map((order) => {
+    const items = orders.map((order) => {
       const user = byId.get(order.userId);
       return {
         ...order,
         customer: user ? { email: user.email, name: user.name } : null,
       };
     });
+    return { items, total, page, pageSize };
   }
 
   async getForAdmin(orderId: string): Promise<OrderWithDetail> {

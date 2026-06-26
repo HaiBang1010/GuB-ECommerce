@@ -17,3 +17,19 @@ export class OrderAdminResponseDto extends OrderResponseDto {
   @ApiProperty({ type: CustomerSummaryDto, nullable: true })
   customer!: CustomerSummaryDto | null;
 }
+
+// One page of admin orders. `total` is the count over the SAME filter/search
+// (not the grand total), so the UI can compute the page count.
+export class PaginatedOrdersResponseDto {
+  @ApiProperty({ type: () => [OrderAdminResponseDto] })
+  items!: OrderAdminResponseDto[];
+
+  @ApiProperty({ example: 42, description: 'Total rows matching the filter.' })
+  total!: number;
+
+  @ApiProperty({ example: 1, description: '1-based current page.' })
+  page!: number;
+
+  @ApiProperty({ example: 10, description: 'Rows per page.' })
+  pageSize!: number;
+}

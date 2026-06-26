@@ -24,13 +24,13 @@ import { Roles } from '../../common/auth/roles.decorator';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { SupabaseAuthGuard } from '../iam/auth/supabase-auth.guard';
 import { ListOrdersQueryDto } from './dto/list-orders-query.dto';
-import { OrderAdminResponseDto } from './dto/order-admin-response.dto';
+import { PaginatedOrdersResponseDto } from './dto/order-admin-response.dto';
 import { OrderResponseDto } from './dto/order-response.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import {
-  OrderAdminWithCustomer,
   OrderService,
   OrderWithDetail,
+  PaginatedAdminOrders,
 } from './order.service';
 
 // Admin order management — Supabase JWT + ADMIN role (backend-enforced, not UI-only).
@@ -45,16 +45,17 @@ export class OrderAdminController {
   constructor(private readonly orderService: OrderService) {}
 
   @ApiOperation({
-    summary: 'List all orders (optional multi ?status, ?search) + customer info',
+    summary:
+      'List orders, paginated (multi ?status, ?search, ?page, ?pageSize) + customer info',
   })
-  @ApiOkResponse({ type: [OrderAdminResponseDto] })
+  @ApiOkResponse({ type: PaginatedOrdersResponseDto })
   @Get()
-  list(
-    @Query() query: ListOrdersQueryDto,
-  ): Promise<OrderAdminWithCustomer[]> {
+  list(@Query() query: ListOrdersQueryDto): Promise<PaginatedAdminOrders> {
     return this.orderService.listForAdmin({
       statuses: query.status,
       search: query.search,
+      page: query.page,
+      pageSize: query.pageSize,
     });
   }
 

@@ -45,7 +45,7 @@ function viewItem(overrides: Record<string, unknown> = {}) {
 
 describe('OrderService', () => {
   let prisma: {
-    order: { findUnique: jest.Mock; findMany: jest.Mock };
+    order: { findUnique: jest.Mock; findMany: jest.Mock; count: jest.Mock };
     orderItem: { findUnique: jest.Mock };
     $transaction: jest.Mock;
   };
@@ -62,7 +62,11 @@ describe('OrderService', () => {
 
   beforeEach(() => {
     prisma = {
-      order: { findUnique: jest.fn(), findMany: jest.fn() },
+      order: {
+        findUnique: jest.fn(),
+        findMany: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
+      },
       orderItem: { findUnique: jest.fn() },
       $transaction: jest.fn(),
     };
@@ -451,11 +455,72 @@ describe('OrderService', () => {
       const result = await service.listForAdmin({});
 
       expect(users.findManyByIds).toHaveBeenCalledWith(['u1', 'ghost']);
-      expect(result[0].customer).toEqual({
+      expect(result.items[0].customer).toEqual({
         email: 'jane@example.com',
         name: 'Jane',
       });
-      expect(result[1].customer).toBeNull();
+      expect(result.items[1].customer).toBeNull();
+    });
+
+    it('defaults to page 1, pageSize 10 (skip 0, take 10) and returns total from count', async () => {
+      prisma.order.count.mockResolvedValue(42);
+      prisma.order.findMany.mockResolvedValue([]);
+
+      const result = await service.listForAdmin({});
+
+      expect(prisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 0, take: 10 }),
+      );
+      expect(result).toEqual(
+        expect.objectContaining({ total: 42, page: 1, pageSize: 10 }),
+      );
+    });
+
+    it('applies page/pageSize as skip/take', async () => {
+      prisma.order.count.mockResolvedValue(100);
+      prisma.order.findMany.mockResolvedValue([]);
+
+      const result = await service.listForAdmin({ page: 3, pageSize: 20 });
+
+      expect(prisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 40, take: 20 }),
+      );
+      expect(result.page).toBe(3);
+      expect(result.pageSize).toBe(20);
+    });
+
+    it('counts over the SAME filter+search where as the page query', async () => {
+      users.searchIdsByNameOrEmail.mockResolvedValue(['u9']);
+      prisma.order.count.mockResolvedValue(3);
+      prisma.order.findMany.mockResolvedValue([]);
+
+      const result = await service.listForAdmin({
+        statuses: ['PAID'] as never,
+        search: 'x',
+      });
+
+      const expectedWhere = {
+        status: { in: ['PAID'] },
+        OR: [
+          { id: { contains: 'x', mode: 'insensitive' } },
+          { userId: { in: ['u9'] } },
+        ],
+      };
+      expect(prisma.order.count).toHaveBeenCalledWith({ where: expectedWhere });
+      expect(prisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expectedWhere }),
+      );
+      expect(result.total).toBe(3);
+    });
+
+    it('a page past the end has empty items but the real total', async () => {
+      prisma.order.count.mockResolvedValue(5);
+      prisma.order.findMany.mockResolvedValue([]);
+
+      const result = await service.listForAdmin({ page: 99, pageSize: 10 });
+
+      expect(result.items).toEqual([]);
+      expect(result.total).toBe(5);
     });
   });
 
