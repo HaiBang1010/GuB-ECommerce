@@ -7,6 +7,7 @@ import { AddressService } from '../iam/address/address.service';
 import { ProductService } from '../product/product/product.service';
 import { ProductVariantService } from '../product/variant/variant.service';
 import { NotificationService } from '../notification/notification.service';
+import { UserService } from '../iam/user/user.service';
 
 function makeAddress(): Address {
   return {
@@ -53,6 +54,10 @@ describe('OrderService', () => {
   let products: { getActiveByIds: jest.Mock };
   let variants: { decrementForOrder: jest.Mock; releaseForOrder: jest.Mock };
   let notifications: { publishOrderStatus: jest.Mock };
+  let users: {
+    findManyByIds: jest.Mock;
+    searchIdsByNameOrEmail: jest.Mock;
+  };
   let service: OrderService;
 
   beforeEach(() => {
@@ -66,6 +71,11 @@ describe('OrderService', () => {
     products = { getActiveByIds: jest.fn() };
     variants = { decrementForOrder: jest.fn(), releaseForOrder: jest.fn() };
     notifications = { publishOrderStatus: jest.fn() };
+    users = {
+      // Default: no enrichment / no search hits — overridden per test.
+      findManyByIds: jest.fn().mockResolvedValue([]),
+      searchIdsByNameOrEmail: jest.fn().mockResolvedValue([]),
+    };
     service = new OrderService(
       prisma as unknown as PrismaService,
       cart as unknown as CartService,
@@ -73,6 +83,7 @@ describe('OrderService', () => {
       products as unknown as ProductService,
       variants as unknown as ProductVariantService,
       notifications as unknown as NotificationService,
+      users as unknown as UserService,
     );
   });
 
@@ -364,20 +375,87 @@ describe('OrderService', () => {
   });
 
   describe('listForAdmin', () => {
-    it('filters by status when provided', async () => {
+    it('lists all orders (empty where) when no filters are given', async () => {
       prisma.order.findMany.mockResolvedValue([]);
-      await service.listForAdmin('SHIPPED' as never);
+      await service.listForAdmin({});
       expect(prisma.order.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { status: 'SHIPPED' } }),
+        expect.objectContaining({ where: {} }),
       );
     });
 
-    it('lists all orders when no status filter is given', async () => {
+    it('filters by multiple statuses (status in [...])', async () => {
       prisma.order.findMany.mockResolvedValue([]);
-      await service.listForAdmin();
+      await service.listForAdmin({ statuses: ['PAID', 'SHIPPED'] as never });
       expect(prisma.order.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: undefined }),
+        expect.objectContaining({ where: { status: { in: ['PAID', 'SHIPPED'] } } }),
       );
+    });
+
+    it('searches by order id OR matching customer userIds (no cross-schema JOIN)', async () => {
+      users.searchIdsByNameOrEmail.mockResolvedValue(['u9']);
+      prisma.order.findMany.mockResolvedValue([]);
+
+      await service.listForAdmin({ search: ' jane ' });
+
+      expect(users.searchIdsByNameOrEmail).toHaveBeenCalledWith('jane');
+      expect(prisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            OR: [
+              { id: { contains: 'jane', mode: 'insensitive' } },
+              { userId: { in: ['u9'] } },
+            ],
+          },
+        }),
+      );
+    });
+
+    it('search with no matching users still filters by order id alone', async () => {
+      users.searchIdsByNameOrEmail.mockResolvedValue([]);
+      prisma.order.findMany.mockResolvedValue([]);
+
+      await service.listForAdmin({ search: 'abc' });
+
+      expect(prisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { OR: [{ id: { contains: 'abc', mode: 'insensitive' } }] },
+        }),
+      );
+    });
+
+    it('combines status + search (AND) in one where', async () => {
+      users.searchIdsByNameOrEmail.mockResolvedValue([]);
+      prisma.order.findMany.mockResolvedValue([]);
+
+      await service.listForAdmin({ statuses: ['PAID'] as never, search: 'x' });
+
+      expect(prisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            status: { in: ['PAID'] },
+            OR: [{ id: { contains: 'x', mode: 'insensitive' } }],
+          },
+        }),
+      );
+    });
+
+    it('enriches each row with customer {email,name}; null when the user is gone', async () => {
+      prisma.order.findMany.mockResolvedValue([
+        { id: 'o1', userId: 'u1', items: [], statusHistory: [] },
+        { id: 'o2', userId: 'ghost', items: [], statusHistory: [] },
+      ]);
+      users.findManyByIds.mockResolvedValue([
+        { id: 'u1', email: 'jane@example.com', name: 'Jane' },
+      ]);
+
+      const result = await service.listForAdmin({});
+
+      expect(users.findManyByIds).toHaveBeenCalledWith(['u1', 'ghost']);
+      expect(result[0].customer).toEqual({
+        email: 'jane@example.com',
+        name: 'Jane',
+      });
+      expect(result[1].customer).toBeNull();
     });
   });
 

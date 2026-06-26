@@ -14,6 +14,7 @@ import {
   StockChange,
 } from '../product/variant/variant.service';
 import { NotificationService } from '../notification/notification.service';
+import { UserService } from '../iam/user/user.service';
 
 // Default window after which an unpaid order is auto-cancelled and its stock
 // released (the release-expired job; ARCHITECTURE §5.6 / §6).
@@ -36,6 +37,12 @@ export type OrderWithDetail = Prisma.OrderGetPayload<{
   include: { items: true; statusHistory: true };
 }>;
 
+// An admin order row enriched with the customer's identity (resolved in-process
+// from iam, never via a cross-schema JOIN). customer is null if the user is gone.
+export type OrderAdminWithCustomer = OrderWithDetail & {
+  customer: { email: string; name: string | null } | null;
+};
+
 type OrderWithItems = Order & { items: OrderItem[] };
 
 @Injectable()
@@ -49,6 +56,8 @@ export class OrderService {
     private readonly variants: ProductVariantService,
     // The single async path: status changes are published here post-commit.
     private readonly notifications: NotificationService,
+    // Resolves customer identity for admin enrichment/search (in-process).
+    private readonly users: UserService,
   ) {}
 
   /**
@@ -211,11 +220,46 @@ export class OrderService {
   // Admin — fulfillment status management (timeline lives in statusHistory).
   // ---------------------------------------------------------------------------
 
-  async listForAdmin(status?: OrderStatus): Promise<OrderWithDetail[]> {
-    return this.prisma.order.findMany({
-      where: status ? { status } : undefined,
+  // Admin order list: optional multi-status filter + unified search (order id OR
+  // customer name/email), with each row enriched with the customer's identity.
+  // Both the search bridge and the enrich step cross the order↔iam boundary ONLY
+  // through UserService (in-process) — never a cross-schema JOIN (ARCHITECTURE §4.3).
+  async listForAdmin(filters: {
+    statuses?: OrderStatus[];
+    search?: string;
+  }): Promise<OrderAdminWithCustomer[]> {
+    const where: Prisma.OrderWhereInput = {};
+    if (filters.statuses?.length) {
+      where.status = { in: filters.statuses };
+    }
+    const term = filters.search?.trim();
+    if (term) {
+      // Resolve matching userIds in iam first, then filter our own rows by id OR
+      // userId — the iam tables are never JOINed from the order schema.
+      const userIds = await this.users.searchIdsByNameOrEmail(term);
+      where.OR = [
+        { id: { contains: term, mode: 'insensitive' } },
+        ...(userIds.length ? [{ userId: { in: userIds } }] : []),
+      ];
+    }
+
+    const orders = await this.prisma.order.findMany({
+      where,
       include: { items: true, statusHistory: true },
       orderBy: { createdAt: 'desc' },
+    });
+
+    // Batch-resolve customers (no N+1, no JOIN) and map onto the page.
+    const userIds = [...new Set(orders.map((o) => o.userId))];
+    const byId = new Map(
+      (await this.users.findManyByIds(userIds)).map((u) => [u.id, u]),
+    );
+    return orders.map((order) => {
+      const user = byId.get(order.userId);
+      return {
+        ...order,
+        customer: user ? { email: user.email, name: user.name } : null,
+      };
     });
   }
 

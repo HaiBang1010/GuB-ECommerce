@@ -54,4 +54,32 @@ export class UserService {
     }
     return user;
   }
+
+  // Cross-module batch read (in-process): resolve many users at once so callers
+  // (e.g. the admin order list) can enrich rows with customer info WITHOUT a
+  // cross-schema JOIN — they map the result by id themselves. Includes archived
+  // users so an admin still sees who an old order belongs to.
+  async findManyByIds(ids: string[]): Promise<User[]> {
+    if (ids.length === 0) return [];
+    return this.prisma.user.findMany({ where: { id: { in: ids } } });
+  }
+
+  // Cross-module search (in-process): return the ids of users whose name or email
+  // matches `q` (case-insensitive substring). Returns ids ONLY, so the caller
+  // filters its own rows by userId — the iam schema is never JOINed from outside.
+  async searchIdsByNameOrEmail(q: string): Promise<string[]> {
+    const term = q.trim();
+    if (term === '') return [];
+    const users = await this.prisma.user.findMany({
+      where: {
+        OR: [
+          { email: { contains: term, mode: 'insensitive' } },
+          { name: { contains: term, mode: 'insensitive' } },
+        ],
+      },
+      select: { id: true },
+      take: 200,
+    });
+    return users.map((u) => u.id);
+  }
 }

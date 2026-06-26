@@ -7,6 +7,7 @@ import { SupabaseClaims } from '../auth/supabase-jwt.service';
 type UserDelegateMock = {
   upsert: jest.Mock;
   findUnique: jest.Mock;
+  findMany: jest.Mock;
 };
 
 function makeUser(overrides: Partial<User> = {}): User {
@@ -32,7 +33,9 @@ describe('UserService', () => {
   let service: UserService;
 
   beforeEach(() => {
-    prisma = { user: { upsert: jest.fn(), findUnique: jest.fn() } };
+    prisma = {
+      user: { upsert: jest.fn(), findUnique: jest.fn(), findMany: jest.fn() },
+    };
     service = new UserService(prisma as unknown as PrismaService);
   });
 
@@ -90,6 +93,47 @@ describe('UserService', () => {
       await expect(service.assertActive('u1')).rejects.toBeInstanceOf(
         NotFoundException,
       );
+    });
+  });
+
+  describe('findManyByIds', () => {
+    it('returns [] without querying for an empty id list', async () => {
+      await expect(service.findManyByIds([])).resolves.toEqual([]);
+      expect(prisma.user.findMany).not.toHaveBeenCalled();
+    });
+
+    it('looks up users by id (in)', async () => {
+      const users = [makeUser({ id: 'u1' }), makeUser({ id: 'u2' })];
+      prisma.user.findMany.mockResolvedValue(users);
+      await expect(service.findManyByIds(['u1', 'u2'])).resolves.toBe(users);
+      expect(prisma.user.findMany).toHaveBeenCalledWith({
+        where: { id: { in: ['u1', 'u2'] } },
+      });
+    });
+  });
+
+  describe('searchIdsByNameOrEmail', () => {
+    it('returns [] for a blank query without querying', async () => {
+      await expect(service.searchIdsByNameOrEmail('   ')).resolves.toEqual([]);
+      expect(prisma.user.findMany).not.toHaveBeenCalled();
+    });
+
+    it('matches name OR email (case-insensitive) and returns ids only', async () => {
+      prisma.user.findMany.mockResolvedValue([{ id: 'u1' }, { id: 'u2' }]);
+      await expect(service.searchIdsByNameOrEmail(' Jane ')).resolves.toEqual([
+        'u1',
+        'u2',
+      ]);
+      expect(prisma.user.findMany).toHaveBeenCalledWith({
+        where: {
+          OR: [
+            { email: { contains: 'Jane', mode: 'insensitive' } },
+            { name: { contains: 'Jane', mode: 'insensitive' } },
+          ],
+        },
+        select: { id: true },
+        take: 200,
+      });
     });
   });
 });

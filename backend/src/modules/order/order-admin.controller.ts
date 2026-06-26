@@ -24,9 +24,14 @@ import { Roles } from '../../common/auth/roles.decorator';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { SupabaseAuthGuard } from '../iam/auth/supabase-auth.guard';
 import { ListOrdersQueryDto } from './dto/list-orders-query.dto';
+import { OrderAdminResponseDto } from './dto/order-admin-response.dto';
 import { OrderResponseDto } from './dto/order-response.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
-import { OrderService, OrderWithDetail } from './order.service';
+import {
+  OrderAdminWithCustomer,
+  OrderService,
+  OrderWithDetail,
+} from './order.service';
 
 // Admin order management — Supabase JWT + ADMIN role (backend-enforced, not UI-only).
 @ApiTags('order')
@@ -39,11 +44,18 @@ import { OrderService, OrderWithDetail } from './order.service';
 export class OrderAdminController {
   constructor(private readonly orderService: OrderService) {}
 
-  @ApiOperation({ summary: 'List all orders (optional ?status)' })
-  @ApiOkResponse({ type: [OrderResponseDto] })
+  @ApiOperation({
+    summary: 'List all orders (optional multi ?status, ?search) + customer info',
+  })
+  @ApiOkResponse({ type: [OrderAdminResponseDto] })
   @Get()
-  list(@Query() query: ListOrdersQueryDto): Promise<OrderWithDetail[]> {
-    return this.orderService.listForAdmin(query.status);
+  list(
+    @Query() query: ListOrdersQueryDto,
+  ): Promise<OrderAdminWithCustomer[]> {
+    return this.orderService.listForAdmin({
+      statuses: query.status,
+      search: query.search,
+    });
   }
 
   @ApiOperation({ summary: 'Get an order by id' })
