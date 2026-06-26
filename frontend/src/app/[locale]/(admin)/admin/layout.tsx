@@ -24,27 +24,32 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const t = useTranslations('admin');
   const isLoading = useAuthStore((s) => s.isLoading);
   const role = useAuthStore((s) => s.role);
+  const roleStatus = useAuthStore((s) => s.roleStatus);
   const user = useAuthStore((s) => s.user);
   const router = useRouter();
   const pathname = usePathname();
 
   const admin = isAdmin(role);
+  // Still settling if the session is restoring, OR we're logged in but the role
+  // fetch (GET /me) hasn't resolved yet. We must NOT treat that null role as
+  // "not an admin" — that's the refresh race that bounced real admins.
+  const resolving = isLoading || (user != null && roleStatus !== 'loaded');
 
   // Client-side convenience guard ONLY — every /admin/* API call is still gated by
-  // the backend RoleGuard (403), the real protection. Wait for the auth store to
-  // settle before redirecting so a still-loading admin isn't bounced.
+  // the backend RoleGuard (403), the real protection. Redirect only once both the
+  // session AND the role have settled and the caller is definitively not an admin.
   useEffect(() => {
-    if (!isLoading && !admin) {
+    if (!resolving && !admin) {
       router.replace('/');
     }
-  }, [isLoading, admin, router]);
+  }, [resolving, admin, router]);
 
   async function handleSignOut() {
     await createClient().auth.signOut();
     router.replace('/');
   }
 
-  if (isLoading) {
+  if (resolving) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <p className="text-muted-foreground text-sm">{t('loading')}</p>

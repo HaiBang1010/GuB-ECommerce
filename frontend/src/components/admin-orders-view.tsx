@@ -1,13 +1,22 @@
 'use client';
 
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { Check, ChevronDown } from 'lucide-react';
 
 import { useAdminOrders, useAdminUpdateOrderStatus } from '@/hooks/use-orders';
 import { OrderStatusBadge } from '@/components/order-status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ApiError } from '@/lib/api/client';
+import { cn } from '@/lib/utils';
 import { formatPriceCents } from '@/lib/money';
 import type { OrderStatus } from '@/lib/api/orders';
 
@@ -20,10 +29,28 @@ const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
   SHIPPED: 'DELIVERED',
 };
 
+// All order statuses, for the filter dropdown. OrderStatus is a generated union
+// (no runtime enum), so the list is spelled out; labels reuse order.status.*.
+const STATUSES: OrderStatus[] = [
+  'PENDING_PAYMENT',
+  'PAID',
+  'PROCESSING',
+  'SHIPPED',
+  'DELIVERED',
+  'CANCELLED',
+  'REFUNDED',
+];
+
+type StatusFilter = OrderStatus | 'ALL';
+
 export function AdminOrdersView() {
   const t = useTranslations('admin');
   const tStatus = useTranslations('order.status');
-  const { isPending, isError, data } = useAdminOrders();
+  const [filter, setFilter] = useState<StatusFilter>('ALL');
+  // 'ALL' → no ?status param (every order); a specific status → server-side filter.
+  const { isPending, isError, data } = useAdminOrders(
+    filter === 'ALL' ? undefined : filter,
+  );
   const advance = useAdminUpdateOrderStatus();
 
   function handleAdvance(id: string, next: OrderStatus) {
@@ -39,7 +66,41 @@ export function AdminOrdersView() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">{t('orders')}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-2xl font-semibold">{t('orders')}</h1>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              {t('filterByStatus')}:{' '}
+              {filter === 'ALL' ? t('filterAll') : tStatus(filter)}
+              <ChevronDown className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setFilter('ALL')}>
+              <Check
+                className={cn(
+                  'size-4',
+                  filter === 'ALL' ? 'opacity-100' : 'opacity-0',
+                )}
+              />
+              {t('filterAll')}
+            </DropdownMenuItem>
+            {STATUSES.map((s) => (
+              <DropdownMenuItem key={s} onClick={() => setFilter(s)}>
+                <Check
+                  className={cn(
+                    'size-4',
+                    filter === s ? 'opacity-100' : 'opacity-0',
+                  )}
+                />
+                {tStatus(s)}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
       {isPending ? (
         <Skeleton className="h-40 w-full" />

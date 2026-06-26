@@ -175,6 +175,8 @@
     "statusColumn": "Status",
     "total": "Total",
     "action": "Action",
+    "filterByStatus": "Status",
+    "filterAll": "All",
     "noOrders": "No orders",
     "error": "Couldn't load orders",
     "advanceTo": "Advance to {status}",

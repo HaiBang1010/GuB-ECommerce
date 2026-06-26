@@ -29,6 +29,8 @@ export function Providers({ children }: { children: ReactNode }) {
 
   const setUser = useAuthStore((s) => s.setUser);
   const setRole = useAuthStore((s) => s.setRole);
+  const setRoleStatus = useAuthStore((s) => s.setRoleStatus);
+  const clearRole = useAuthStore((s) => s.clearRole);
   const setLoading = useAuthStore((s) => s.setLoading);
 
   // Mirror the Supabase session into the auth store: read it once on mount, then
@@ -38,13 +40,15 @@ export function Providers({ children }: { children: ReactNode }) {
     let active = true;
 
     // Resolve the app role from the backend (reads iam.User.role) — the single
-    // source of truth. Best-effort: a failure leaves role null, so the UI just
-    // hides admin affordances (the backend RoleGuard is the real gate).
+    // source of truth. roleStatus goes loading→loaded so the admin guard can tell
+    // "still fetching" apart from "resolved, not an admin". Best-effort: a failure
+    // leaves role null (UI hides admin affordances; backend RoleGuard is the gate).
     const syncRole = (hasSession: boolean) => {
       if (!hasSession) {
-        setRole(null);
+        clearRole();
         return;
       }
+      setRoleStatus('loading');
       void getMe()
         .then((me) => {
           if (active) setRole(me.role);
@@ -80,7 +84,7 @@ export function Providers({ children }: { children: ReactNode }) {
           });
       }
       if (event === 'SIGNED_OUT') {
-        setRole(null);
+        clearRole();
         useCartStore.getState().clear();
         void queryClient.invalidateQueries({ queryKey: ['cart'] });
       }
@@ -90,7 +94,7 @@ export function Providers({ children }: { children: ReactNode }) {
       active = false;
       subscription.unsubscribe();
     };
-  }, [setUser, setRole, setLoading, queryClient]);
+  }, [setUser, setRole, setRoleStatus, clearRole, setLoading, queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>

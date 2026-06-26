@@ -175,6 +175,8 @@
     "statusColumn": "Trạng thái",
     "total": "Tổng cộng",
     "action": "Thao tác",
+    "filterByStatus": "Trạng thái",
+    "filterAll": "Tất cả",
     "noOrders": "Chưa có đơn hàng",
     "error": "Không tải được đơn hàng",
     "advanceTo": "Chuyển sang {status}",
