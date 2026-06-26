@@ -4,6 +4,9 @@ import type { components } from '@/lib/api/schema';
 export type Order = components['schemas']['OrderResponseDto'];
 // Admin list row = order + enriched customer summary (email/name).
 export type AdminOrder = components['schemas']['OrderAdminResponseDto'];
+// One paginated page of admin orders.
+export type PaginatedOrders =
+  components['schemas']['PaginatedOrdersResponseDto'];
 export type OrderItem = components['schemas']['OrderItemDto'];
 export type OrderStatusHistory =
   components['schemas']['OrderStatusHistoryDto'];
@@ -64,18 +67,28 @@ export function getMyOrders(signal?: AbortSignal): Promise<Order[]> {
   return apiFetch<Order[]>('/orders', { signal });
 }
 
-// GET /admin/orders — every order, with optional multi-status filter + unified
-// search (order id / customer name / email), each row enriched with customer
-// info. ADMIN-only on the backend (RoleGuard). Statuses repeat as ?status=A&status=B.
+// GET /admin/orders — a paginated page of orders, with optional multi-status
+// filter + unified search (order id / customer name / email), each row enriched
+// with customer info. ADMIN-only on the backend (RoleGuard). Statuses repeat as
+// ?status=A&status=B; pagination via ?page&?pageSize.
 export function getAdminOrders(
-  params: { statuses?: OrderStatus[]; search?: string } = {},
+  params: {
+    statuses?: OrderStatus[];
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  } = {},
   signal?: AbortSignal,
-): Promise<AdminOrder[]> {
+): Promise<PaginatedOrders> {
   const qs = new URLSearchParams();
   params.statuses?.forEach((s) => qs.append('status', s));
   if (params.search?.trim()) qs.set('search', params.search.trim());
+  if (params.page) qs.set('page', String(params.page));
+  if (params.pageSize) qs.set('pageSize', String(params.pageSize));
   const q = qs.toString();
-  return apiFetch<AdminOrder[]>(`/admin/orders${q ? `?${q}` : ''}`, { signal });
+  return apiFetch<PaginatedOrders>(`/admin/orders${q ? `?${q}` : ''}`, {
+    signal,
+  });
 }
 
 // POST /admin/orders/:id/status — advance fulfillment (PAID→PROCESSING→SHIPPED→

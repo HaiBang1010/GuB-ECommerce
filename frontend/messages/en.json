@@ -180,6 +180,8 @@
     "filterClear": "Clear",
     "searchPlaceholder": "Search by order id, name or email",
     "backToShop": "Back to shop",
+    "rowsPerPage": "Rows per page",
+    "pageOf": "Page {page} of {total}",
     "noOrders": "No orders",
     "error": "Couldn't load orders",
     "advanceTo": "Advance to {status}",

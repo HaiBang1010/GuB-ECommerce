@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import { useAuthStore } from '@/stores/auth.store';
 import { ApiError } from '@/lib/api/client';
@@ -67,19 +72,26 @@ export function useCancelOrder() {
   });
 }
 
-// Admin: every order, with optional multi-status filter + search. Gated to a
-// logged-in user; the backend RoleGuard rejects non-admins (the admin shell also
-// guards the UI). Statuses are sorted in the key so cache hits are order-stable.
-export function useAdminOrders(statuses?: OrderStatus[], search?: string) {
+// Admin: a paginated page of orders, with optional multi-status filter + search.
+// Gated to a logged-in user; the backend RoleGuard rejects non-admins (the admin
+// shell also guards the UI). Statuses are sorted in the key so cache hits are
+// order-stable; keepPreviousData avoids a flash when paging/filtering.
+export function useAdminOrders(
+  statuses?: OrderStatus[],
+  search?: string,
+  page = 1,
+  pageSize = 10,
+) {
   const authLoading = useAuthStore((s) => s.isLoading);
   const user = useAuthStore((s) => s.user);
   const sorted = [...(statuses ?? [])].sort();
   const term = search?.trim() ?? '';
   return useQuery({
-    queryKey: ['admin', 'orders', { statuses: sorted, search: term }],
+    queryKey: ['admin', 'orders', { statuses: sorted, search: term, page, pageSize }],
     queryFn: ({ signal }) =>
-      getAdminOrders({ statuses: sorted, search: term }, signal),
+      getAdminOrders({ statuses: sorted, search: term, page, pageSize }, signal),
     enabled: !authLoading && !!user,
+    placeholderData: keepPreviousData,
   });
 }
 

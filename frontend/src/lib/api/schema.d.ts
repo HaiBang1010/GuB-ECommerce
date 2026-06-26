@@ -766,7 +766,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List all orders (optional multi ?status, ?search) + customer info */
+        /** List orders, paginated (multi ?status, ?search, ?page, ?pageSize) + customer info */
         get: operations["OrderAdminController_list"];
         put?: never;
         post?: never;
@@ -1818,6 +1818,24 @@ export interface components {
             items: components["schemas"]["OrderItemDto"][];
             statusHistory: components["schemas"]["OrderStatusHistoryDto"][];
             customer: components["schemas"]["CustomerSummaryDto"] | null;
+        };
+        PaginatedOrdersResponseDto: {
+            items: components["schemas"]["OrderAdminResponseDto"][];
+            /**
+             * @description Total rows matching the filter.
+             * @example 42
+             */
+            total: number;
+            /**
+             * @description 1-based current page.
+             * @example 1
+             */
+            page: number;
+            /**
+             * @description Rows per page.
+             * @example 10
+             */
+            pageSize: number;
         };
         UpdateOrderStatusDto: {
             /**
@@ -4175,6 +4193,8 @@ export interface operations {
                 status?: ("PENDING_PAYMENT" | "PAID" | "PROCESSING" | "SHIPPED" | "DELIVERED" | "CANCELLED" | "REFUNDED")[];
                 /** @description Search by order id, customer name or email. */
                 search?: string;
+                page?: number;
+                pageSize?: number;
             };
             header?: never;
             path?: never;
@@ -4187,7 +4207,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OrderAdminResponseDto"][];
+                    "application/json": components["schemas"]["PaginatedOrdersResponseDto"];
                 };
             };
             /** @description Missing or invalid token. */

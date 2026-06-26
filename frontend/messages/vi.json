@@ -180,6 +180,8 @@
     "filterClear": "Bỏ chọn",
     "searchPlaceholder": "Tìm theo mã đơn, tên hoặc email",
     "backToShop": "Về cửa hàng",
+    "rowsPerPage": "Số dòng mỗi trang",
+    "pageOf": "Trang {page} / {total}",
     "noOrders": "Chưa có đơn hàng",
     "error": "Không tải được đơn hàng",
     "advanceTo": "Chuyển sang {status}",
