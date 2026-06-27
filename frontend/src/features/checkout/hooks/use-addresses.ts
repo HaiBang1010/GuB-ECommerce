@@ -5,7 +5,7 @@ import {
   createAddress,
   getAddresses,
   type CreateAddressInput,
-} from '@/lib/api/addresses';
+} from '@/features/checkout/api/addresses';
 
 export function useAddresses() {
   const authLoading = useAuthStore((s) => s.isLoading);

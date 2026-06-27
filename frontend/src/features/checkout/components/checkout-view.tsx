@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { Link, useRouter } from '@/i18n/navigation';
-import { useAddresses, useCreateAddress } from '@/hooks/use-addresses';
+import { useAddresses, useCreateAddress } from '@/features/checkout/hooks/use-addresses';
 import { useCart } from '@/features/cart/hooks/use-cart';
 import { useCreateOrder } from '@/hooks/use-orders';
 import { ApiError } from '@/lib/api/client';

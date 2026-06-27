@@ -1,6 +1,6 @@
 import { setRequestLocale } from 'next-intl/server';
 
-import { CheckoutView } from '@/components/checkout-view';
+import { CheckoutView } from '@/features/checkout/components/checkout-view';
 
 export default async function CheckoutPage({
   params,
