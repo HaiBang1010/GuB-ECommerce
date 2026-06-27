@@ -101,9 +101,9 @@ Purchased-only reviews surface in two existing pages (no new route):
 Data layer: the customer fetchers/hooks (`features/review/api/reviews.ts` + `features/review/hooks/use-reviews.ts`)
 and the admin reply fetcher/hook (`features/admin/reviews/{api/reviews.ts,hooks/use-admin-reviews.ts}`);
 the shared `components/star-rating.tsx` + `ui/textarea.tsx`, and the `reviews` i18n namespace. The reply *display* (the "Store reply"
-block) ships for everyone; **admin reply input** now ships too — an inline box on product detail,
-shown to an admin under each review without a reply (`POST /admin/reviews/:id/reply`). It lives on
-the product page because there is no admin list-all-reviews endpoint. See §10.
+block) ships for everyone; **admin reply input** now ships too — an inline `AdminReplyForm` shown to an
+admin under each review without a reply (`POST /admin/reviews/:id/reply`), available **both** on the
+storefront product page and on the dedicated `/admin/reviews` list-all page (§10).
 
 ## 9. Notifications (Phase 3)
 
@@ -119,9 +119,9 @@ producer (the single async path, backend §4.8); the frontend only reads + acks.
 ## 10. Admin (Phase 3)
 
 The admin area is a `[locale]/(admin)/admin/` route group with its own client `AdminLayout` (an admin
-topbar + a sidebar: **Orders**, plus **Reviews/Catalog/Analytics** "coming soon" placeholders) —
-separate from the `[locale]/(storefront)/` group that renders the storefront `Header`. Route groups
-don't affect the URL, so every customer route is unchanged.
+topbar + a sidebar: **Orders · Users · Reviews** are wired, plus **Catalog/Analytics** "coming soon"
+placeholders) — separate from the `[locale]/(storefront)/` group that renders the storefront `Header`.
+Route groups don't affect the URL, so every customer route is unchanged.
 
 **Role is the single source of truth from the backend.** `Providers` calls `GET /me` (which returns
 `iam.User.role`) on the initial session and on `SIGNED_IN`, storing `role` in the auth store (cleared
@@ -138,8 +138,20 @@ service call, **no cross-module JOIN**), a status badge, the total, and a status
 step, the backend enforces the legal transition). The toolbar adds a **multi-status checkbox filter**, a
 **debounced unified search** (order id / customer name / email), and a **rows-per-page + windowed pager**
 (`page`/`pageSize` + `total`, `keepPreviousData` so paging doesn't flash); any filter/search/page-size
-change resets to page 1. The customer cell links to `/admin/users/[id]`, a **placeholder route (404 for
-now)** — an admin user-detail page is a later slice.
+change resets to page 1. Clicking an order id opens a shared **order-detail dialog** (`useAdminOrderDetail`
+→ `GET /admin/orders/:id`: full items, shipping snapshot, status timeline, customer, and the advance-status
+action). The customer cell links to the **user-detail page** at `/admin/users/[id]`.
 
-**Review reply** is inline on product detail (§8), not a dedicated admin page, because the backend
-exposes no admin list-all-reviews endpoint — only `POST /admin/reviews/:id/reply` (by review id).
+**Users** (`/admin/users` + `/admin/users/[id]`): the list (`useAdminUsers` → `GET /admin/users`) is
+paginated with a debounced name/email search; each row links to the detail page. The detail page
+(`useAdminUser` → `GET /admin/users/:id`) is composed **in-process, never a cross-schema JOIN**: identity +
+profile + address book from iam, **order stats + recent orders** from the order module (`OrderModule`
+exports `OrderService`; iam imports it — acyclic). The stats card shows total orders, **total spent**
+(only money actually collected — `PAID`/`PROCESSING`/`SHIPPED`/`DELIVERED`; `PENDING_PAYMENT`,
+`CANCELLED` and `REFUNDED` are excluded), and a per-status breakdown (`byStatus` counts **every** status).
+Recent orders open the same shared order-detail dialog.
+
+**Reviews** (`/admin/reviews`): `useAdminReviews` (`GET /admin/reviews`) lists **every** review, paginated
+and enriched with product name + reviewer identity, with an **all / unreplied / replied** filter. A review
+with no reply shows an inline `AdminReplyForm` (`POST /admin/reviews/:id/reply`); the same form is **also**
+embedded (admin-gated) on the storefront product detail (§8), so an admin can reply from either place.
