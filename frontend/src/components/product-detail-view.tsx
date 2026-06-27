@@ -2,19 +2,18 @@
 
 import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { toast } from 'sonner';
 
 import { Link } from '@/i18n/navigation';
 import { useProduct } from '@/hooks/use-product';
 import { useAddToCart } from '@/hooks/use-cart';
-import { useAdminReplyToReview, useProductReviews } from '@/hooks/use-reviews';
+import { useProductReviews } from '@/hooks/use-reviews';
 import { useCartStore } from '@/stores/cart.store';
 import { useAuthStore } from '@/stores/auth.store';
 import { isAdmin } from '@/lib/auth/is-admin';
+import { AdminReplyForm } from '@/components/admin/admin-reply-form';
 import { StarRating } from '@/components/star-rating';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { formatPriceCents } from '@/lib/money';
 import { formatDate, formatDateTime } from '@/lib/datetime';
@@ -324,48 +323,6 @@ function ProductReviews({ productId }: { productId: string }) {
         </>
       )}
     </section>
-  );
-}
-
-// Admin-only inline store reply, shown under a review that has no reply yet. There
-// is no admin list-all-reviews endpoint, so replies happen here on the product page.
-function AdminReplyForm({ reviewId }: { reviewId: string }) {
-  const t = useTranslations('admin');
-  const reply = useAdminReplyToReview();
-  const [text, setText] = useState('');
-
-  function submit() {
-    const value = text.trim();
-    if (!value) return;
-    reply.mutate(
-      { id: reviewId, body: { reply: value } },
-      {
-        onSuccess: () => {
-          toast.success(t('replied'));
-          setText('');
-        },
-        onError: () => toast.error(t('replyError')),
-      },
-    );
-  }
-
-  return (
-    <div className="mt-1 flex flex-col items-start gap-2">
-      <Textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        maxLength={2000}
-        placeholder={t('replyPlaceholder')}
-        className="w-full"
-      />
-      <Button
-        size="sm"
-        onClick={submit}
-        disabled={!text.trim() || reply.isPending}
-      >
-        {t('reply')}
-      </Button>
-    </div>
   );
 }
 

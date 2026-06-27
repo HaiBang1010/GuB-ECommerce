@@ -628,79 +628,17 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/cart": {
+    "/admin/users/{id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get the cart
-         * @description Works without auth for guests — send an X-Cart-Session header instead of a Bearer token.
-         */
-        get: operations["CartController_get"];
+        /** Get a customer by id (profile + addresses + order stats + recent) */
+        get: operations["AdminUserController_getOne"];
         put?: never;
         post?: never;
-        /** Clear the cart */
-        delete: operations["CartController_clear"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/cart/items": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Add an item to the cart
-         * @description Works without auth for guests — send an X-Cart-Session header instead of a Bearer token.
-         */
-        post: operations["CartController_add"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/cart/items/{variantId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove an item from the cart */
-        delete: operations["CartController_remove"];
-        options?: never;
-        head?: never;
-        /** Set an item quantity */
-        patch: operations["CartController_update"];
-        trace?: never;
-    };
-    "/cart/merge": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Merge a guest cart into the user cart on login
-         * @description Requires a Bearer token; guest cart id comes from X-Cart-Session.
-         */
-        post: operations["CartMergeController_merge"];
         delete?: never;
         options?: never;
         head?: never;
@@ -783,7 +721,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get an order by id */
+        /** Get an order by id (with customer info) */
         get: operations["OrderAdminController_getOne"];
         put?: never;
         post?: never;
@@ -821,6 +759,85 @@ export interface paths {
         put?: never;
         /** Release stock of expired unpaid orders (UptimeRobot cron) */
         post: operations["OrderJobsController_releaseExpired"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the cart
+         * @description Works without auth for guests — send an X-Cart-Session header instead of a Bearer token.
+         */
+        get: operations["CartController_get"];
+        put?: never;
+        post?: never;
+        /** Clear the cart */
+        delete: operations["CartController_clear"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cart/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add an item to the cart
+         * @description Works without auth for guests — send an X-Cart-Session header instead of a Bearer token.
+         */
+        post: operations["CartController_add"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cart/items/{variantId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove an item from the cart */
+        delete: operations["CartController_remove"];
+        options?: never;
+        head?: never;
+        /** Set an item quantity */
+        patch: operations["CartController_update"];
+        trace?: never;
+    };
+    "/cart/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge a guest cart into the user cart on login
+         * @description Requires a Bearer token; guest cart id comes from X-Cart-Session.
+         */
+        post: operations["CartMergeController_merge"];
         delete?: never;
         options?: never;
         head?: never;
@@ -972,6 +989,23 @@ export interface paths {
         };
         /** List a product's reviews with its rating summary */
         get: operations["ProductReviewsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all reviews, paginated (?replied filter) + product/reviewer info */
+        get: operations["ReviewAdminController_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1567,68 +1601,47 @@ export interface components {
              */
             createdAt: string;
         };
-        CartItemViewDto: {
-            /** @example clx1a2b3c4d5e6f7g8h9var01 */
-            variantId: string;
-            /** @example clx1a2b3c4d5e6f7g8h9prd01 */
-            productId: string;
-            /** @example AO-THUN-BASIC-M-WHITE */
-            sku: string;
-            /** @example M */
-            size: string;
-            /** @example White */
-            color: string;
-            /** @example 2 */
-            quantity: number;
+        ProfileDto: {
+            /** @example 175 */
+            heightCm: number | null;
+            /** @example 68 */
+            weightKg: number | null;
             /**
-             * @description Live unit price in USD cents — 1200 = $12.00.
-             * @example 1200
+             * @example {
+             *       "chest": 96,
+             *       "waist": 80,
+             *       "hip": 98
+             *     }
              */
-            unitPriceCents: number;
-            /**
-             * @description unitPriceCents × quantity, USD cents.
-             * @example 2400
-             */
-            lineCents: number;
-            /**
-             * @description Current stock for the variant.
-             * @example 50
-             */
-            stockQty: number;
+            measurements: {
+                [key: string]: unknown;
+            } | null;
         };
-        CartViewDto: {
-            items: components["schemas"]["CartItemViewDto"][];
-            /**
-             * @description Sum of line totals, USD cents.
-             * @example 2400
-             */
-            subtotalCents: number;
+        OrderStatusCountsDto: {
+            /** @example 0 */
+            PENDING_PAYMENT: number;
+            /** @example 0 */
+            PAID: number;
+            /** @example 0 */
+            PROCESSING: number;
+            /** @example 0 */
+            SHIPPED: number;
+            /** @example 0 */
+            DELIVERED: number;
+            /** @example 0 */
+            CANCELLED: number;
+            /** @example 0 */
+            REFUNDED: number;
         };
-        AddCartItemDto: {
+        OrderStatsDto: {
+            /** @example 7 */
+            totalOrders: number;
             /**
-             * @description Variant id to add.
-             * @example clx1a2b3c4d5e6f7g8h9var01
+             * @description Total spent in integer cents.
+             * @example 123400
              */
-            variantId: string;
-            /**
-             * @description Quantity to add (capped at live stock).
-             * @example 2
-             */
-            quantity: number;
-        };
-        UpdateCartItemDto: {
-            /**
-             * @description New absolute quantity (>= 1).
-             * @example 3
-             */
-            quantity: number;
-        };
-        CreateOrderDto: {
-            /**
-             * @description One of the caller's address ids; snapshotted onto the order.
-             * @example clx1a2b3c4d5e6f7g8h9adr01
-             */
-            addressId: string;
+            totalSpentCents: number;
+            byStatus: components["schemas"]["OrderStatusCountsDto"];
         };
         ShippingAddressSnapshotDto: {
             /** @example Nguyễn Văn A */
@@ -1740,6 +1753,40 @@ export interface components {
             updatedAt: string;
             items: components["schemas"]["OrderItemDto"][];
             statusHistory: components["schemas"]["OrderStatusHistoryDto"][];
+        };
+        AdminUserDetailResponseDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9usr01 */
+            id: string;
+            /** @example user@example.com */
+            email: string;
+            /** @example Nguyễn Văn A */
+            name: string | null;
+            /**
+             * @example CUSTOMER
+             * @enum {string}
+             */
+            role: "CUSTOMER" | "ADMIN";
+            /**
+             * Format: date-time
+             * @example null
+             */
+            birthday: string | null;
+            /**
+             * Format: date-time
+             * @example 2026-06-01T00:00:00.000Z
+             */
+            createdAt: string;
+            profile: components["schemas"]["ProfileDto"] | null;
+            addresses: components["schemas"]["AddressResponseDto"][];
+            stats: components["schemas"]["OrderStatsDto"];
+            recentOrders: components["schemas"]["OrderResponseDto"][];
+        };
+        CreateOrderDto: {
+            /**
+             * @description One of the caller's address ids; snapshotted onto the order.
+             * @example clx1a2b3c4d5e6f7g8h9adr01
+             */
+            addressId: string;
         };
         OutOfStockItemDto: {
             /** @example clx1a2b3c4d5e6f7g8h9var01 */
@@ -1860,6 +1907,62 @@ export interface components {
              * @example 3
              */
             released: number;
+        };
+        CartItemViewDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9var01 */
+            variantId: string;
+            /** @example clx1a2b3c4d5e6f7g8h9prd01 */
+            productId: string;
+            /** @example AO-THUN-BASIC-M-WHITE */
+            sku: string;
+            /** @example M */
+            size: string;
+            /** @example White */
+            color: string;
+            /** @example 2 */
+            quantity: number;
+            /**
+             * @description Live unit price in USD cents — 1200 = $12.00.
+             * @example 1200
+             */
+            unitPriceCents: number;
+            /**
+             * @description unitPriceCents × quantity, USD cents.
+             * @example 2400
+             */
+            lineCents: number;
+            /**
+             * @description Current stock for the variant.
+             * @example 50
+             */
+            stockQty: number;
+        };
+        CartViewDto: {
+            items: components["schemas"]["CartItemViewDto"][];
+            /**
+             * @description Sum of line totals, USD cents.
+             * @example 2400
+             */
+            subtotalCents: number;
+        };
+        AddCartItemDto: {
+            /**
+             * @description Variant id to add.
+             * @example clx1a2b3c4d5e6f7g8h9var01
+             */
+            variantId: string;
+            /**
+             * @description Quantity to add (capped at live stock).
+             * @example 2
+             */
+            quantity: number;
+        };
+        UpdateCartItemDto: {
+            /**
+             * @description New absolute quantity (>= 1).
+             * @example 3
+             */
+            quantity: number;
         };
         NotificationPayloadDto: {
             /** @example clx1a2b3c4d5e6f7g8h9ord01 */
@@ -2013,6 +2116,69 @@ export interface components {
         ProductReviewsResponseDto: {
             summary: components["schemas"]["ReviewSummaryDto"];
             items: components["schemas"]["ReviewResponseDto"][];
+        };
+        ReviewProductSummaryDto: {
+            /** @example Áo thun */
+            nameVi: string;
+            /** @example T-shirt */
+            nameEn: string;
+        };
+        ReviewerSummaryDto: {
+            /** @example jane@example.com */
+            email: string;
+            /** @example Jane */
+            name: string | null;
+        };
+        AdminReviewResponseDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9rev01 */
+            id: string;
+            /**
+             * @description Author user id.
+             * @example clx1a2b3c4d5e6f7g8h9usr01
+             */
+            userId: string;
+            /**
+             * @description Reviewed product id.
+             * @example clx1a2b3c4d5e6f7g8h9prd01
+             */
+            productId: string;
+            /**
+             * @description Order item this review proves was purchased.
+             * @example clx1a2b3c4d5e6f7g8h9oit01
+             */
+            orderItemId: string;
+            /** @example 5 */
+            rating: number;
+            /** @example Great fit, true to size. */
+            body: string | null;
+            /** @example null */
+            adminReply: string | null;
+            /**
+             * Format: date-time
+             * @example null
+             */
+            adminReplyAt: string | null;
+            /**
+             * Format: date-time
+             * @example 2026-06-25T00:00:00.000Z
+             */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @example 2026-06-25T00:00:00.000Z
+             */
+            updatedAt: string;
+            product: components["schemas"]["ReviewProductSummaryDto"] | null;
+            reviewer: components["schemas"]["ReviewerSummaryDto"] | null;
+        };
+        PaginatedAdminReviewsResponseDto: {
+            items: components["schemas"]["AdminReviewResponseDto"][];
+            /** @example 42 */
+            total: number;
+            /** @example 1 */
+            page: number;
+            /** @example 10 */
+            pageSize: number;
         };
         AdminReplyDto: {
             /** @example Thanks for the feedback! Glad it fit well. */
@@ -3848,94 +4014,12 @@ export interface operations {
             };
         };
     };
-    CartController_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CartViewDto"];
-                };
-            };
-            /** @description Missing X-Cart-Session header (guest) or invalid body. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    CartController_clear: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CartViewDto"];
-                };
-            };
-            /** @description Missing X-Cart-Session header (guest) or invalid body. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    CartController_add: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AddCartItemDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CartViewDto"];
-                };
-            };
-            /** @description Missing X-Cart-Session header (guest) or invalid body. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    CartController_remove: {
+    AdminUserController_getOne: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                variantId: string;
+                id: string;
             };
             cookie?: never;
         };
@@ -3946,83 +4030,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CartViewDto"];
+                    "application/json": components["schemas"]["AdminUserDetailResponseDto"];
                 };
-            };
-            /** @description Missing X-Cart-Session header (guest) or invalid body. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    CartController_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                variantId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateCartItemDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CartViewDto"];
-                };
-            };
-            /** @description Missing X-Cart-Session header (guest) or invalid body. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Item is not in the cart. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    CartMergeController_merge: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CartViewDto"];
-                };
-            };
-            /** @description Missing X-Cart-Session header. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Missing or invalid token. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description User not found. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4242,7 +4268,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OrderResponseDto"];
+                    "application/json": components["schemas"]["OrderAdminResponseDto"];
                 };
             };
             /** @description Missing or invalid token. */
@@ -4350,6 +4376,188 @@ export interface operations {
                 content?: never;
             };
             /** @description Missing or invalid x-admin-secret header. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CartController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CartViewDto"];
+                };
+            };
+            /** @description Missing X-Cart-Session header (guest) or invalid body. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CartController_clear: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CartViewDto"];
+                };
+            };
+            /** @description Missing X-Cart-Session header (guest) or invalid body. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CartController_add: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddCartItemDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CartViewDto"];
+                };
+            };
+            /** @description Missing X-Cart-Session header (guest) or invalid body. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CartController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                variantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CartViewDto"];
+                };
+            };
+            /** @description Missing X-Cart-Session header (guest) or invalid body. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CartController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                variantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCartItemDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CartViewDto"];
+                };
+            };
+            /** @description Missing X-Cart-Session header (guest) or invalid body. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Item is not in the cart. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CartMergeController_merge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CartViewDto"];
+                };
+            };
+            /** @description Missing X-Cart-Session header. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid token. */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -4660,6 +4868,44 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ProductReviewsResponseDto"];
                 };
+            };
+        };
+    };
+    ReviewAdminController_list: {
+        parameters: {
+            query?: {
+                /** @description Filter by reply state: true=replied, false=unreplied. */
+                replied?: boolean;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedAdminReviewsResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
