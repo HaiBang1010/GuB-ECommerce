@@ -59,16 +59,21 @@ delegate** (e.g. the variant spec has no `product` delegate), so a stray cross-t
 ```
 order ──▶ product   (read price/stock, reserve & decrement stock via product.service)
 order ──▶ cart      (convert cart → order, then clear cart)
-order ──▶ voucher   (validate + apply, increment usedCount)
+order ──▶ voucher   (validate read-only, then redeem inside the checkout tx — increments usedCount)
 order ──▶ payment   (create PaymentIntent)
 order ──▶ iam       (admin order list: enrich customers + resolve search ids via user.service)
 order ──(QStash)──▶ notification
+voucher ─▶ cart     (preview reads the live cart subtotal server-side)
+voucher ─▶ iam      (grant-by-email + wallet: resolve the user via user.service)
 review ─▶ order     (verify the OrderItem belongs to user and order is DELIVERED)
 chat  ──▶ (Supabase Realtime, out-of-process)
 ```
 
 No dependency cycles. `payment` does **not** call `order` synchronously; the webhook
-updates order state by emitting an event / calling `order.service.markPaid()`.
+updates order state by emitting an event / calling `order.service.markPaid()`. `voucher`
+is one-way too — it resolves users/carts via `iam`/`cart` but **never** calls `order`, so
+the per-user redemption count lives on `UserVoucher` (in the `voucher` schema), not by
+querying `ordering` (§4.10).
 
 ## 4. Key flows
 
@@ -204,6 +209,41 @@ only dependency on `iam` (§3), and it stays a service call. (Pagination query p
 the global `ValidationPipe` has no `enableImplicitConversion` — so the DTO `@Transform`s `page`/`pageSize`
 to ints, mirroring the status-array transform.)
 
+### 4.10 Vouchers (validate / redeem at checkout) — Phase 4
+
+The `voucher` module owns `Voucher` + `UserVoucher` and exposes two in-process entry points the
+order module calls at checkout (never a cross-schema JOIN, §4.3):
+
+- **`validate(code, userId, subtotalCents)` — read-only.** Looks the code up (stored/looked-up
+  UPPERCASE), checks the window (`validFrom`/`validTo`), `minOrderCents`, the global `usageLimit`,
+  the per-user `perUserLimit` (via the `UserVoucher` ledger) and — for `isPublic === false`
+  (wallet-only) — that a `UserVoucher` grant exists; then computes the discount. Failures throw a
+  **structured 4xx** `{ statusCode, error, message, code, …meta }` whose `code` is a `VoucherErrorCode`
+  (`VOUCHER_NOT_FOUND` · `…_EXPIRED` · `…_MIN_ORDER_NOT_MET` (+`minOrderCents`) · `…_USED_UP` ·
+  `…_USER_LIMIT` · `…_NOT_AVAILABLE`), so the storefront maps each to its own i18n message — mirroring
+  `OutOfStockErrorDto`. Discount math is pure integer cents: PERCENT → `floor(subtotal·value/100)`
+  capped at `maxDiscountCents`, FIXED → `value`, then clamped to `≤ subtotal` (never a negative total).
+  Used by both `POST /vouchers/preview` (FE preview — reads the caller's live cart subtotal via
+  `CartService`, so the amount is never trusted from the client) and the pre-transaction check in
+  `OrderService.createFromCart`.
+- **`redeem(tx, voucher, userId)` — inside the checkout transaction.** Runs alongside the atomic stock
+  decrement (§4.3) so the order + the redemption commit or roll back together — a failed/oversold order
+  never consumes a voucher. Two **atomic guarded increments** (the same idiom as the stock guard): a
+  global `updateMany` on `Voucher` guarded by `usedCount < usageLimit`, then a per-user `updateMany` on
+  `UserVoucher` guarded by `usedCount < perUserLimit` (creating the ledger row on a PUBLIC voucher's
+  first redemption; requiring an existing grant for wallet-only). The discount is **snapshotted** onto
+  the order (`voucherCode` + `discountCents`; `total = subtotal − discount`) and the PaymentIntent
+  charges that discounted `totalCents` (`payment.service.ts` reads `order.totalCents`, regression-tested).
+
+**Public vs wallet-only** is the explicit `Voucher.isPublic` flag. **Admin** (`/admin/vouchers`,
+RoleGuard ADMIN): paginated CRUD (archive, never hard-delete), **grant-by-email** (`POST
+/admin/vouchers/:id/grant { email }` → `UserService.findByEmail`, 404 if unknown, idempotent on a repeat
+grant) and **list grants** (`GET /admin/vouchers/:id/grants` — each `UserVoucher` enriched with the
+grantee's email + `usedCount`/`usedAt` via `UserService.findManyByIds`, batch, no JOIN). Vouchers also
+carry optional **bilingual** `titleVi/En` + `descriptionVi/En`. **Wallet:** `GET /me/vouchers` returns a
+user's still-usable grants (customer UI deferred). **Cron** (birthday grants) and **product discounts**
+are later-Phase-4 work.
+
 ## 5. Data model (Prisma)
 
 Full schema: [`prisma/schema.prisma`](./prisma/schema.prisma). It uses the `multiSchema`
@@ -247,6 +287,8 @@ preview feature; each model carries `@@schema("<module>")`.
 - `Payment`: unique `idempotencyKey` (no duplicate PaymentIntent) and unique `stripePaymentIntentId`.
 - `StripeEvent.id` = the Stripe event id → webhook idempotency ledger.
 - `Cart`: at most one of `userId` / `sessionId` (both `@unique`).
+- `Voucher`: unique `code` (stored UPPERCASE). `isPublic` flags PUBLIC vs wallet-only; `usedCount` is the global redemption counter (atomic-guarded vs `usageLimit` at redeem, §4.10). Money fields (`value` for FIXED, `minOrderCents`, `maxDiscountCents`) are integer cents; optional bilingual `titleVi/En` + `descriptionVi/En`. `isPublic` + the title/description columns were added by hand-written migrations (`20260627000000_add_voucher_public_and_per_user_count`, `20260627120000_add_voucher_title_description`).
+- `UserVoucher`: `@@unique([userId, voucherId])` — the per-user redemption **ledger** (`usedCount` enforces `perUserLimit`, `usedAt` = last redeemed). A wallet grant pre-creates a row (`usedCount = 0`); a PUBLIC redemption creates it lazily.
 
 ### 5.5 Full-text + fuzzy search
 `Product` has a **generated** `search_tsv tsvector` column (weighted name=A, brand=B,

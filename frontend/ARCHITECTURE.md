@@ -22,19 +22,19 @@ Code is organised **by domain feature**, not by technical layer. Each domain own
 src/
 ├── app/[locale]/                 # next-intl: /vi, /en — route groups are URL-transparent
 │   ├── (storefront)/             # home · products/[slug] · cart · checkout · orders/[id]{/pay,/confirmation} · auth + Header
-│   ├── (admin)/admin/            # orders · users · users/[id] · reviews (admin shell)
+│   ├── (admin)/admin/            # orders · users · users/[id] · reviews · vouchers (admin shell)
 │   └── providers.tsx, layout.tsx # QueryClient + Supabase session bridge + <Toaster>
 ├── features/                     # domain-owned UI; each is {components,hooks,api}/ as needed
-│   ├── product/ cart/ checkout/  # storefront domains
+│   ├── product/ cart/ checkout/ voucher/  # storefront domains (voucher = preview at checkout)
 │   ├── order/ review/            #   order (customer) + review (customer) — fetchers/hooks own the
 │   │                             #   canonical core types (e.g. OrderStatus in order/api/orders.ts)
 │   ├── notification/ auth/       #   notification bell + me.ts / is-admin
 │   └── admin/                    # ADMIN — split by area, separate from storefront domains
-│       ├── orders/ users/ reviews/  #   each {components,hooks,api}/; the admin halves of the
-│       │                            #   split order/review fetchers + hooks live here
+│       ├── orders/ users/ reviews/ vouchers/  # each {components,hooks,api}/; the admin halves of the
+│       │                            #   split order/review fetchers + hooks live here; vouchers is admin-only
 │       ├── components/           #   admin-shared: order-detail-dialog, pagination-bar
 │       └── hooks/                #   admin-shared: use-debounce
-├── components/                   # SHARED leaves only: header, order-status-badge, star-rating + ui/ (shadcn primitives)
+├── components/                   # SHARED leaves only: header, order-status-badge, star-rating + ui/ (shadcn primitives; sheet is a hand-built Radix Dialog wrapper)
 ├── lib/api/                      # infra ONLY: apiFetch client + committed schema.d.ts (NO fetchers here)
 ├── lib/                          # money, datetime, utils, stripe, supabase/ (browser/server/middleware clients)
 ├── stores/                       # Zustand: auth + cart (guest sessionId + display snapshots)
@@ -155,3 +155,28 @@ Recent orders open the same shared order-detail dialog.
 and enriched with product name + reviewer identity, with an **all / unreplied / replied** filter. A review
 with no reply shows an inline `AdminReplyForm` (`POST /admin/reviews/:id/reply`); the same form is **also**
 embedded (admin-gated) on the storefront product detail (§8), so an admin can reply from either place.
+
+**Vouchers** (`/admin/vouchers`): `useAdminVouchers` (`GET /admin/vouchers`) — paginated list with a
+debounced code search. **New / Edit** open a right-side **Sheet** (`components/ui/sheet.tsx`, a hand-built
+Radix Dialog wrapper) holding an RHF + zod form with the full field set, incl. the **two inputs per
+content field** (`titleVi/En`, `descriptionVi/En`) and `PERCENT`/`FIXED` + public/wallet `<select>`s
+(no shadcn Select primitive yet). Money inputs are integer cents. Archive is a soft delete. A **grant
+panel** — shown **only for wallet-only vouchers** (`isPublic === false`; public ones need no grant) —
+grants by **email** (`POST /admin/vouchers/:id/grant`) and lists the granted users with their used/unused
+state (`GET /admin/vouchers/:id/grants`). The **user-detail page** (`/admin/users/[id]`) shows a
+copy-to-clipboard **user id** for cross-referencing.
+
+## 11. Vouchers at checkout (Phase 4)
+
+The storefront voucher lives inline in the checkout order summary (`features/voucher/` +
+`features/checkout/components/checkout-view.tsx`) — no new route. A code input + **Apply** calls
+`POST /vouchers/preview` (`useVoucherPreview`), which validates against the user's **live server cart**
+and returns the discount; the summary then shows `subtotal / discount −X / total`, the applied voucher's
+**title by locale** (fallback its code) and a **Remove** action. Placing the order passes the
+`voucherCode` to `POST /orders`; the **backend re-validates + redeems** it (the preview is non-binding —
+the discounted total is the backend's, ARCHITECTURE.md §4.10). A structured voucher error (`code` →
+i18n message: not found / expired / min-order / used-up / user-limit / not-available) is rendered
+distinctly from the out-of-stock 409 and a generic payment error, both at preview time and if the voucher
+becomes invalid between preview and place-order. The customer **wallet** (`GET /me/vouchers`) has a
+fetcher but its UI is deferred. All strings go through the `voucher` (storefront) + `admin` (admin)
+next-intl namespaces (vi/en).
