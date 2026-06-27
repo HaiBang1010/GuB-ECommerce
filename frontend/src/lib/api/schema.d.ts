@@ -628,6 +628,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List customers, paginated (?search by name/email) */
+        get: operations["AdminUserController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/users/{id}": {
         parameters: {
             query?: never;
@@ -1600,6 +1617,33 @@ export interface components {
              * @example 2026-06-01T00:00:00.000Z
              */
             createdAt: string;
+        };
+        AdminUserListItemDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9usr01 */
+            id: string;
+            /** @example user@example.com */
+            email: string;
+            /** @example Nguyễn Văn A */
+            name: string | null;
+            /**
+             * @example CUSTOMER
+             * @enum {string}
+             */
+            role: "CUSTOMER" | "ADMIN";
+            /**
+             * Format: date-time
+             * @example 2026-06-01T00:00:00.000Z
+             */
+            createdAt: string;
+        };
+        PaginatedAdminUsersResponseDto: {
+            items: components["schemas"]["AdminUserListItemDto"][];
+            /** @example 42 */
+            total: number;
+            /** @example 1 */
+            page: number;
+            /** @example 10 */
+            pageSize: number;
         };
         ProfileDto: {
             /** @example 175 */
@@ -4007,6 +4051,44 @@ export interface operations {
             };
             /** @description Missing or invalid token. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AdminUserController_list: {
+        parameters: {
+            query?: {
+                /** @description Search by customer name or email. */
+                search?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedAdminUsersResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
