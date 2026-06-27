@@ -4,7 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
-import { useOrder } from '@/hooks/use-orders';
+import { useOrder } from '@/features/order/hooks/use-orders';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatPriceCents } from '@/lib/money';

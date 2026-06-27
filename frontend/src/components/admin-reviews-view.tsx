@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import { useAdminReviews } from '@/hooks/use-reviews';
 import { AdminReplyForm } from '@/components/admin/admin-reply-form';
-import { PaginationBar } from '@/components/admin/pagination-bar';
+import { PaginationBar } from '@/features/admin/components/pagination-bar';
 import { StarRating } from '@/components/star-rating';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';

@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { setRequestLocale } from 'next-intl/server';
 
-import { ConfirmationView } from '@/components/confirmation-view';
+import { ConfirmationView } from '@/features/order/components/confirmation-view';
 
 export default async function ConfirmationPage({
   params,

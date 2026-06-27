@@ -5,8 +5,8 @@ import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import { Link, useRouter } from '@/i18n/navigation';
-import { useCancelOrder, useOrder, usePaymentIntent } from '@/hooks/use-orders';
-import { OrderPayment } from '@/components/order-payment';
+import { useCancelOrder, useOrder, usePaymentIntent } from '@/features/order/hooks/use-orders';
+import { OrderPayment } from '@/features/order/components/order-payment';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatPriceCents } from '@/lib/money';

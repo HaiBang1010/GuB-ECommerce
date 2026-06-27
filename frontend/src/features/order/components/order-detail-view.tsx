@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import { Link, useRouter } from '@/i18n/navigation';
-import { useCancelOrder, useOrder } from '@/hooks/use-orders';
+import { useCancelOrder, useOrder } from '@/features/order/hooks/use-orders';
 import {
   useCreateReview,
   useProductReviews,

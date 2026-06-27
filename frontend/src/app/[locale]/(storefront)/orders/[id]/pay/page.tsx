@@ -1,6 +1,6 @@
 import { setRequestLocale } from 'next-intl/server';
 
-import { PayView } from '@/components/pay-view';
+import { PayView } from '@/features/order/components/pay-view';
 
 export default async function PayPage({
   params,

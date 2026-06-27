@@ -5,8 +5,8 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
 import { useAdminUsers } from '@/hooks/use-users';
-import { useDebounce } from '@/hooks/use-debounce';
-import { PaginationBar } from '@/components/admin/pagination-bar';
+import { useDebounce } from '@/features/admin/hooks/use-debounce';
+import { PaginationBar } from '@/features/admin/components/pagination-bar';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDate } from '@/lib/datetime';

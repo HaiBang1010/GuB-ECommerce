@@ -6,14 +6,17 @@ import { toast } from "sonner";
 import { ChevronDown } from "lucide-react";
 
 import { Link } from "@/i18n/navigation";
-import { useAdminOrders, useAdminUpdateOrderStatus } from "@/hooks/use-orders";
-import { useDebounce } from "@/hooks/use-debounce";
+import {
+  useAdminOrders,
+  useAdminUpdateOrderStatus,
+} from "@/features/admin/orders/hooks/use-admin-orders";
+import { useDebounce } from "@/features/admin/hooks/use-debounce";
 import { OrderStatusBadge } from "@/components/order-status-badge";
-import { PaginationBar } from "@/components/admin/pagination-bar";
+import { PaginationBar } from "@/features/admin/components/pagination-bar";
 import {
   NEXT_STATUS,
   OrderDetailDialog,
-} from "@/components/admin/order-detail-dialog";
+} from "@/features/admin/components/order-detail-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -27,7 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ApiError } from "@/lib/api/client";
 import { formatPriceCents } from "@/lib/money";
-import type { OrderStatus } from "@/lib/api/orders";
+import type { OrderStatus } from "@/features/order/api/orders";
 
 // All order statuses, for the filter checkboxes. OrderStatus is a generated union
 // (no runtime enum), so the list is spelled out; labels reuse order.status.*.

@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   useAdminOrderDetail,
   useAdminUpdateOrderStatus,
-} from '@/hooks/use-orders';
+} from '@/features/admin/orders/hooks/use-admin-orders';
 import { OrderStatusBadge } from '@/components/order-status-badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,7 +19,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api/client';
 import { formatPriceCents } from '@/lib/money';
 import { formatDate, formatDateTime } from '@/lib/datetime';
-import type { AdminOrder, OrderStatus } from '@/lib/api/orders';
+import type { AdminOrder } from '@/features/admin/orders/api/orders';
+import type { OrderStatus } from '@/features/order/api/orders';
 
 // The admin-driven fulfillment chain — which advance button to show. The backend
 // ADMIN_TRANSITIONS is authoritative; an illegal step is rejected server-side.

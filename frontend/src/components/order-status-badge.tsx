@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl';
 
 import { cn } from '@/lib/utils';
-import type { OrderStatus } from '@/lib/api/orders';
+import type { OrderStatus } from '@/features/order/api/orders';
 
 // Light-only status colors (no dark variants).
 const STATUS_STYLES: Record<OrderStatus, string> = {

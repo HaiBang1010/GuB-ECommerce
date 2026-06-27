@@ -6,14 +6,14 @@ import { useLocale, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useAdminUser } from '@/hooks/use-users';
 import { OrderStatusBadge } from '@/components/order-status-badge';
-import { OrderDetailDialog } from '@/components/admin/order-detail-dialog';
+import { OrderDetailDialog } from '@/features/admin/components/order-detail-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api/client';
 import { formatPriceCents } from '@/lib/money';
 import { formatDate } from '@/lib/datetime';
-import type { OrderStatus } from '@/lib/api/orders';
+import type { OrderStatus } from '@/features/order/api/orders';
 import type { AdminUserDetail } from '@/lib/api/users';
 
 // Order statuses in fulfillment order, for the per-status breakdown (only non-zero

@@ -3,7 +3,7 @@
 import { useLocale, useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
-import { useMyOrders } from '@/hooks/use-orders';
+import { useMyOrders } from '@/features/order/hooks/use-orders';
 import { OrderStatusBadge } from '@/components/order-status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
