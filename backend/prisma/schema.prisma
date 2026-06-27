@@ -445,6 +445,9 @@ model Voucher {
   id               String        @id @default(cuid())
   code             String        @unique
   type             VoucherType
+  // PUBLIC: any code holder may redeem (bounded by usageLimit/perUserLimit).
+  // false = WALLET-ONLY: redeemable only by a user it was granted to (UserVoucher).
+  isPublic         Boolean       @default(true)
   value            Int // PERCENT: 0..100 ; FIXED: amount in cents
   minOrderCents    Int?
   maxDiscountCents Int? // cap for PERCENT vouchers
@@ -466,6 +469,9 @@ model UserVoucher {
   userId    String // cross-module scalar → iam.User.id
   voucherId String
   voucher   Voucher   @relation(fields: [voucherId], references: [id])
+  // Per-user redemption ledger: how many times this user has redeemed this voucher
+  // (enforces Voucher.perUserLimit). A wallet grant starts at 0; usedAt = last redeem.
+  usedCount Int       @default(0)
   usedAt    DateTime?
   createdAt DateTime  @default(now())
 
