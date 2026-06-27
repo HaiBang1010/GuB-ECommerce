@@ -8,6 +8,7 @@ import {
   createPaymentIntent,
   getMyOrders,
   getOrder,
+  type CreateOrderInput,
 } from '@/features/order/api/orders';
 
 // The current user's order history (newest first handled in the view).
@@ -27,7 +28,7 @@ export function useMyOrders() {
 export function useCreateOrder() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (addressId: string) => createOrder(addressId),
+    mutationFn: (input: CreateOrderInput) => createOrder(input),
     // A 409 means stock ran out between viewing the cart and placing the order;
     // refresh the cart so the stock-sync UI reflects the new live quantities.
     onError: (err) => {

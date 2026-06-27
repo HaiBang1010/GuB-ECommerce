@@ -12,6 +12,8 @@ import { useCart } from '@/features/cart/hooks/use-cart';
 import { useCreateOrder } from '@/features/order/hooks/use-orders';
 import { ApiError } from '@/lib/api/client';
 import { isOutOfStockError } from '@/features/order/api/orders';
+import { useVoucherPreview } from '@/features/voucher/hooks/use-voucher-preview';
+import { isVoucherError, type VoucherError } from '@/features/voucher/api/vouchers';
 import { useAuthStore } from '@/stores/auth.store';
 import { useCartStore } from '@/stores/cart.store';
 import { Button } from '@/components/ui/button';
@@ -53,6 +55,7 @@ function CheckoutSkeleton() {
 
 function CheckoutContent() {
   const t = useTranslations('checkout');
+  const tVoucher = useTranslations('voucher');
   const locale = useLocale();
   const router = useRouter();
   const snapshots = useCartStore((s) => s.snapshots);
@@ -61,11 +64,18 @@ function CheckoutContent() {
   const cart = useCart();
   const createAddr = useCreateAddress();
   const createOrder = useCreateOrder();
+  const voucherPreview = useVoucherPreview();
 
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
     null,
   );
   const [showForm, setShowForm] = useState(false);
+  const [voucherInput, setVoucherInput] = useState('');
+  const [applied, setApplied] = useState<{
+    code: string;
+    discountCents: number;
+  } | null>(null);
+  const [voucherError, setVoucherError] = useState<string | null>(null);
 
   const form = useForm<AddressValues>({
     resolver: zodResolver(addressSchema),
@@ -95,9 +105,74 @@ function CheckoutContent() {
     if (!selectedAddressId) return;
     // The order is placed (stock reserved) here; payment happens on the durable
     // pay page, so the buyer never loses the card field on a tab-switch/refresh.
-    createOrder.mutate(selectedAddressId, {
-      onSuccess: (order) => router.push(`/orders/${order.id}/pay`),
+    // The voucher (if any) is re-validated + redeemed server-side — the preview
+    // below is non-binding.
+    createOrder.mutate(
+      { addressId: selectedAddressId, voucherCode: applied?.code },
+      { onSuccess: (order) => router.push(`/orders/${order.id}/pay`) },
+    );
+  }
+
+  // Voucher: the discount/total are previewed server-side; the backend is the
+  // source of truth, so the displayed total clamps the stored discount to the
+  // live subtotal and never goes negative.
+  const subtotalCents = cart.data?.subtotalCents ?? 0;
+  const discountCents = applied
+    ? Math.min(applied.discountCents, subtotalCents)
+    : 0;
+  const totalCents = subtotalCents - discountCents;
+
+  function translateVoucherError(body: VoucherError): string {
+    switch (body.code) {
+      case 'VOUCHER_NOT_FOUND':
+        return tVoucher('errNotFound');
+      case 'VOUCHER_NOT_YET_VALID':
+        return tVoucher('errNotYetValid');
+      case 'VOUCHER_EXPIRED':
+        return tVoucher('errExpired');
+      case 'VOUCHER_MIN_ORDER_NOT_MET':
+        return tVoucher('errMinOrder', {
+          min: formatPriceCents(body.minOrderCents ?? 0),
+        });
+      case 'VOUCHER_USED_UP':
+        return tVoucher('errUsedUp');
+      case 'VOUCHER_USER_LIMIT':
+        return tVoucher('errUserLimit');
+      case 'VOUCHER_NOT_AVAILABLE':
+        return tVoucher('errNotAvailable');
+      default:
+        return tVoucher('errGeneric');
+    }
+  }
+
+  function handleApplyVoucher() {
+    const code = voucherInput.trim();
+    if (!code) return;
+    setVoucherError(null);
+    voucherPreview.mutate(code, {
+      onSuccess: (preview) => {
+        setApplied({
+          code: preview.voucherCode,
+          discountCents: preview.discountCents,
+        });
+        setVoucherInput(preview.voucherCode);
+      },
+      onError: (err) => {
+        setApplied(null);
+        setVoucherError(
+          err instanceof ApiError && isVoucherError(err.body)
+            ? translateVoucherError(err.body)
+            : tVoucher('errGeneric'),
+        );
+      },
     });
+  }
+
+  function handleRemoveVoucher() {
+    setApplied(null);
+    setVoucherInput('');
+    setVoucherError(null);
+    voucherPreview.reset();
   }
 
   const items = cart.data?.items ?? [];
@@ -120,6 +195,12 @@ function CheckoutContent() {
     orderError.status === 409 &&
     isOutOfStockError(orderError.body)
       ? orderError.body.items
+      : null;
+  // A voucher that became invalid between preview and place-order (e.g. used up):
+  // surface its message so the buyer can remove it and retry.
+  const orderVoucherError =
+    orderError instanceof ApiError && isVoucherError(orderError.body)
+      ? translateVoucherError(orderError.body)
       : null;
   const nameForVariant = (variantId: string): string => {
     const snap = snapshots[variantId];
@@ -237,9 +318,63 @@ function CheckoutContent() {
                 />
               ))}
             </ul>
-            <div className="flex justify-between border-t pt-3 text-lg font-semibold">
-              <span>{t('total')}</span>
-              <span>{formatPriceCents(cart.data?.subtotalCents ?? 0)}</span>
+            {/* Voucher */}
+            <div className="flex flex-col gap-2 border-t pt-3">
+              {applied ? (
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <span>{tVoucher('applied', { code: applied.code })}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRemoveVoucher}
+                  >
+                    {tVoucher('remove')}
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-start gap-2">
+                  <Input
+                    value={voucherInput}
+                    onChange={(e) => setVoucherInput(e.target.value)}
+                    placeholder={tVoucher('codePlaceholder')}
+                    aria-label={tVoucher('code')}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={
+                      voucherPreview.isPending || voucherInput.trim() === ''
+                    }
+                    onClick={handleApplyVoucher}
+                  >
+                    {voucherPreview.isPending
+                      ? tVoucher('applying')
+                      : tVoucher('apply')}
+                  </Button>
+                </div>
+              )}
+              {voucherError ? (
+                <p className="text-destructive text-sm">{voucherError}</p>
+              ) : null}
+            </div>
+
+            {/* Totals */}
+            <div className="flex flex-col gap-1 border-t pt-3">
+              <div className="flex justify-between text-sm">
+                <span>{tVoucher('subtotal')}</span>
+                <span>{formatPriceCents(subtotalCents)}</span>
+              </div>
+              {discountCents > 0 ? (
+                <div className="text-muted-foreground flex justify-between text-sm">
+                  <span>{tVoucher('discount')}</span>
+                  <span>−{formatPriceCents(discountCents)}</span>
+                </div>
+              ) : null}
+              <div className="flex justify-between text-lg font-semibold">
+                <span>{tVoucher('total')}</span>
+                <span>{formatPriceCents(totalCents)}</span>
+              </div>
             </div>
 
             <>
@@ -273,6 +408,10 @@ function CheckoutContent() {
                       </p>
                     ))}
                   </div>
+                ) : orderVoucherError ? (
+                  <p className="text-destructive text-sm">
+                    {orderVoucherError}
+                  </p>
                 ) : (
                   <p className="text-destructive text-sm">
                     {t('paymentError')}

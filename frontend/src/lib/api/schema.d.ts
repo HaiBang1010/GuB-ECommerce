@@ -929,6 +929,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/vouchers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List vouchers, paginated (?search by code) */
+        get: operations["VoucherAdminController_list"];
+        put?: never;
+        /** Create a voucher */
+        post: operations["VoucherAdminController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/vouchers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one voucher */
+        get: operations["VoucherAdminController_getOne"];
+        put?: never;
+        post?: never;
+        /** Archive a voucher (soft delete) */
+        delete: operations["VoucherAdminController_archive"];
+        options?: never;
+        head?: never;
+        /** Update a voucher */
+        patch: operations["VoucherAdminController_update"];
+        trace?: never;
+    };
+    "/admin/vouchers/{id}/grant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Grant a (wallet-only) voucher to a user */
+        post: operations["VoucherAdminController_grant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vouchers/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview a voucher against the user's current cart */
+        post: operations["VoucherController_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/vouchers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the current user's usable wallet vouchers */
+        get: operations["WalletController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/payments/intent": {
         parameters: {
             query?: never;
@@ -1831,6 +1919,11 @@ export interface components {
              * @example clx1a2b3c4d5e6f7g8h9adr01
              */
             addressId: string;
+            /**
+             * @description Voucher code to apply; re-validated + redeemed at place-order.
+             * @example SUMMER10
+             */
+            voucherCode?: string;
         };
         OutOfStockItemDto: {
             /** @example clx1a2b3c4d5e6f7g8h9var01 */
@@ -2064,6 +2157,282 @@ export interface components {
         ConsumeResponseDto: {
             /** @example true */
             received: boolean;
+        };
+        CreateVoucherDto: {
+            /**
+             * @description Unique code; stored UPPERCASE.
+             * @example SUMMER10
+             */
+            code: string;
+            /**
+             * @example PERCENT
+             * @enum {string}
+             */
+            type: "PERCENT" | "FIXED";
+            /**
+             * @description true = PUBLIC (any code holder); false = WALLET-ONLY (needs a grant).
+             * @default true
+             */
+            isPublic: boolean;
+            /**
+             * @description PERCENT: 1..100 (percent off). FIXED: amount off in cents.
+             * @example 10
+             */
+            value: number;
+            /**
+             * @description Minimum order subtotal (cents).
+             * @example 5000
+             */
+            minOrderCents?: number;
+            /**
+             * @description Cap for a PERCENT discount (cents).
+             * @example 2000
+             */
+            maxDiscountCents?: number;
+            /** @example 2026-07-01T00:00:00.000Z */
+            validFrom?: string;
+            /** @example 2026-08-01T00:00:00.000Z */
+            validTo?: string;
+            /**
+             * @description Global redemption cap.
+             * @example 100
+             */
+            usageLimit?: number;
+            /**
+             * @description Per-user redemption cap.
+             * @example 1
+             */
+            perUserLimit?: number;
+        };
+        VoucherResponseDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9vch01 */
+            id: string;
+            /** @example SUMMER10 */
+            code: string;
+            /**
+             * @example PERCENT
+             * @enum {string}
+             */
+            type: "PERCENT" | "FIXED";
+            /**
+             * @description false = wallet-only (granted).
+             * @example true
+             */
+            isPublic: boolean;
+            /**
+             * @description PERCENT: 1..100. FIXED: cents off.
+             * @example 10
+             */
+            value: number;
+            /** @example 5000 */
+            minOrderCents: number | null;
+            /** @example 2000 */
+            maxDiscountCents: number | null;
+            /**
+             * Format: date-time
+             * @example 2026-07-01T00:00:00.000Z
+             */
+            validFrom: string | null;
+            /**
+             * Format: date-time
+             * @example 2026-08-01T00:00:00.000Z
+             */
+            validTo: string | null;
+            /** @example 100 */
+            usageLimit: number | null;
+            /** @example 1 */
+            perUserLimit: number | null;
+            /**
+             * @description Global redemptions so far.
+             * @example 7
+             */
+            usedCount: number;
+            /**
+             * Format: date-time
+             * @example null
+             */
+            archivedAt: string | null;
+            /**
+             * Format: date-time
+             * @example 2026-06-27T00:00:00.000Z
+             */
+            createdAt: string;
+        };
+        PaginatedVouchersResponseDto: {
+            items: components["schemas"]["VoucherResponseDto"][];
+            /**
+             * @description Total rows matching the filter.
+             * @example 42
+             */
+            total: number;
+            /**
+             * @description 1-based current page.
+             * @example 1
+             */
+            page: number;
+            /**
+             * @description Rows per page.
+             * @example 10
+             */
+            pageSize: number;
+        };
+        UpdateVoucherDto: {
+            /**
+             * @description Unique code; stored UPPERCASE.
+             * @example SUMMER10
+             */
+            code?: string;
+            /**
+             * @example PERCENT
+             * @enum {string}
+             */
+            type?: "PERCENT" | "FIXED";
+            /**
+             * @description true = PUBLIC (any code holder); false = WALLET-ONLY (needs a grant).
+             * @default true
+             */
+            isPublic: boolean;
+            /**
+             * @description PERCENT: 1..100 (percent off). FIXED: amount off in cents.
+             * @example 10
+             */
+            value?: number;
+            /**
+             * @description Minimum order subtotal (cents).
+             * @example 5000
+             */
+            minOrderCents?: number;
+            /**
+             * @description Cap for a PERCENT discount (cents).
+             * @example 2000
+             */
+            maxDiscountCents?: number;
+            /** @example 2026-07-01T00:00:00.000Z */
+            validFrom?: string;
+            /** @example 2026-08-01T00:00:00.000Z */
+            validTo?: string;
+            /**
+             * @description Global redemption cap.
+             * @example 100
+             */
+            usageLimit?: number;
+            /**
+             * @description Per-user redemption cap.
+             * @example 1
+             */
+            perUserLimit?: number;
+        };
+        GrantVoucherDto: {
+            /**
+             * @description The iam.User id to grant this voucher to.
+             * @example clx1a2b3c4d5e6f7g8h9usr01
+             */
+            userId: string;
+        };
+        PreviewVoucherDto: {
+            /** @example SUMMER10 */
+            code: string;
+        };
+        VoucherPreviewResponseDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9vch01 */
+            voucherId: string;
+            /**
+             * @description Normalized (UPPERCASE) code.
+             * @example SUMMER10
+             */
+            voucherCode: string;
+            /**
+             * @description Discount applied (cents).
+             * @example 1200
+             */
+            discountCents: number;
+            /**
+             * @description Cart subtotal (cents).
+             * @example 12000
+             */
+            subtotalCents: number;
+            /**
+             * @description subtotal − discount (cents).
+             * @example 10800
+             */
+            totalCents: number;
+        };
+        VoucherErrorDto: {
+            /** @example 400 */
+            statusCode: number;
+            /** @example Bad Request */
+            error: string;
+            /** @example This voucher has expired. */
+            message: string;
+            /**
+             * @example VOUCHER_EXPIRED
+             * @enum {string}
+             */
+            code: "VOUCHER_NOT_FOUND" | "VOUCHER_NOT_YET_VALID" | "VOUCHER_EXPIRED" | "VOUCHER_MIN_ORDER_NOT_MET" | "VOUCHER_USED_UP" | "VOUCHER_USER_LIMIT" | "VOUCHER_NOT_AVAILABLE";
+            /**
+             * @description Minimum order subtotal in cents — only on VOUCHER_MIN_ORDER_NOT_MET.
+             * @example 5000
+             */
+            minOrderCents?: number;
+        };
+        WalletVoucherResponseDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9vch01 */
+            id: string;
+            /** @example SUMMER10 */
+            code: string;
+            /**
+             * @example PERCENT
+             * @enum {string}
+             */
+            type: "PERCENT" | "FIXED";
+            /**
+             * @description false = wallet-only (granted).
+             * @example true
+             */
+            isPublic: boolean;
+            /**
+             * @description PERCENT: 1..100. FIXED: cents off.
+             * @example 10
+             */
+            value: number;
+            /** @example 5000 */
+            minOrderCents: number | null;
+            /** @example 2000 */
+            maxDiscountCents: number | null;
+            /**
+             * Format: date-time
+             * @example 2026-07-01T00:00:00.000Z
+             */
+            validFrom: string | null;
+            /**
+             * Format: date-time
+             * @example 2026-08-01T00:00:00.000Z
+             */
+            validTo: string | null;
+            /** @example 100 */
+            usageLimit: number | null;
+            /** @example 1 */
+            perUserLimit: number | null;
+            /**
+             * @description Global redemptions so far.
+             * @example 7
+             */
+            usedCount: number;
+            /**
+             * Format: date-time
+             * @example null
+             */
+            archivedAt: string | null;
+            /**
+             * Format: date-time
+             * @example 2026-06-27T00:00:00.000Z
+             */
+            createdAt: string;
+            /**
+             * @description This user's redemptions of this voucher.
+             * @example 0
+             */
+            userUsedCount: number;
         };
         CreateIntentDto: {
             /**
@@ -4756,6 +5125,368 @@ export interface operations {
             };
             /** @description Missing body or invalid signature. */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    VoucherAdminController_list: {
+        parameters: {
+            query?: {
+                /** @description Search by voucher code (substring). */
+                search?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedVouchersResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    VoucherAdminController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateVoucherDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoucherResponseDto"];
+                };
+            };
+            /** @description Validation failed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A voucher with this code already exists. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    VoucherAdminController_getOne: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoucherResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Voucher not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    VoucherAdminController_archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoucherResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Voucher not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    VoucherAdminController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateVoucherDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoucherResponseDto"];
+                };
+            };
+            /** @description Validation failed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Voucher not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A voucher with this code already exists. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    VoucherAdminController_grant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantVoucherDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoucherResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Voucher or user not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    VoucherController_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewVoucherDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoucherPreviewResponseDto"];
+                };
+            };
+            /** @description The voucher is not applicable (see `code`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoucherErrorDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Voucher not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoucherErrorDto"];
+                };
+            };
+            /** @description The voucher is used up / already used. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoucherErrorDto"];
+                };
+            };
+        };
+    };
+    WalletController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletVoucherResponseDto"][];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

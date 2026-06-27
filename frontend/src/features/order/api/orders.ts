@@ -21,13 +21,16 @@ export function isOutOfStockError(body: unknown): body is OutOfStockError {
   );
 }
 
-// POST /orders — body is just { addressId }; items come from the user's server
-// cart, the address is snapshotted. Returns the order (status PENDING_PAYMENT).
-export function createOrder(addressId: string): Promise<Order> {
+export type CreateOrderInput = { addressId: string; voucherCode?: string };
+
+// POST /orders — items come from the user's server cart, the address is
+// snapshotted, and an optional voucherCode is re-validated + redeemed server-side.
+// Returns the order (status PENDING_PAYMENT).
+export function createOrder(input: CreateOrderInput): Promise<Order> {
   return apiFetch<Order>('/orders', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ addressId }),
+    body: JSON.stringify(input),
   });
 }
 
