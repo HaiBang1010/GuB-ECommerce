@@ -22,7 +22,7 @@ Code is organised **by domain feature**, not by technical layer. Each domain own
 src/
 ├── app/[locale]/                 # next-intl: /vi, /en — route groups are URL-transparent
 │   ├── (storefront)/             # home · products/[slug] · cart · checkout · orders/[id]{/pay,/confirmation} · auth + Header
-│   ├── (admin)/admin/            # orders · users · users/[id] · reviews · vouchers (admin shell)
+│   ├── (admin)/admin/            # orders · users · users/[id] · reviews · vouchers · sales (admin shell)
 │   └── providers.tsx, layout.tsx # QueryClient + Supabase session bridge + <Toaster>
 ├── features/                     # domain-owned UI; each is {components,hooks,api}/ as needed
 │   ├── product/ cart/ checkout/ voucher/  # storefront domains (voucher = preview at checkout)
@@ -30,8 +30,8 @@ src/
 │   │                             #   canonical core types (e.g. OrderStatus in order/api/orders.ts)
 │   ├── notification/ auth/       #   notification bell + me.ts / is-admin
 │   └── admin/                    # ADMIN — split by area, separate from storefront domains
-│       ├── orders/ users/ reviews/ vouchers/  # each {components,hooks,api}/; the admin halves of the
-│       │                            #   split order/review fetchers + hooks live here; vouchers is admin-only
+│       ├── orders/ users/ reviews/ vouchers/ sales/  # each {components,hooks,api}/; the admin halves of
+│       │                            #   the split order/review fetchers + hooks live here; vouchers + sales are admin-only
 │       ├── components/           #   admin-shared: order-detail-dialog, pagination-bar
 │       └── hooks/                #   admin-shared: use-debounce
 ├── components/                   # SHARED leaves only: header, order-status-badge, star-rating + ui/ (shadcn primitives; sheet is a hand-built Radix Dialog wrapper)
@@ -166,6 +166,14 @@ grants by **email** (`POST /admin/vouchers/:id/grant`) and lists the granted use
 state (`GET /admin/vouchers/:id/grants`). The **user-detail page** (`/admin/users/[id]`) shows a
 copy-to-clipboard **user id** for cross-referencing.
 
+**Sales** (`/admin/sales`): a minimal sale-price manager (`features/admin/sales/`) — **not** a full
+catalog CRUD. `useAdminProducts` (`GET /admin/products`) lists every product (incl. archived); a
+client-side name search filters the (unpaginated, small) catalog. Each row shows base + current sale
+price and an integer-cents input with **Save** / **Clear** → `useSetProductSale` (`PATCH
+/admin/products/:id { salePriceCents }`, number sets / `null` clears). The backend re-validates
+`sale < base` and the 400 message surfaces via a toast. The sale itself is applied at checkout by the
+backend (ARCHITECTURE.md §4.11); this page is only the input surface.
+
 ## 11. Vouchers at checkout (Phase 4)
 
 The storefront voucher lives inline in the checkout order summary (`features/voucher/` +
@@ -180,3 +188,20 @@ distinctly from the out-of-stock 409 and a generic payment error, both at previe
 becomes invalid between preview and place-order. The customer **wallet** (`GET /me/vouchers`) has a
 fetcher but its UI is deferred. All strings go through the `voucher` (storefront) + `admin` (admin)
 next-intl namespaces (vi/en).
+
+## 12. Product discounts — storefront display (Phase 4)
+
+The sale is computed on the **backend** (the effective price, ARCHITECTURE.md §4.11); the frontend
+only renders it. The display is **sale-aware everywhere a price shows**:
+
+- **Product card** (`features/product/components/product-card.tsx`) — shipped in Phase 1: `salePriceCents`
+  vs struck-through `basePriceCents` + a red "Sale" badge.
+- **Product detail** (`product-detail-view.tsx`) — now mirrors the backend rule: the shown price is
+  `salePriceCents < variant.priceCents ? salePriceCents : variant.priceCents` (per selected variant, or
+  the lowest across variants for the `From …` label), with the pre-sale price struck through + the badge
+  when discounted.
+- **Cart** (`cart-view.tsx`) — shows the backend's `unitPriceCents` (already the effective price) and
+  strikes through `compareAtCents` (the pre-sale unit price, `null` when not on sale) sent on each cart
+  line. No client-side price math.
+
+The "Sale" badge label lives in the `product` + `Products` next-intl namespaces (vi/en).

@@ -50,6 +50,7 @@ owning slice's service in-process. This keeps the scalar-id boundary (root §4.3
 | variant · image (write/sign) | `ProductService.assertExists(id)` | validate a single `productId` |
 | collection (membership) | `ProductService.assertManyExist(ids)` | validate a batch of `productId`s before attaching |
 | collection · image (storefront) | `ProductService.getActiveByIds(ids)` · `getActiveBySlug(slug)` | resolve active + category-visible products without touching the product table |
+| variant (pricing) | `ProductService.getActiveByIds(ids)` | fold the product-level sale into each variant's **effective price** — reuses the rows already fetched for the visibility filter, so it costs **no extra query** (see §4.11) |
 
 Each spec enforces the boundary structurally: the Prisma mock exposes **only the slice's own
 delegate** (e.g. the variant spec has no `product` delegate), so a stray cross-table query throws.
@@ -80,7 +81,7 @@ querying `ordering` (§4.10).
 ### 4.1 Checkout (the hardest path)
 1. `order.service` reads the cart and validates each line against `product.service` (active variant, enough stock).
 2. **Reserve stock atomically** — see 4.3. Either decrement now inside a transaction, or create a time-boxed reservation that a cron releases on expiry.
-3. **Snapshot** prices and product fields into `OrderItem` (`unitPriceCents`, `productNameVi/En`, `size`, `color`) and the address into `Order.shippingAddress`. Snapshot the voucher (`voucherCode`, `voucherId`, `discountCents`).
+3. **Snapshot** prices and product fields into `OrderItem` (`unitPriceCents` = the **effective** sale-aware price from the cart view, §4.11; `productNameVi/En`, `size`, `color`) and the address into `Order.shippingAddress`. Snapshot the voucher (`voucherCode`, `voucherId`, `discountCents`).
 4. `payment.service` creates a Stripe PaymentIntent (`amount` = `order.totalCents`; **currency hard-locked to `usd`** — cents map 1:1 only for 2-decimal currencies, a zero-decimal one like VND/JPY would need conversion) with an `idempotencyKey`; order is `PENDING_PAYMENT`.
 5. Return the `clientSecret` to the frontend; the browser confirms payment.
 6. Stripe webhook `payment_intent.succeeded` → order becomes `PAID`, append `OrderStatusHistory`, emit a notification event.
@@ -241,8 +242,33 @@ RoleGuard ADMIN): paginated CRUD (archive, never hard-delete), **grant-by-email*
 grant) and **list grants** (`GET /admin/vouchers/:id/grants` — each `UserVoucher` enriched with the
 grantee's email + `usedCount`/`usedAt` via `UserService.findManyByIds`, batch, no JOIN). Vouchers also
 carry optional **bilingual** `titleVi/En` + `descriptionVi/En`. **Wallet:** `GET /me/vouchers` returns a
-user's still-usable grants (customer UI deferred). **Cron** (birthday grants) and **product discounts**
-are later-Phase-4 work.
+user's still-usable grants (customer UI deferred). **Cron** (birthday grants) is later-Phase-4 work;
+**product discounts** ship in §4.11.
+
+### 4.11 Product discounts (effective sale price) — Phase 4
+
+A product carries one product-level `Product.salePriceCents` (null = not on sale; admin DTO validates
+`sale < basePriceCents`). The price a customer is **charged** lives on the variant
+(`ProductVariant.priceCents`), so the sale has to be folded in where the two meet:
+
+- **`ProductVariantService.getPurchasableByIds`** already loads the owning `Product` rows for the
+  visibility filter (via `ProductService.getActiveByIds`, §4.3). It reuses those rows to compute, per
+  variant, an **`effectivePriceCents` = `sale < variant.priceCents ? sale : variant.priceCents`** — so
+  the sale only ever **lowers** the price (a variant already cheaper than the sale keeps its price), at
+  **zero extra query**. The method returns a `PurchasableVariant` (= `ProductVariant` + `effectivePriceCents`).
+- **`CartService.buildView`** reads that field (never the product table — the cart resolves variants
+  through `ProductVariantService` **in-process**, no JOIN): `unitPriceCents` = `effectivePriceCents`,
+  plus a **display-only `compareAtCents`** (the pre-sale `variant.priceCents` when discounted, else
+  `null`) so the storefront can strike through the original. `subtotalCents` sums the effective lines.
+- **`OrderService.createFromCart` needs no change** — it already snapshots `item.unitPriceCents` from
+  the cart view, which is now the effective price (immutable, §4.4 — a past order keeps its sale price).
+  **Sale + voucher stack**: `validate(code, userId, subtotalCents)` runs against the sale-priced
+  subtotal, so the voucher discount applies on top of the sale. **This closed a money bug** where the
+  sale was shown but checkout charged the base price; cart/order/snapshot now agree
+  (variant/cart/order specs cover it).
+
+**Admin** sets/clears the sale via the existing `PATCH /admin/products/:id { salePriceCents }`
+(number sets, `null` clears; RoleGuard ADMIN, re-validates `sale < base`). No new backend endpoint.
 
 ## 5. Data model (Prisma)
 
