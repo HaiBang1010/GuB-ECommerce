@@ -975,8 +975,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Grant a (wallet-only) voucher to a user */
+        /** Grant a (wallet-only) voucher to a user by email */
         post: operations["VoucherAdminController_grant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/vouchers/{id}/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the users a voucher has been granted to */
+        get: operations["VoucherAdminController_grants"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2165,6 +2182,26 @@ export interface components {
              */
             code: string;
             /**
+             * @description Display title (vi).
+             * @example Giảm 10% mùa hè
+             */
+            titleVi?: string;
+            /**
+             * @description Display title (en).
+             * @example Summer 10% off
+             */
+            titleEn?: string;
+            /**
+             * @description Description (vi).
+             * @example Áp dụng cho mọi đơn hàng.
+             */
+            descriptionVi?: string;
+            /**
+             * @description Description (en).
+             * @example Applies to all orders.
+             */
+            descriptionEn?: string;
+            /**
              * @example PERCENT
              * @enum {string}
              */
@@ -2209,6 +2246,14 @@ export interface components {
             id: string;
             /** @example SUMMER10 */
             code: string;
+            /** @example Giảm 10% mùa hè */
+            titleVi: string | null;
+            /** @example Summer 10% off */
+            titleEn: string | null;
+            /** @example Áp dụng cho mọi đơn hàng. */
+            descriptionVi: string | null;
+            /** @example Applies to all orders. */
+            descriptionEn: string | null;
             /**
              * @example PERCENT
              * @enum {string}
@@ -2283,6 +2328,26 @@ export interface components {
              */
             code?: string;
             /**
+             * @description Display title (vi).
+             * @example Giảm 10% mùa hè
+             */
+            titleVi?: string;
+            /**
+             * @description Display title (en).
+             * @example Summer 10% off
+             */
+            titleEn?: string;
+            /**
+             * @description Description (vi).
+             * @example Áp dụng cho mọi đơn hàng.
+             */
+            descriptionVi?: string;
+            /**
+             * @description Description (en).
+             * @example Applies to all orders.
+             */
+            descriptionEn?: string;
+            /**
              * @example PERCENT
              * @enum {string}
              */
@@ -2324,10 +2389,32 @@ export interface components {
         };
         GrantVoucherDto: {
             /**
-             * @description The iam.User id to grant this voucher to.
-             * @example clx1a2b3c4d5e6f7g8h9usr01
+             * @description Email of the user to grant this voucher to.
+             * @example jane@example.com
              */
+            email: string;
+        };
+        GrantedUserResponseDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9usr01 */
             userId: string;
+            /** @example jane@example.com */
+            email: string | null;
+            /**
+             * @description This user's redemptions of this voucher.
+             * @example 0
+             */
+            usedCount: number;
+            /**
+             * Format: date-time
+             * @description Last redeemed at (null = never used).
+             * @example null
+             */
+            usedAt: string | null;
+            /**
+             * Format: date-time
+             * @example 2026-06-27T00:00:00.000Z
+             */
+            grantedAt: string;
         };
         PreviewVoucherDto: {
             /** @example SUMMER10 */
@@ -2341,6 +2428,10 @@ export interface components {
              * @example SUMMER10
              */
             voucherCode: string;
+            /** @example Giảm 10% mùa hè */
+            titleVi: string | null;
+            /** @example Summer 10% off */
+            titleEn: string | null;
             /**
              * @description Discount applied (cents).
              * @example 1200
@@ -2380,6 +2471,14 @@ export interface components {
             id: string;
             /** @example SUMMER10 */
             code: string;
+            /** @example Giảm 10% mùa hè */
+            titleVi: string | null;
+            /** @example Summer 10% off */
+            titleEn: string | null;
+            /** @example Áp dụng cho mọi đơn hàng. */
+            descriptionVi: string | null;
+            /** @example Applies to all orders. */
+            descriptionEn: string | null;
             /**
              * @example PERCENT
              * @enum {string}
@@ -5403,6 +5502,48 @@ export interface operations {
                 content?: never;
             };
             /** @description Voucher or user not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    VoucherAdminController_grants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantedUserResponseDto"][];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Voucher not found. */
             404: {
                 headers: {
                     [name: string]: unknown;

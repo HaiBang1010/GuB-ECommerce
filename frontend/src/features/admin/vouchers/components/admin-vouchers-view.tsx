@@ -8,6 +8,7 @@ import {
   useAdminVouchers,
   useArchiveVoucher,
   useGrantVoucher,
+  useVoucherGrants,
 } from '@/features/admin/vouchers/hooks/use-admin-vouchers';
 import type { Voucher } from '@/features/admin/vouchers/api/vouchers';
 import { VoucherForm } from '@/features/admin/vouchers/components/voucher-form';
@@ -16,6 +17,12 @@ import { useDebounce } from '@/features/admin/hooks/use-debounce';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { formatPriceCents } from '@/lib/money';
 import { formatDate } from '@/lib/datetime';
 
@@ -26,14 +33,16 @@ export function AdminVouchersView() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const search = useDebounce(searchInput, 300);
-  // null = list only · 'new' = create form · a Voucher = edit form.
+  // null = sheet closed · 'new' = create form · a Voucher = edit form.
   const [editing, setEditing] = useState<Voucher | 'new' | null>(null);
+  // The voucher whose grant panel is open (wallet-only only).
   const [grantingId, setGrantingId] = useState<string | null>(null);
-  const [grantUserId, setGrantUserId] = useState('');
+  const [grantEmail, setGrantEmail] = useState('');
 
   const { isPending, isError, data } = useAdminVouchers(search, page, pageSize);
   const archive = useArchiveVoucher();
   const grant = useGrantVoucher();
+  const grants = useVoucherGrants(grantingId);
 
   function handleSearch(value: string) {
     setSearchInput(value);
@@ -42,9 +51,6 @@ export function AdminVouchersView() {
   function handlePageSize(size: number) {
     setPageSize(size);
     setPage(1);
-  }
-  function closeForm() {
-    setEditing(null);
   }
 
   function handleArchive(v: Voucher) {
@@ -55,16 +61,20 @@ export function AdminVouchersView() {
     });
   }
 
+  function toggleGrant(voucherId: string) {
+    setGrantEmail('');
+    setGrantingId(grantingId === voucherId ? null : voucherId);
+  }
+
   function handleGrant(voucherId: string) {
-    const userId = grantUserId.trim();
-    if (!userId) return;
+    const email = grantEmail.trim();
+    if (!email) return;
     grant.mutate(
-      { id: voucherId, userId },
+      { id: voucherId, email },
       {
         onSuccess: () => {
           toast.success(t('voucherGranted'));
-          setGrantingId(null);
-          setGrantUserId('');
+          setGrantEmail('');
         },
         onError: () => toast.error(t('grantError')),
       },
@@ -72,9 +82,10 @@ export function AdminVouchersView() {
   }
 
   function valueLabel(v: Voucher): string {
-    return v.type === 'PERCENT'
-      ? `${v.value}%`
-      : formatPriceCents(v.value);
+    return v.type === 'PERCENT' ? `${v.value}%` : formatPriceCents(v.value);
+  }
+  function titleFor(v: Voucher): string | null {
+    return locale === 'vi' ? v.titleVi : v.titleEn;
   }
 
   return (
@@ -93,13 +104,28 @@ export function AdminVouchersView() {
         </div>
       </div>
 
-      {editing ? (
-        <VoucherForm
-          key={editing === 'new' ? 'new' : editing.id}
-          voucher={editing === 'new' ? undefined : editing}
-          onDone={closeForm}
-        />
-      ) : null}
+      {/* New / Edit voucher — slides in from the right (long form). */}
+      <Sheet
+        open={editing !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditing(null);
+        }}
+      >
+        <SheetContent>
+          <SheetHeader>
+            <SheetTitle>
+              {editing === 'new' ? t('newVoucher') : t('editVoucher')}
+            </SheetTitle>
+          </SheetHeader>
+          {editing !== null ? (
+            <VoucherForm
+              key={editing === 'new' ? 'new' : editing.id}
+              voucher={editing === 'new' ? undefined : editing}
+              onDone={() => setEditing(null)}
+            />
+          ) : null}
+        </SheetContent>
+      </Sheet>
 
       {isPending ? (
         <Skeleton className="h-40 w-full" />
@@ -118,6 +144,11 @@ export function AdminVouchersView() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono font-medium">{v.code}</span>
+                    {titleFor(v) ? (
+                      <span className="text-muted-foreground text-sm">
+                        {titleFor(v)}
+                      </span>
+                    ) : null}
                     <Badge>{valueLabel(v)}</Badge>
                     <Badge>{v.isPublic ? t('public') : t('walletOnly')}</Badge>
                     {v.archivedAt ? (
@@ -132,15 +163,15 @@ export function AdminVouchersView() {
                     >
                       {t('edit')}
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setGrantingId(grantingId === v.id ? null : v.id)
-                      }
-                    >
-                      {t('grant')}
-                    </Button>
+                    {!v.isPublic ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toggleGrant(v.id)}
+                      >
+                        {t('grant')}
+                      </Button>
+                    ) : null}
                     {!v.archivedAt ? (
                       <Button
                         variant="ghost"
@@ -185,31 +216,51 @@ export function AdminVouchersView() {
                   ) : null}
                 </div>
 
-                {grantingId === v.id ? (
-                  <div className="flex flex-wrap items-center gap-2 border-t pt-2">
-                    <Input
-                      value={grantUserId}
-                      onChange={(e) => setGrantUserId(e.target.value)}
-                      placeholder={t('grantUserPlaceholder')}
-                      className="w-full sm:w-80"
-                    />
-                    <Button
-                      size="sm"
-                      disabled={!grantUserId.trim() || grant.isPending}
-                      onClick={() => handleGrant(v.id)}
-                    >
-                      {t('grant')}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setGrantingId(null);
-                        setGrantUserId('');
-                      }}
-                    >
-                      {t('cancel')}
-                    </Button>
+                {/* Grant panel — wallet-only vouchers; public ones need no grant. */}
+                {!v.isPublic && grantingId === v.id ? (
+                  <div className="flex flex-col gap-2 border-t pt-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Input
+                        type="email"
+                        value={grantEmail}
+                        onChange={(e) => setGrantEmail(e.target.value)}
+                        placeholder={t('grantEmailPlaceholder')}
+                        className="w-full sm:w-80"
+                      />
+                      <Button
+                        size="sm"
+                        disabled={!grantEmail.trim() || grant.isPending}
+                        onClick={() => handleGrant(v.id)}
+                      >
+                        {t('grant')}
+                      </Button>
+                    </div>
+
+                    {grants.isPending ? (
+                      <Skeleton className="h-12 w-full" />
+                    ) : grants.data && grants.data.length > 0 ? (
+                      <ul className="flex flex-col gap-1 text-xs">
+                        {grants.data.map((g) => (
+                          <li
+                            key={g.userId}
+                            className="flex items-center justify-between gap-2"
+                          >
+                            <span className="truncate">
+                              {g.email ?? g.userId}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {g.usedCount > 0
+                                ? t('grantUsed')
+                                : t('grantUnused')}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-muted-foreground text-xs">
+                        {t('noGrants')}
+                      </p>
+                    )}
                   </div>
                 ) : null}
               </li>

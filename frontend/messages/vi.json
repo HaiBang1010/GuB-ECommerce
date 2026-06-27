@@ -287,6 +287,17 @@
     "grantError": "Không cấp được voucher",
     "saveError": "Không lưu được voucher",
     "vouchersError": "Không tải được voucher",
-    "noVouchers": "Chưa có voucher"
+    "noVouchers": "Chưa có voucher",
+    "titleVi": "Tiêu đề (VI)",
+    "titleEn": "Tiêu đề (EN)",
+    "descriptionVi": "Mô tả (VI)",
+    "descriptionEn": "Mô tả (EN)",
+    "grantEmailPlaceholder": "Email khách hàng",
+    "grantUsed": "Đã dùng",
+    "grantUnused": "Chưa dùng",
+    "noGrants": "Chưa cấp cho ai",
+    "back": "Quay lại",
+    "userId": "User ID",
+    "copied": "Đã sao chép"
   }
 }

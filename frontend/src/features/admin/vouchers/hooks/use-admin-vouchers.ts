@@ -10,6 +10,7 @@ import {
   archiveVoucher,
   createVoucher,
   getAdminVouchers,
+  getVoucherGrants,
   grantVoucher,
   updateVoucher,
   type CreateVoucherBody,
@@ -62,8 +63,26 @@ export function useArchiveVoucher() {
 }
 
 export function useGrantVoucher() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, userId }: { id: string; userId: string }) =>
-      grantVoucher(id, userId),
+    mutationFn: ({ id, email }: { id: string; email: string }) =>
+      grantVoucher(id, email),
+    onSuccess: (_data, { id }) => {
+      void qc.invalidateQueries({
+        queryKey: ['admin', 'vouchers', 'grants', id],
+      });
+    },
+  });
+}
+
+// The users a (wallet-only) voucher has been granted to. Enabled only when a
+// voucher id is provided (the grant panel is open).
+export function useVoucherGrants(voucherId: string | null) {
+  const authLoading = useAuthStore((s) => s.isLoading);
+  const user = useAuthStore((s) => s.user);
+  return useQuery({
+    queryKey: ['admin', 'vouchers', 'grants', voucherId],
+    queryFn: ({ signal }) => getVoucherGrants(voucherId as string, signal),
+    enabled: !authLoading && !!user && !!voucherId,
   });
 }

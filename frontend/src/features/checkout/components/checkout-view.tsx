@@ -73,6 +73,7 @@ function CheckoutContent() {
   const [voucherInput, setVoucherInput] = useState('');
   const [applied, setApplied] = useState<{
     code: string;
+    label: string;
     discountCents: number;
   } | null>(null);
   const [voucherError, setVoucherError] = useState<string | null>(null);
@@ -151,8 +152,10 @@ function CheckoutContent() {
     setVoucherError(null);
     voucherPreview.mutate(code, {
       onSuccess: (preview) => {
+        const title = locale === 'vi' ? preview.titleVi : preview.titleEn;
         setApplied({
           code: preview.voucherCode,
+          label: title || preview.voucherCode,
           discountCents: preview.discountCents,
         });
         setVoucherInput(preview.voucherCode);
@@ -322,7 +325,7 @@ function CheckoutContent() {
             <div className="flex flex-col gap-2 border-t pt-3">
               {applied ? (
                 <div className="flex items-center justify-between gap-2 text-sm">
-                  <span>{tVoucher('applied', { code: applied.code })}</span>
+                  <span>{tVoucher('applied', { code: applied.label })}</span>
                   <Button
                     type="button"
                     variant="ghost"

@@ -17,6 +17,7 @@ import type {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
 // Form values are all strings (native inputs/selects); the typed API payload is
 // built in onSubmit. Numeric fields accept digits only; the cross-field rules
@@ -24,6 +25,10 @@ import { Label } from '@/components/ui/label';
 const schema = z
   .object({
     code: z.string().trim().min(1, 'required').max(50),
+    titleVi: z.string().max(120),
+    titleEn: z.string().max(120),
+    descriptionVi: z.string().max(500),
+    descriptionEn: z.string().max(500),
     type: z.enum(['PERCENT', 'FIXED']),
     isPublic: z.enum(['true', 'false']),
     value: z.string().regex(/^\d+$/, 'required'),
@@ -52,6 +57,10 @@ type FormValues = z.infer<typeof schema>;
 function toFormValues(voucher?: Voucher): FormValues {
   return {
     code: voucher?.code ?? '',
+    titleVi: voucher?.titleVi ?? '',
+    titleEn: voucher?.titleEn ?? '',
+    descriptionVi: voucher?.descriptionVi ?? '',
+    descriptionEn: voucher?.descriptionEn ?? '',
     type: voucher?.type ?? 'PERCENT',
     isPublic: (voucher?.isPublic ?? true) ? 'true' : 'false',
     value: voucher != null ? String(voucher.value) : '',
@@ -99,8 +108,13 @@ export function VoucherForm({
   function onSubmit(values: FormValues) {
     const num = (s: string): number | undefined =>
       s.trim() === '' ? undefined : Number(s);
+    const text = (s: string): string | undefined => s.trim() || undefined;
     const payload: CreateVoucherBody = {
       code: values.code.trim(),
+      titleVi: text(values.titleVi),
+      titleEn: text(values.titleEn),
+      descriptionVi: text(values.descriptionVi),
+      descriptionEn: text(values.descriptionEn),
       type: values.type,
       isPublic: values.isPublic === 'true',
       value: Number(values.value),
@@ -144,13 +158,9 @@ export function VoucherForm({
   return (
     <form
       onSubmit={form.handleSubmit(onSubmit)}
-      className="flex flex-col gap-3 rounded-md border p-4"
+      className="flex flex-1 flex-col gap-3"
       noValidate
     >
-      <h2 className="text-lg font-medium">
-        {isEdit ? t('editVoucher') : t('newVoucher')}
-      </h2>
-
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label={t('code')} error={fieldError('code')}>
           <Input {...form.register('code')} />
@@ -161,6 +171,28 @@ export function VoucherForm({
             <option value="true">{t('public')}</option>
             <option value="false">{t('walletOnly')}</option>
           </select>
+        </Field>
+
+        {/* Bilingual display copy (admin form has two inputs per content field). */}
+        <Field label={t('titleVi')} error={fieldError('titleVi')}>
+          <Input {...form.register('titleVi')} />
+        </Field>
+        <Field label={t('titleEn')} error={fieldError('titleEn')}>
+          <Input {...form.register('titleEn')} />
+        </Field>
+        <Field
+          label={t('descriptionVi')}
+          error={fieldError('descriptionVi')}
+          className="sm:col-span-2"
+        >
+          <Textarea rows={2} {...form.register('descriptionVi')} />
+        </Field>
+        <Field
+          label={t('descriptionEn')}
+          error={fieldError('descriptionEn')}
+          className="sm:col-span-2"
+        >
+          <Textarea rows={2} {...form.register('descriptionEn')} />
         </Field>
 
         <Field label={t('type')} error={fieldError('type')}>
@@ -211,7 +243,7 @@ export function VoucherForm({
         </Field>
       </div>
 
-      <div className="flex gap-2">
+      <div className="mt-2 flex gap-2">
         <Button type="submit" disabled={pending}>
           {t('save')}
         </Button>
@@ -227,15 +259,17 @@ function Field({
   label,
   hint,
   error,
+  className,
   children,
 }: {
   label: string;
   hint?: string;
   error?: string | null;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className={`flex flex-col gap-1.5 ${className ?? ''}`}>
       <Label>{label}</Label>
       {children}
       {hint ? <p className="text-muted-foreground text-xs">{hint}</p> : null}

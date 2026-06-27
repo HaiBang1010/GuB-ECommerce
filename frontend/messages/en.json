@@ -287,6 +287,17 @@
     "grantError": "Couldn't grant the voucher",
     "saveError": "Couldn't save the voucher",
     "vouchersError": "Couldn't load vouchers",
-    "noVouchers": "No vouchers"
+    "noVouchers": "No vouchers",
+    "titleVi": "Title (VI)",
+    "titleEn": "Title (EN)",
+    "descriptionVi": "Description (VI)",
+    "descriptionEn": "Description (EN)",
+    "grantEmailPlaceholder": "Customer email",
+    "grantUsed": "Used",
+    "grantUnused": "Not used",
+    "noGrants": "Not granted to anyone yet",
+    "back": "Back",
+    "userId": "User ID",
+    "copied": "Copied"
   }
 }

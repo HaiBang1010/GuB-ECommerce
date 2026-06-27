@@ -6,6 +6,7 @@ export type PaginatedVouchers =
   components['schemas']['PaginatedVouchersResponseDto'];
 export type CreateVoucherBody = components['schemas']['CreateVoucherDto'];
 export type UpdateVoucherBody = components['schemas']['UpdateVoucherDto'];
+export type GrantedUser = components['schemas']['GrantedUserResponseDto'];
 
 // GET /admin/vouchers — paginated, optional ?search by code. ADMIN-only on the backend.
 export function getAdminVouchers(
@@ -50,11 +51,22 @@ export function archiveVoucher(id: string): Promise<Voucher> {
   });
 }
 
-// POST /admin/vouchers/:id/grant — grant a wallet-only voucher to a user.
-export function grantVoucher(id: string, userId: string): Promise<Voucher> {
+// POST /admin/vouchers/:id/grant — grant a wallet-only voucher to a user by email.
+export function grantVoucher(id: string, email: string): Promise<Voucher> {
   return apiFetch<Voucher>(`/admin/vouchers/${encodeURIComponent(id)}/grant`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify({ email }),
   });
+}
+
+// GET /admin/vouchers/:id/grants — users this voucher was granted to (+ used state).
+export function getVoucherGrants(
+  id: string,
+  signal?: AbortSignal,
+): Promise<GrantedUser[]> {
+  return apiFetch<GrantedUser[]>(
+    `/admin/vouchers/${encodeURIComponent(id)}/grants`,
+    { signal },
+  );
 }

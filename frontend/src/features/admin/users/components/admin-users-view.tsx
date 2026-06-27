@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { ArrowLeft, Copy } from 'lucide-react';
 
 import { Link } from '@/i18n/navigation';
 import { useAdminUser } from '@/features/admin/users/hooks/use-users';
@@ -50,7 +51,10 @@ export function AdminUsersView({ userId }: { userId: string }) {
           {notFound ? t('userNotFound') : t('userError')}
         </p>
         <Button asChild variant="outline" size="sm">
-          <Link href="/admin/orders">{t('orders')}</Link>
+          <Link href="/admin/users">
+            <ArrowLeft className="size-4" />
+            {t('back')}
+          </Link>
         </Button>
       </div>
     );
@@ -68,9 +72,19 @@ function UserDetail({ user }: { user: AdminUserDetail }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold">{t('userDetail')}</h1>
+        <div className="flex flex-col gap-0.5">
+          <h1 className="text-2xl font-semibold">{t('userDetail')}</h1>
+          <CopyableId
+            id={user.id}
+            label={t('userId')}
+            copiedLabel={t('copied')}
+          />
+        </div>
         <Button asChild variant="outline" size="sm">
-          <Link href="/admin/orders">{t('orders')}</Link>
+          <Link href="/admin/users">
+            <ArrowLeft className="size-4" />
+            {t('back')}
+          </Link>
         </Button>
       </div>
 
@@ -248,5 +262,39 @@ function Field({ label, value }: { label: string; value: string }) {
       <span className="text-muted-foreground">{label}</span>
       <span className="text-right">{value}</span>
     </div>
+  );
+}
+
+// The user id, click-to-copy (for admins referencing a user, e.g. voucher grants).
+function CopyableId({
+  id,
+  label,
+  copiedLabel,
+}: {
+  id: string;
+  label: string;
+  copiedLabel: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(id);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard may be unavailable (insecure context) — silently ignore.
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title={label}
+      className="text-muted-foreground hover:text-foreground inline-flex w-fit items-center gap-1 text-xs"
+    >
+      <span className="font-mono">{id}</span>
+      <Copy className="size-3" />
+      {copied ? <span>{copiedLabel}</span> : null}
+    </button>
   );
 }
