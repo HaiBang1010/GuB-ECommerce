@@ -7,7 +7,7 @@ import { Toaster } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth.store';
 import { useCartStore } from '@/stores/cart.store';
-import { mergeCart } from '@/lib/api/cart';
+import { mergeCart } from '@/features/cart/api/cart';
 import { getMe } from '@/lib/api/me';
 
 // Client-only provider tree. The locale layout is a server component, so context

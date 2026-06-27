@@ -10,7 +10,7 @@ import {
   removeCartItem,
   updateCartItem,
   type CartView,
-} from '@/lib/api/cart';
+} from '@/features/cart/api/cart';
 
 // The server cart serves BOTH guest (X-Cart-Session) and user (Bearer). Wait for
 // auth to settle so the first fetch carries the token when logged in.

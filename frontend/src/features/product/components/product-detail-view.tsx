@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
 import { useProduct } from '@/features/product/hooks/use-product';
-import { useAddToCart } from '@/hooks/use-cart';
+import { useAddToCart } from '@/features/cart/hooks/use-cart';
 import { useProductReviews } from '@/hooks/use-reviews';
 import { useCartStore } from '@/stores/cart.store';
 import { useAuthStore } from '@/stores/auth.store';

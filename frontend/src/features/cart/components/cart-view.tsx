@@ -9,12 +9,12 @@ import {
   useCart,
   useRemoveCartItem,
   useUpdateCartItem,
-} from '@/hooks/use-cart';
+} from '@/features/cart/hooks/use-cart';
 import { useCartStore } from '@/stores/cart.store';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatPriceCents } from '@/lib/money';
-import type { CartItemView } from '@/lib/api/cart';
+import type { CartItemView } from '@/features/cart/api/cart';
 
 export function CartView() {
   const t = useTranslations('cart');
