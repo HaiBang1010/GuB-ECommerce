@@ -2,8 +2,8 @@
 
 import { useTranslations } from 'next-intl';
 
-import { useProducts } from '@/hooks/use-products';
-import { ProductCard } from '@/components/product-card';
+import { useProducts } from '@/features/product/hooks/use-products';
+import { ProductCard } from '@/features/product/components/product-card';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const GRID_CLASS =

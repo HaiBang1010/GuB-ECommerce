@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatPriceCents } from '@/lib/money';
-import type { Product } from '@/lib/api/products';
+import type { Product } from '@/features/product/api/products';
 
 export function ProductCard({ product }: { product: Product }) {
   const locale = useLocale();

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
-import { useProduct } from '@/hooks/use-product';
+import { useProduct } from '@/features/product/hooks/use-product';
 import { useAddToCart } from '@/hooks/use-cart';
 import { useProductReviews } from '@/hooks/use-reviews';
 import { useCartStore } from '@/stores/cart.store';
@@ -17,7 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { formatPriceCents } from '@/lib/money';
 import { formatDate, formatDateTime } from '@/lib/datetime';
-import type { ProductDetail, ProductVariant } from '@/lib/api/products';
+import type { ProductDetail, ProductVariant } from '@/features/product/api/products';
 
 export function ProductDetailView({ slug }: { slug: string }) {
   const t = useTranslations('product');

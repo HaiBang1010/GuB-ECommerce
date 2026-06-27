@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { getProducts, type ProductListParams } from '@/lib/api/products';
+import { getProducts, type ProductListParams } from '@/features/product/api/products';
 
 // Server state for the storefront product list. The params object is part of the
 // query key so different search/category combinations cache independently.

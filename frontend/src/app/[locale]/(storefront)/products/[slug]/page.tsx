@@ -1,6 +1,6 @@
 import { setRequestLocale } from 'next-intl/server';
 
-import { ProductDetailView } from '@/components/product-detail-view';
+import { ProductDetailView } from '@/features/product/components/product-detail-view';
 
 export default async function ProductDetailPage({
   params,
