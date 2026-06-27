@@ -9,7 +9,7 @@ import { useAddToCart } from '@/features/cart/hooks/use-cart';
 import { useProductReviews } from '@/hooks/use-reviews';
 import { useCartStore } from '@/stores/cart.store';
 import { useAuthStore } from '@/stores/auth.store';
-import { isAdmin } from '@/lib/auth/is-admin';
+import { isAdmin } from '@/features/auth/is-admin';
 import { AdminReplyForm } from '@/components/admin/admin-reply-form';
 import { StarRating } from '@/components/star-rating';
 import { Button } from '@/components/ui/button';

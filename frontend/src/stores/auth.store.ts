@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { User } from '@supabase/supabase-js';
-import type { Role } from '@/lib/api/me';
+import type { Role } from '@/features/auth/api/me';
 
 // Lifecycle of the app role fetch (GET /me). Distinguishing 'loading' from a
 // resolved-null role is what stops the admin guard from bouncing an admin during

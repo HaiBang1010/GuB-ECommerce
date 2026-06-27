@@ -6,7 +6,7 @@ import { ArrowLeft } from 'lucide-react';
 
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { useAuthStore } from '@/stores/auth.store';
-import { isAdmin } from '@/lib/auth/is-admin';
+import { isAdmin } from '@/features/auth/is-admin';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';

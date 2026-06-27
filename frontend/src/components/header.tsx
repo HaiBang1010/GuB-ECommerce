@@ -7,7 +7,7 @@ import { Link } from '@/i18n/navigation';
 import { useAuthStore } from '@/stores/auth.store';
 import { useCart } from '@/features/cart/hooks/use-cart';
 import { createClient } from '@/lib/supabase/client';
-import { isAdmin } from '@/lib/auth/is-admin';
+import { isAdmin } from '@/features/auth/is-admin';
 import { NotificationBell } from '@/features/notification/components/notification-bell';
 import { Button } from '@/components/ui/button';
 import {
