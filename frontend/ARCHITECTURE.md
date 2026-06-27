@@ -11,31 +11,48 @@ Next.js **App Router** on Vercel. Overall system architecture: see [`../ARCHITEC
 - Every UI string goes through **next-intl** (vi/en) — never hardcode language in a component.
 - **Light theme only.**
 
-## 2. Directory structure (actual, Phase 2)
+## 2. Directory structure (actual, Phase 3 — `features/` by domain)
+
+Code is organised **by domain feature**, not by technical layer. Each domain owns its
+`{components,hooks,api}/`; admin is kept **separate** from the storefront business domains
+(an admin area is not a "domain"). Only genuinely shared leaves stay in `components/`, and
+`lib/api/` holds infra only — domain fetchers live in `features/<domain>/api/`.
 
 ```
 src/
-├── app/[locale]/                 # next-intl: /vi, /en
-│   ├── page.tsx                  # home
-│   ├── products/                 # grid + [slug] detail
-│   ├── cart/                     # server cart (guest + user)
-│   ├── checkout/                 # address + place order → redirects to the pay page
-│   ├── orders/                   # list · [id] detail+timeline · [id]/pay (durable payment) · [id]/confirmation
-│   ├── auth/                     # login · signup · callback
+├── app/[locale]/                 # next-intl: /vi, /en — route groups are URL-transparent
+│   ├── (storefront)/             # home · products/[slug] · cart · checkout · orders/[id]{/pay,/confirmation} · auth + Header
+│   ├── (admin)/admin/            # orders · users · users/[id] · reviews (admin shell)
 │   └── providers.tsx, layout.tsx # QueryClient + Supabase session bridge + <Toaster>
-├── components/                   # page views + ui/ (hand-written shadcn primitives)
-├── hooks/                        # TanStack Query hooks (use-cart, use-orders, use-addresses, …)
-├── lib/api/                      # apiFetch client, committed schema.d.ts, per-resource fetchers
-├── lib/supabase/                 # browser / server / middleware clients
+├── features/                     # domain-owned UI; each is {components,hooks,api}/ as needed
+│   ├── product/ cart/ checkout/  # storefront domains
+│   ├── order/ review/            #   order (customer) + review (customer) — fetchers/hooks own the
+│   │                             #   canonical core types (e.g. OrderStatus in order/api/orders.ts)
+│   ├── notification/ auth/       #   notification bell + me.ts / is-admin
+│   └── admin/                    # ADMIN — split by area, separate from storefront domains
+│       ├── orders/ users/ reviews/  #   each {components,hooks,api}/; the admin halves of the
+│       │                            #   split order/review fetchers + hooks live here
+│       ├── components/           #   admin-shared: order-detail-dialog, pagination-bar
+│       └── hooks/                #   admin-shared: use-debounce
+├── components/                   # SHARED leaves only: header, order-status-badge, star-rating + ui/ (shadcn primitives)
+├── lib/api/                      # infra ONLY: apiFetch client + committed schema.d.ts (NO fetchers here)
+├── lib/                          # money, datetime, utils, stripe, supabase/ (browser/server/middleware clients)
 ├── stores/                       # Zustand: auth + cart (guest sessionId + display snapshots)
 ├── i18n/ · messages/             # routing/navigation helpers + vi.json / en.json
-└── middleware.ts                 # i18n locale + Supabase session refresh + protect /checkout, /orders
+└── middleware.ts                 # i18n locale + Supabase session refresh + protect /checkout, /orders, /admin
 ```
 
 The admin area lives in a `[locale]/(admin)/admin/` route group with its own shell; the storefront
 `Header` sits in a sibling `[locale]/(storefront)/` group (route groups are URL-transparent, so
 customer URLs are unchanged). See §10. There is no `app/api/` BFF layer; the browser calls the
 NestJS backend directly (CORS-open in dev).
+
+**Cross-feature edges (intentional, type-only or admin-embedded):** `OrderStatus` + core order types
+are canonical in `features/order/api/orders.ts`; the shared `order-status-badge`, `features/admin/orders`
+and `features/admin/users` type-import them. The admin review fetcher (`features/admin/reviews/api`)
+type-imports `Review` from `features/review/api`. The admin reply form
+(`features/admin/reviews/components/admin-reply-form`) is embedded (admin-gated) on the storefront
+product page — one deliberate storefront→admin edge.
 
 ## 3. State management
 
@@ -71,26 +88,27 @@ NestJS backend directly (CORS-open in dev).
 ## 8. Reviews (Phase 3)
 
 Purchased-only reviews surface in two existing pages (no new route):
-- **Order detail** (`components/order-detail-view.tsx`) — a `DELIVERED` order renders a
+- **Order detail** (`features/order/components/order-detail-view.tsx`) — a `DELIVERED` order renders a
   write/edit review block **per distinct product** (the backend allows one review per product,
   not per line item). The user's existing review is found by matching their id against the
   product's public review list (`useProductReviews`), since the order payload carries no review
   back-reference. Interactive `StarRating` + `Textarea`; `useCreateReview` / `useUpdateReview`
   invalidate `['reviews', productId]`.
-- **Product detail** (`components/product-detail-view.tsx`) — a public rating summary
+- **Product detail** (`features/product/components/product-detail-view.tsx`) — a public rating summary
   (half-star average + count) and review list, each with a **"Verified buyer"** badge (the API
   exposes only `userId`, no name) and a **"Store reply"** block when `adminReply` is present.
 
-Shared bits: `lib/api/reviews.ts` + `hooks/use-reviews.ts`, the net-new `components/star-rating.tsx`
-and `ui/textarea.tsx`, and the `reviews` i18n namespace. The reply *display* (the "Store reply"
+Data layer: the customer fetchers/hooks (`features/review/api/reviews.ts` + `features/review/hooks/use-reviews.ts`)
+and the admin reply fetcher/hook (`features/admin/reviews/{api/reviews.ts,hooks/use-admin-reviews.ts}`);
+the shared `components/star-rating.tsx` + `ui/textarea.tsx`, and the `reviews` i18n namespace. The reply *display* (the "Store reply"
 block) ships for everyone; **admin reply input** now ships too — an inline box on product detail,
 shown to an admin under each review without a reply (`POST /admin/reviews/:id/reply`). It lives on
 the product page because there is no admin list-all-reviews endpoint. See §10.
 
 ## 9. Notifications (Phase 3)
 
-A bell in the header (`components/notification-bell.tsx`), shown for logged-in users only.
-`useNotifications` (`hooks/use-notifications.ts`) fetches the list + `unreadCount`, gated by the
+A bell in the header (`features/notification/components/notification-bell.tsx`), shown for logged-in users only.
+`useNotifications` (`features/notification/hooks/use-notifications.ts`) fetches the list + `unreadCount`, gated by the
 auth store and polling every 60s (no realtime until Phase 6). The badge shows the unread count; the
 shadcn `DropdownMenu` lists items, each rendering its text from the structured `type` + `payload.orderId`
 via the `notification` i18n namespace — **never** a stored string — linking to `/orders/[id]` and
