@@ -4,6 +4,7 @@ import { ReviewService } from './review.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrderService } from '../order/order.service';
 import { ProductService } from '../product/product/product.service';
+import { UserService } from '../iam/user/user.service';
 
 // The prisma mock exposes ONLY the `review` delegate: any stray query to another
 // module's table (order/product/orderItem) throws, enforcing the schema boundary
@@ -12,17 +13,20 @@ type ReviewDelegate = {
   findFirst: jest.Mock;
   findUnique: jest.Mock;
   findMany: jest.Mock;
+  count: jest.Mock;
   create: jest.Mock;
   update: jest.Mock;
   aggregate: jest.Mock;
 };
 type OrdersMock = { getDeliveredOrderItemForUser: jest.Mock };
-type ProductsMock = { assertExists: jest.Mock };
+type ProductsMock = { assertExists: jest.Mock; findManyByIds: jest.Mock };
+type UsersMock = { findManyByIds: jest.Mock };
 
 describe('ReviewService', () => {
   let prisma: { review: ReviewDelegate };
   let orders: OrdersMock;
   let products: ProductsMock;
+  let users: UsersMock;
   let service: ReviewService;
 
   beforeEach(() => {
@@ -31,17 +35,23 @@ describe('ReviewService', () => {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
         findMany: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
         create: jest.fn(),
         update: jest.fn(),
         aggregate: jest.fn(),
       },
     };
     orders = { getDeliveredOrderItemForUser: jest.fn() };
-    products = { assertExists: jest.fn() };
+    products = {
+      assertExists: jest.fn(),
+      findManyByIds: jest.fn().mockResolvedValue([]),
+    };
+    users = { findManyByIds: jest.fn().mockResolvedValue([]) };
     service = new ReviewService(
       prisma as unknown as PrismaService,
       orders as unknown as OrderService,
       products as unknown as ProductService,
+      users as unknown as UserService,
     );
   });
 
@@ -234,6 +244,72 @@ describe('ReviewService', () => {
         summary: { average: null, count: 0 },
         items: [],
       });
+    });
+  });
+
+  describe('listAllForAdmin', () => {
+    it('filters to unreplied reviews (adminReply: null) when replied=false', async () => {
+      prisma.review.findMany.mockResolvedValue([]);
+      await service.listAllForAdmin({ replied: false });
+      expect(prisma.review.count).toHaveBeenCalledWith({
+        where: { adminReply: null },
+      });
+      expect(prisma.review.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { adminReply: null } }),
+      );
+    });
+
+    it('filters to replied reviews (adminReply not null) when replied=true', async () => {
+      prisma.review.findMany.mockResolvedValue([]);
+      await service.listAllForAdmin({ replied: true });
+      expect(prisma.review.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { adminReply: { not: null } } }),
+      );
+    });
+
+    it('lists all (empty where) with default pagination when no filter', async () => {
+      prisma.review.count.mockResolvedValue(25);
+      prisma.review.findMany.mockResolvedValue([]);
+      const result = await service.listAllForAdmin({});
+      expect(prisma.review.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: {}, skip: 0, take: 10 }),
+      );
+      expect(result).toEqual(
+        expect.objectContaining({ total: 25, page: 1, pageSize: 10 }),
+      );
+    });
+
+    it('applies page/pageSize as skip/take', async () => {
+      prisma.review.findMany.mockResolvedValue([]);
+      await service.listAllForAdmin({ page: 3, pageSize: 20 });
+      expect(prisma.review.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 40, take: 20 }),
+      );
+    });
+
+    it('enriches each row with product + reviewer; null when a ref is gone', async () => {
+      prisma.review.findMany.mockResolvedValue([
+        { id: 'r1', productId: 'p1', userId: 'u1' },
+        { id: 'r2', productId: 'gone', userId: 'ghost' },
+      ]);
+      products.findManyByIds.mockResolvedValue([
+        { id: 'p1', nameVi: 'Áo', nameEn: 'Shirt' },
+      ]);
+      users.findManyByIds.mockResolvedValue([
+        { id: 'u1', email: 'jane@example.com', name: 'Jane' },
+      ]);
+
+      const result = await service.listAllForAdmin({});
+
+      expect(products.findManyByIds).toHaveBeenCalledWith(['p1', 'gone']);
+      expect(users.findManyByIds).toHaveBeenCalledWith(['u1', 'ghost']);
+      expect(result.items[0].product).toEqual({ nameVi: 'Áo', nameEn: 'Shirt' });
+      expect(result.items[0].reviewer).toEqual({
+        email: 'jane@example.com',
+        name: 'Jane',
+      });
+      expect(result.items[1].product).toBeNull();
+      expect(result.items[1].reviewer).toBeNull();
     });
   });
 

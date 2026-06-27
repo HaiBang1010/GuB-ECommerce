@@ -7,6 +7,7 @@ import { Prisma, Review } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrderService } from '../order/order.service';
 import { ProductService } from '../product/product/product.service';
+import { UserService } from '../iam/user/user.service';
 import { AdminReplyDto } from './dto/admin-reply.dto';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
@@ -18,6 +19,22 @@ export type ProductReviews = {
   items: Review[];
 };
 
+// An admin review row enriched with the product name + the author's identity, both
+// resolved in-process from sibling modules (never a cross-schema JOIN). Each ref is
+// null when the referenced row is gone.
+export type ReviewAdminWithRefs = Review & {
+  product: { nameVi: string; nameEn: string } | null;
+  reviewer: { email: string; name: string | null } | null;
+};
+
+// One page of admin reviews. `total` is the count over the same filter.
+export type PaginatedAdminReviews = {
+  items: ReviewAdminWithRefs[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 @Injectable()
 export class ReviewService {
   constructor(
@@ -25,6 +42,8 @@ export class ReviewService {
     // Cross-module collaborators, called in-process (never their tables).
     private readonly orders: OrderService,
     private readonly products: ProductService,
+    // Resolves the reviewer's identity for admin enrichment (in-process).
+    private readonly users: UserService,
   ) {}
 
   /**
@@ -124,6 +143,59 @@ export class ReviewService {
       summary: { average: agg._avg.rating, count: agg._count },
       items,
     };
+  }
+
+  // Admin list-all (ADMIN-guarded at the controller): every review, paginated and
+  // optionally filtered by reply state, each enriched with the product name and the
+  // reviewer's identity. Both enrichments are in-process service calls (no JOIN):
+  // the product/iam tables are never queried from the review schema.
+  async listAllForAdmin(filters: {
+    page?: number;
+    pageSize?: number;
+    replied?: boolean;
+  }): Promise<PaginatedAdminReviews> {
+    const where: Prisma.ReviewWhereInput = {};
+    if (filters.replied === true) where.adminReply = { not: null };
+    else if (filters.replied === false) where.adminReply = null;
+
+    const page = filters.page ?? 1;
+    const pageSize = filters.pageSize ?? 10;
+    // count + page share the same `where`, so `total` reflects the filtered set.
+    const [total, rows] = await Promise.all([
+      this.prisma.review.count({ where }),
+      this.prisma.review.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+
+    // Batch-resolve product names + reviewers (no N+1, no JOIN) and map onto the page.
+    const productById = new Map(
+      (
+        await this.products.findManyByIds([
+          ...new Set(rows.map((r) => r.productId)),
+        ])
+      ).map((p) => [p.id, p]),
+    );
+    const userById = new Map(
+      (
+        await this.users.findManyByIds([...new Set(rows.map((r) => r.userId))])
+      ).map((u) => [u.id, u]),
+    );
+    const items = rows.map((review) => {
+      const product = productById.get(review.productId);
+      const user = userById.get(review.userId);
+      return {
+        ...review,
+        product: product
+          ? { nameVi: product.nameVi, nameEn: product.nameEn }
+          : null,
+        reviewer: user ? { email: user.email, name: user.name } : null,
+      };
+    });
+    return { items, total, page, pageSize };
   }
 
   // Admin (ADMIN-guarded at the controller): attach/replace the admin reply on a

@@ -284,6 +284,17 @@ export class ProductService {
     return products.filter((p) => visibleCategoryIds.has(p.categoryId));
   }
 
+  // Admin batch resolution of products by id — INCLUDES archived/hidden products
+  // and applies no category-visibility filter, because admin enrichment (e.g. the
+  // reviews list) must show the product name even after it was archived. Callers
+  // map the result by id; the boundary stays a service call (no cross-schema JOIN).
+  async findManyByIds(productIds: string[]): Promise<Product[]> {
+    if (productIds.length === 0) return [];
+    return this.prisma.product.findMany({
+      where: { id: { in: productIds } },
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Internal helpers
   // ---------------------------------------------------------------------------

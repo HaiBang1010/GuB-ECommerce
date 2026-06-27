@@ -346,4 +346,22 @@ describe('ProductService', () => {
       );
     });
   });
+
+  describe('findManyByIds', () => {
+    it('returns [] without querying for an empty id list', async () => {
+      await expect(service.findManyByIds([])).resolves.toEqual([]);
+      expect(prisma.product.findMany).not.toHaveBeenCalled();
+    });
+
+    it('looks up products by id (in) with NO archive/visibility filter', async () => {
+      const products = [makeProduct({ id: 'p1' }), makeProduct({ id: 'p2' })];
+      prisma.product.findMany.mockResolvedValue(products);
+      await expect(service.findManyByIds(['p1', 'p2'])).resolves.toBe(products);
+      expect(prisma.product.findMany).toHaveBeenCalledWith({
+        where: { id: { in: ['p1', 'p2'] } },
+      });
+      // Admin enrichment must not depend on category visibility.
+      expect(categoryService.getVisibleCategoryIds).not.toHaveBeenCalled();
+    });
+  });
 });
