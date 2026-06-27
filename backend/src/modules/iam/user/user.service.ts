@@ -1,7 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { User } from '@prisma/client';
+import { Prisma, User } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { SupabaseClaims } from '../auth/supabase-jwt.service';
+
+// A User row with its (in-schema) Profile relation, for the admin user-detail page.
+export type UserWithProfile = Prisma.UserGetPayload<{
+  include: { profile: true };
+}>;
 
 /**
  * Owns the iam.User aggregate. Identity originates in Supabase Auth; this service
@@ -43,6 +48,16 @@ export class UserService {
   // decide how to react.
   async findById(id: string): Promise<User | null> {
     return this.prisma.user.findUnique({ where: { id } });
+  }
+
+  // The user plus its Profile (height/weight/measurements), for the admin
+  // user-detail page. Profile has no service of its own; this single-relation
+  // include stays within the `iam` schema (no cross-schema work).
+  async findByIdWithProfile(id: string): Promise<UserWithProfile | null> {
+    return this.prisma.user.findUnique({
+      where: { id },
+      include: { profile: true },
+    });
   }
 
   // Convenience for callers that require an active account; throws when the user

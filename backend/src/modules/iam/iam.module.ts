@@ -1,9 +1,12 @@
 import { Global, Module } from '@nestjs/common';
+import { OrderModule } from '../order/order.module';
 import { AddressController } from './address/address.controller';
 import { AddressService } from './address/address.service';
 import { OptionalSupabaseAuthGuard } from './auth/optional-supabase-auth.guard';
 import { SupabaseAuthGuard } from './auth/supabase-auth.guard';
 import { SupabaseJwtService } from './auth/supabase-jwt.service';
+import { AdminUserController } from './user/admin-user.controller';
+import { AdminUserService } from './user/admin-user.service';
 import { UserController } from './user/user.controller';
 import { UserService } from './user/user.service';
 
@@ -18,10 +21,14 @@ import { UserService } from './user/user.service';
  */
 @Global()
 @Module({
-  controllers: [AddressController, UserController],
+  // OrderModule (exports OrderService) powers the admin user-detail order stats.
+  // Acyclic: OrderModule never imports the @Global IamModule.
+  imports: [OrderModule],
+  controllers: [AddressController, UserController, AdminUserController],
   providers: [
     UserService,
     AddressService,
+    AdminUserService,
     SupabaseJwtService,
     SupabaseAuthGuard,
     OptionalSupabaseAuthGuard,

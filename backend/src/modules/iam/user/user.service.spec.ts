@@ -112,6 +112,18 @@ describe('UserService', () => {
     });
   });
 
+  describe('findByIdWithProfile', () => {
+    it('looks up the user including its profile relation', async () => {
+      const user = makeUser({ id: 'u1' });
+      prisma.user.findUnique.mockResolvedValue({ ...user, profile: null });
+      await service.findByIdWithProfile('u1');
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({
+        where: { id: 'u1' },
+        include: { profile: true },
+      });
+    });
+  });
+
   describe('searchIdsByNameOrEmail', () => {
     it('returns [] for a blank query without querying', async () => {
       await expect(service.searchIdsByNameOrEmail('   ')).resolves.toEqual([]);
