@@ -1,48 +1,12 @@
 import { apiFetch } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
+import type { Review } from '@/features/review/api/reviews';
 
-export type ProductReviews = components['schemas']['ProductReviewsResponseDto'];
-export type Review = components['schemas']['ReviewResponseDto'];
-export type CreateReviewBody = components['schemas']['CreateReviewDto'];
-export type UpdateReviewBody = components['schemas']['UpdateReviewDto'];
 export type AdminReplyBody = components['schemas']['AdminReplyDto'];
 // Admin list row = review + enriched product name + reviewer identity.
 export type AdminReview = components['schemas']['AdminReviewResponseDto'];
 export type PaginatedAdminReviews =
   components['schemas']['PaginatedAdminReviewsResponseDto'];
-
-// GET /products/:productId/reviews — public: a product's reviews + rating aggregate.
-export function getProductReviews(
-  productId: string,
-  signal?: AbortSignal,
-): Promise<ProductReviews> {
-  return apiFetch<ProductReviews>(
-    `/products/${encodeURIComponent(productId)}/reviews`,
-    { signal },
-  );
-}
-
-// POST /reviews — purchased-only; the backend derives productId from the order
-// item, so the body never carries it.
-export function createReview(body: CreateReviewBody): Promise<Review> {
-  return apiFetch<Review>('/reviews', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-}
-
-// PATCH /reviews/:id — edit your own review (rating / body).
-export function updateReview(
-  id: string,
-  body: UpdateReviewBody,
-): Promise<Review> {
-  return apiFetch<Review>(`/reviews/${encodeURIComponent(id)}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-}
 
 // GET /admin/reviews — every review, paginated, optionally filtered by reply state,
 // each enriched with product name + reviewer info. ADMIN-only on the backend.

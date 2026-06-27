@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
-import { useAdminReviews } from '@/hooks/use-reviews';
-import { AdminReplyForm } from '@/components/admin/admin-reply-form';
+import { useAdminReviews } from '@/features/admin/reviews/hooks/use-admin-reviews';
+import { AdminReplyForm } from '@/features/admin/reviews/components/admin-reply-form';
 import { PaginationBar } from '@/features/admin/components/pagination-bar';
 import { StarRating } from '@/components/star-rating';
 import { Button } from '@/components/ui/button';

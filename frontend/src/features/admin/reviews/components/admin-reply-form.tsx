@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
-import { useAdminReplyToReview } from '@/hooks/use-reviews';
+import { useAdminReplyToReview } from '@/features/admin/reviews/hooks/use-admin-reviews';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 

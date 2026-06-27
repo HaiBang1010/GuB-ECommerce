@@ -10,7 +10,7 @@ import {
   useCreateReview,
   useProductReviews,
   useUpdateReview,
-} from '@/hooks/use-reviews';
+} from '@/features/review/hooks/use-reviews';
 import { OrderStatusBadge } from '@/components/order-status-badge';
 import { StarRating } from '@/components/star-rating';
 import { Button } from '@/components/ui/button';
