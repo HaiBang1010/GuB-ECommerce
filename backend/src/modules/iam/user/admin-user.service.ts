@@ -6,7 +6,7 @@ import {
   OrderStats,
   OrderWithDetail,
 } from '../../order/order.service';
-import { UserService } from './user.service';
+import { PaginatedAdminUsers, UserService } from './user.service';
 
 // The composed admin user-detail payload. Built in-process from iam (user/profile/
 // addresses) and the order module (stats/recent) — never a cross-schema JOIN. Uses
@@ -40,6 +40,16 @@ export class AdminUserService {
     // the @Global IamModule). Order stats are owned by the order module.
     private readonly orders: OrderService,
   ) {}
+
+  // The admin users list (paginated + optional search). Pure user data, so it
+  // delegates to UserService — no cross-module composition here.
+  list(filters: {
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<PaginatedAdminUsers> {
+    return this.users.listForAdmin(filters);
+  }
 
   // Compose one customer's full admin view. Admins can inspect archived users too,
   // so this does NOT use assertActive — a missing row is the only 404.

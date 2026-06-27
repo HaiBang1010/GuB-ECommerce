@@ -8,6 +8,15 @@ export type UserWithProfile = Prisma.UserGetPayload<{
   include: { profile: true };
 }>;
 
+// One page of users for the admin users list. `total` is the count over the same
+// search filter.
+export type PaginatedAdminUsers = {
+  items: User[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 /**
  * Owns the iam.User aggregate. Identity originates in Supabase Auth; this service
  * keeps the local mirror in sync and is the in-process entry point other modules
@@ -68,6 +77,36 @@ export class UserService {
       throw new NotFoundException('User not found.');
     }
     return user;
+  }
+
+  // Admin users list: every user, paginated, optionally filtered by a name/email
+  // search. Single-module read (the iam schema), so a plain query — no enrichment.
+  async listForAdmin(filters: {
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<PaginatedAdminUsers> {
+    const where: Prisma.UserWhereInput = {};
+    const term = filters.search?.trim();
+    if (term) {
+      where.OR = [
+        { email: { contains: term, mode: 'insensitive' } },
+        { name: { contains: term, mode: 'insensitive' } },
+      ];
+    }
+    const page = filters.page ?? 1;
+    const pageSize = filters.pageSize ?? 10;
+    // count + page share the same `where`, so `total` reflects the filtered set.
+    const [total, items] = await Promise.all([
+      this.prisma.user.count({ where }),
+      this.prisma.user.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+    return { items, total, page, pageSize };
   }
 
   // Cross-module batch read (in-process): resolve many users at once so callers

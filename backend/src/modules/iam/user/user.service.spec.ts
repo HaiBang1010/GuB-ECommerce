@@ -8,6 +8,7 @@ type UserDelegateMock = {
   upsert: jest.Mock;
   findUnique: jest.Mock;
   findMany: jest.Mock;
+  count: jest.Mock;
 };
 
 function makeUser(overrides: Partial<User> = {}): User {
@@ -34,7 +35,12 @@ describe('UserService', () => {
 
   beforeEach(() => {
     prisma = {
-      user: { upsert: jest.fn(), findUnique: jest.fn(), findMany: jest.fn() },
+      user: {
+        upsert: jest.fn(),
+        findUnique: jest.fn(),
+        findMany: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
+      },
     };
     service = new UserService(prisma as unknown as PrismaService);
   });
@@ -109,6 +115,41 @@ describe('UserService', () => {
       expect(prisma.user.findMany).toHaveBeenCalledWith({
         where: { id: { in: ['u1', 'u2'] } },
       });
+    });
+  });
+
+  describe('listForAdmin', () => {
+    it('lists all users (empty where) with default pagination', async () => {
+      prisma.user.count.mockResolvedValue(25);
+      prisma.user.findMany.mockResolvedValue([]);
+      const result = await service.listForAdmin({});
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: {}, skip: 0, take: 10 }),
+      );
+      expect(result).toEqual(
+        expect.objectContaining({ total: 25, page: 1, pageSize: 10 }),
+      );
+    });
+
+    it('filters by a name/email search and applies page/pageSize', async () => {
+      prisma.user.count.mockResolvedValue(3);
+      prisma.user.findMany.mockResolvedValue([]);
+      const result = await service.listForAdmin({
+        search: ' jane ',
+        page: 2,
+        pageSize: 20,
+      });
+      const expectedWhere = {
+        OR: [
+          { email: { contains: 'jane', mode: 'insensitive' } },
+          { name: { contains: 'jane', mode: 'insensitive' } },
+        ],
+      };
+      expect(prisma.user.count).toHaveBeenCalledWith({ where: expectedWhere });
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expectedWhere, skip: 20, take: 20 }),
+      );
+      expect(result.total).toBe(3);
     });
   });
 

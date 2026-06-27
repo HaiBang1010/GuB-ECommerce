@@ -5,13 +5,13 @@ import { AddressService } from '../address/address.service';
 import { OrderService } from '../../order/order.service';
 
 describe('AdminUserService', () => {
-  let users: { findByIdWithProfile: jest.Mock };
+  let users: { findByIdWithProfile: jest.Mock; listForAdmin: jest.Mock };
   let addresses: { list: jest.Mock };
   let orders: { getStatsForUser: jest.Mock; listRecentForUser: jest.Mock };
   let service: AdminUserService;
 
   beforeEach(() => {
-    users = { findByIdWithProfile: jest.fn() };
+    users = { findByIdWithProfile: jest.fn(), listForAdmin: jest.fn() };
     addresses = { list: jest.fn().mockResolvedValue([]) };
     orders = {
       getStatsForUser: jest.fn().mockResolvedValue({
@@ -84,5 +84,12 @@ describe('AdminUserService', () => {
       NotFoundException,
     );
     expect(orders.getStatsForUser).not.toHaveBeenCalled();
+  });
+
+  it('delegates list to UserService.listForAdmin', async () => {
+    const page = { items: [], total: 0, page: 1, pageSize: 10 };
+    users.listForAdmin.mockResolvedValue(page);
+    await expect(service.list({ search: 'x', page: 2 })).resolves.toBe(page);
+    expect(users.listForAdmin).toHaveBeenCalledWith({ search: 'x', page: 2 });
   });
 });
