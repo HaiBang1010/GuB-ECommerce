@@ -1,8 +1,11 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { CartItem, ProductVariant } from '@prisma/client';
+import { CartItem } from '@prisma/client';
 import { CartService } from './cart.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { ProductVariantService } from '../product/variant/variant.service';
+import {
+  ProductVariantService,
+  type PurchasableVariant,
+} from '../product/variant/variant.service';
 
 type CartDelegate = {
   findUnique: jest.Mock;
@@ -21,16 +24,23 @@ type VariantsMock = {
   getPurchasableByIds: jest.Mock;
 };
 
-function makeVariant(overrides: Partial<ProductVariant> = {}): ProductVariant {
+// The cart consumes ProductVariantService.getPurchasable*, which returns a
+// PurchasableVariant (variant + sale-aware effectivePriceCents). effectivePriceCents
+// defaults to priceCents (not on sale); pass it explicitly to model a sale.
+function makeVariant(
+  overrides: Partial<PurchasableVariant> = {},
+): PurchasableVariant {
+  const priceCents = overrides.priceCents ?? 1000;
   return {
     id: 'v1',
     productId: 'p1',
     sku: 'SNEAKER-42-RED',
     size: '42',
     color: 'Red',
-    priceCents: 1000,
+    priceCents,
     stockQty: 5,
     archivedAt: null,
+    effectivePriceCents: priceCents,
     ...overrides,
   };
 }
@@ -103,9 +113,29 @@ describe('CartService', () => {
         variantId: 'v1',
         quantity: 2,
         unitPriceCents: 1500,
+        compareAtCents: null,
         lineCents: 3000,
       });
       expect(view.subtotalCents).toBe(3000);
+    });
+
+    it('charges the sale (effective) price and exposes the pre-sale price to strike through', async () => {
+      prisma.cart.findUnique.mockResolvedValue({
+        id: 'c1',
+        items: [makeItem({ variantId: 'v1', quantity: 2 })],
+      });
+      // On sale: charged $9.00, normally $15.00.
+      variants.getPurchasableByIds.mockResolvedValue([
+        makeVariant({ id: 'v1', priceCents: 1500, effectivePriceCents: 900 }),
+      ]);
+
+      const view = await service.getView({ userId: 'u1' });
+      expect(view.items[0]).toMatchObject({
+        unitPriceCents: 900,
+        compareAtCents: 1500,
+        lineCents: 1800,
+      });
+      expect(view.subtotalCents).toBe(1800);
     });
   });
 

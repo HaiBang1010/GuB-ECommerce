@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, ProductVariant } from '@prisma/client';
+import { Prisma, Product, ProductVariant } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ProductService } from '../product/product.service';
 import { CreateVariantDto } from './dto/create-variant.dto';
@@ -22,6 +22,14 @@ export interface StockChange {
   variantId: string;
   quantity: number;
 }
+
+// A purchasable variant enriched with the sale-aware price actually charged.
+// `effectivePriceCents` already folds in the owning product's sale (see
+// ProductVariantService.effectivePrice); the cart/order consume it so the sale
+// is applied at checkout, not just displayed.
+export type PurchasableVariant = ProductVariant & {
+  effectivePriceCents: number;
+};
 
 // Discriminator on the 409 body so the storefront can tell an out-of-stock
 // rejection apart from a payment failure. Mirrored by OutOfStockErrorDto.
@@ -199,21 +207,30 @@ export class ProductVariantService {
   // product (visibility decided by ProductService). See ARCHITECTURE.md §4.3.
   // ---------------------------------------------------------------------------
 
-  async getPurchasableByIds(variantIds: string[]): Promise<ProductVariant[]> {
+  async getPurchasableByIds(
+    variantIds: string[],
+  ): Promise<PurchasableVariant[]> {
     if (variantIds.length === 0) return [];
     const variants = await this.prisma.productVariant.findMany({
       where: { id: { in: variantIds }, archivedAt: null },
     });
     if (variants.length === 0) return [];
     // Resolve product visibility through ProductService (the archive cascade),
-    // never by querying the product table here.
+    // never by querying the product table here. The resolved products also carry
+    // the sale price, so the effective (charged) price is computed here for free.
     const productIds = [...new Set(variants.map((v) => v.productId))];
     const visibleProducts = await this.productService.getActiveByIds(productIds);
-    const visibleProductIds = new Set(visibleProducts.map((p) => p.id));
-    return variants.filter((v) => visibleProductIds.has(v.productId));
+    const productById = new Map(visibleProducts.map((p) => [p.id, p]));
+    return variants
+      .filter((v) => productById.has(v.productId))
+      .map((v) => ({
+        ...v,
+        // productById.get is non-null here — filtered to visible products above.
+        effectivePriceCents: this.effectivePrice(v, productById.get(v.productId)!),
+      }));
   }
 
-  async getPurchasable(variantId: string): Promise<ProductVariant> {
+  async getPurchasable(variantId: string): Promise<PurchasableVariant> {
     const [variant] = await this.getPurchasableByIds([variantId]);
     if (!variant) {
       throw new NotFoundException('Variant not found.');
@@ -278,6 +295,14 @@ export class ProductVariantService {
   // ---------------------------------------------------------------------------
   // Internal helpers
   // ---------------------------------------------------------------------------
+
+  // The unit price actually charged for a variant. Sale never RAISES the price:
+  // the product-level sale applies only when it undercuts the variant's own price
+  // (a variant cheaper than the sale keeps its price). null sale = not on sale.
+  private effectivePrice(variant: ProductVariant, product: Product): number {
+    const sale = product.salePriceCents;
+    return sale !== null && sale < variant.priceCents ? sale : variant.priceCents;
+  }
 
   // Normalize a free-text size/color/prefix into an SKU token: uppercase, and
   // collapse any run of non-alphanumerics to a single hyphen ("Navy Blue" → "NAVY-BLUE").

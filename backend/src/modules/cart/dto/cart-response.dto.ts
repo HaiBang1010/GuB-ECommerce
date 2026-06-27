@@ -24,6 +24,14 @@ export class CartItemViewDto {
   @ApiProperty({ example: 1200, description: 'Live unit price in USD cents — 1200 = $12.00.' })
   unitPriceCents!: number;
 
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    example: 1500,
+    description: 'Pre-sale unit price (USD cents) when the line is on sale, else null.',
+  })
+  compareAtCents!: number | null;
+
   @ApiProperty({ example: 2400, description: 'unitPriceCents × quantity, USD cents.' })
   lineCents!: number;
 

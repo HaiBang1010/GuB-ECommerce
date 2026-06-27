@@ -37,11 +37,14 @@ function makeVariant(overrides: Partial<ProductVariant> = {}): ProductVariant {
   };
 }
 
-// ProductService.assertExists returns the product; only id/slug are read here.
+// ProductService returns the product; id/slug + the price fields are read here
+// (the sale price drives the effective/charged price).
 function makeProduct(overrides: Partial<Product> = {}): Product {
   return {
     id: 'p1',
     slug: 'sneaker',
+    basePriceCents: 1200,
+    salePriceCents: null,
     ...overrides,
   } as Product;
 }
@@ -338,15 +341,15 @@ describe('ProductVariantService', () => {
   });
 
   describe('getPurchasableByIds', () => {
-    it('returns active variants whose product is storefront-visible', async () => {
-      const v1 = makeVariant({ id: 'v1', productId: 'p1' });
+    it('returns active variants whose product is storefront-visible, with effective price', async () => {
+      const v1 = makeVariant({ id: 'v1', productId: 'p1', priceCents: 1200 });
       const v2 = makeVariant({ id: 'v2', productId: 'p2' });
       prisma.productVariant.findMany.mockResolvedValue([v1, v2]);
-      // Only p1 is visible → v2 (under p2) is filtered out.
+      // Only p1 is visible → v2 (under p2) is filtered out. p1 has no sale.
       productService.getActiveByIds.mockResolvedValue([makeProduct({ id: 'p1' })]);
 
       await expect(service.getPurchasableByIds(['v1', 'v2'])).resolves.toEqual([
-        v1,
+        { ...v1, effectivePriceCents: 1200 },
       ]);
       expect(productService.getActiveByIds).toHaveBeenCalledWith(['p1', 'p2']);
     });
@@ -361,14 +364,50 @@ describe('ProductVariantService', () => {
       await expect(service.getPurchasableByIds(['v1'])).resolves.toEqual([]);
       expect(productService.getActiveByIds).not.toHaveBeenCalled();
     });
+
+    // The sale-aware price the cart/order consume. The product sale applies only
+    // when it undercuts the variant's own price (a sale never raises the price).
+    it('applies the product sale when it undercuts the variant price', async () => {
+      const v1 = makeVariant({ id: 'v1', productId: 'p1', priceCents: 1200 });
+      prisma.productVariant.findMany.mockResolvedValue([v1]);
+      productService.getActiveByIds.mockResolvedValue([
+        makeProduct({ id: 'p1', basePriceCents: 1200, salePriceCents: 900 }),
+      ]);
+      const [out] = await service.getPurchasableByIds(['v1']);
+      expect(out.effectivePriceCents).toBe(900);
+    });
+
+    it('charges the variant price when the product is not on sale', async () => {
+      const v1 = makeVariant({ id: 'v1', productId: 'p1', priceCents: 1200 });
+      prisma.productVariant.findMany.mockResolvedValue([v1]);
+      productService.getActiveByIds.mockResolvedValue([
+        makeProduct({ id: 'p1', salePriceCents: null }),
+      ]);
+      const [out] = await service.getPurchasableByIds(['v1']);
+      expect(out.effectivePriceCents).toBe(1200);
+    });
+
+    it('never raises a variant cheaper than the sale (guard)', async () => {
+      // The sale ($11) is above this variant's own price ($10) → keep $10.
+      const v1 = makeVariant({ id: 'v1', productId: 'p1', priceCents: 1000 });
+      prisma.productVariant.findMany.mockResolvedValue([v1]);
+      productService.getActiveByIds.mockResolvedValue([
+        makeProduct({ id: 'p1', basePriceCents: 1200, salePriceCents: 1100 }),
+      ]);
+      const [out] = await service.getPurchasableByIds(['v1']);
+      expect(out.effectivePriceCents).toBe(1000);
+    });
   });
 
   describe('getPurchasable', () => {
-    it('returns the variant when purchasable', async () => {
-      const v1 = makeVariant({ id: 'v1', productId: 'p1' });
+    it('returns the variant (with effective price) when purchasable', async () => {
+      const v1 = makeVariant({ id: 'v1', productId: 'p1', priceCents: 1200 });
       prisma.productVariant.findMany.mockResolvedValue([v1]);
       productService.getActiveByIds.mockResolvedValue([makeProduct({ id: 'p1' })]);
-      await expect(service.getPurchasable('v1')).resolves.toEqual(v1);
+      await expect(service.getPurchasable('v1')).resolves.toEqual({
+        ...v1,
+        effectivePriceCents: 1200,
+      });
     });
 
     it('throws NotFound when the variant is not purchasable', async () => {

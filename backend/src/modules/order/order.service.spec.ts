@@ -38,6 +38,7 @@ function viewItem(overrides: Record<string, unknown> = {}) {
     color: 'Red',
     quantity: 2,
     unitPriceCents: 1000,
+    compareAtCents: null,
     lineCents: 2000,
     stockQty: 5,
     ...overrides,
@@ -321,6 +322,86 @@ describe('OrderService', () => {
             totalCents: 2000,
             voucherId: null,
             voucherCode: null,
+          }),
+        }),
+      );
+    });
+
+    it('snapshots the sale (effective) price from the cart view, not the base price', async () => {
+      // The cart view already carries the sale-aware price: charged $9.00 (was $15.00).
+      cart.getView.mockResolvedValue({
+        items: [
+          viewItem({ unitPriceCents: 900, compareAtCents: 1500, lineCents: 1800 }),
+        ],
+        subtotalCents: 1800,
+      });
+      addresses.getOwnedActive.mockResolvedValue(makeAddress());
+      products.getActiveByIds.mockResolvedValue([
+        { id: 'p1', nameVi: 'Áo', nameEn: 'Shirt' },
+      ]);
+      variants.decrementForOrder.mockResolvedValue(undefined);
+      const created = { id: 'o1', items: [], statusHistory: [] };
+      const txMock = { order: { create: jest.fn().mockResolvedValue(created) } };
+      prisma.$transaction.mockImplementation(
+        (cb: (tx: unknown) => unknown) => cb(txMock),
+      );
+      cart.clear.mockResolvedValue({ items: [], subtotalCents: 0 });
+
+      await service.createFromCart('u1', 'addr1');
+
+      expect(txMock.order.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            subtotalCents: 1800,
+            totalCents: 1800,
+            items: {
+              createMany: {
+                data: [expect.objectContaining({ unitPriceCents: 900 })],
+              },
+            },
+          }),
+        }),
+      );
+    });
+
+    it('stacks a voucher on top of the sale subtotal (sale first, voucher second)', async () => {
+      // Sale-priced cart: subtotal already reflects the sale ($18.00).
+      cart.getView.mockResolvedValue({
+        items: [
+          viewItem({ unitPriceCents: 900, compareAtCents: 1500, lineCents: 1800 }),
+        ],
+        subtotalCents: 1800,
+      });
+      addresses.getOwnedActive.mockResolvedValue(makeAddress());
+      products.getActiveByIds.mockResolvedValue([
+        { id: 'p1', nameVi: 'Áo', nameEn: 'Shirt' },
+      ]);
+      variants.decrementForOrder.mockResolvedValue(undefined);
+      const voucher = { id: 'vch1', code: 'SAVE3' };
+      vouchers.validate.mockResolvedValue({
+        voucher,
+        voucherId: 'vch1',
+        voucherCode: 'SAVE3',
+        discountCents: 300,
+      });
+      vouchers.redeem.mockResolvedValue(undefined);
+      const created = { id: 'o1', items: [], statusHistory: [] };
+      const txMock = { order: { create: jest.fn().mockResolvedValue(created) } };
+      prisma.$transaction.mockImplementation(
+        (cb: (tx: unknown) => unknown) => cb(txMock),
+      );
+      cart.clear.mockResolvedValue({ items: [], subtotalCents: 0 });
+
+      await service.createFromCart('u1', 'addr1', 'save3');
+
+      // Voucher is validated against the SALE subtotal, not the base price.
+      expect(vouchers.validate).toHaveBeenCalledWith('save3', 'u1', 1800);
+      expect(txMock.order.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            subtotalCents: 1800,
+            discountCents: 300,
+            totalCents: 1500,
           }),
         }),
       );

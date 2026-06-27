@@ -22,6 +22,9 @@ export interface CartItemView {
   color: string;
   quantity: number;
   unitPriceCents: number;
+  // Pre-sale unit price when the line is discounted (so the UI can strike it
+  // through), else null. Display-only — never used for the order total.
+  compareAtCents: number | null;
   lineCents: number;
   stockQty: number;
 }
@@ -209,6 +212,9 @@ export class CartService {
     for (const item of items) {
       const variant = byId.get(item.variantId);
       if (!variant) continue;
+      // The sale-aware price the customer is charged (ProductVariantService folds
+      // the product sale into effectivePriceCents). The order snapshot reads this.
+      const unitPriceCents = variant.effectivePriceCents;
       views.push({
         variantId: variant.id,
         productId: variant.productId,
@@ -216,8 +222,10 @@ export class CartService {
         size: variant.size,
         color: variant.color,
         quantity: item.quantity,
-        unitPriceCents: variant.priceCents,
-        lineCents: variant.priceCents * item.quantity,
+        unitPriceCents,
+        compareAtCents:
+          unitPriceCents < variant.priceCents ? variant.priceCents : null,
+        lineCents: unitPriceCents * item.quantity,
         stockQty: variant.stockQty,
       });
     }
