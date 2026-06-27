@@ -5,7 +5,7 @@ import {
   getNotifications,
   markAllNotificationsRead,
   markNotificationRead,
-} from '@/lib/api/notifications';
+} from '@/features/notification/api/notifications';
 
 // The current user's notifications + unread count. Polls modestly so the bell
 // badge stays fresh without realtime (Supabase Realtime lands in Phase 6).

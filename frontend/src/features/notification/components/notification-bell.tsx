@@ -8,7 +8,7 @@ import {
   useMarkAllNotificationsRead,
   useMarkNotificationRead,
   useNotifications,
-} from '@/hooks/use-notifications';
+} from '@/features/notification/hooks/use-notifications';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -19,7 +19,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatDate } from '@/lib/datetime';
-import type { NotificationItem } from '@/lib/api/notifications';
+import type { NotificationItem } from '@/features/notification/api/notifications';
 
 // Map a notification `type` to an i18n key — the text is rendered from structured
 // data (type + payload), never read as a stored vi/en string from the DB.
