@@ -24,10 +24,14 @@ import { Roles } from '../../common/auth/roles.decorator';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { SupabaseAuthGuard } from '../iam/auth/supabase-auth.guard';
 import { ListOrdersQueryDto } from './dto/list-orders-query.dto';
-import { PaginatedOrdersResponseDto } from './dto/order-admin-response.dto';
+import {
+  OrderAdminResponseDto,
+  PaginatedOrdersResponseDto,
+} from './dto/order-admin-response.dto';
 import { OrderResponseDto } from './dto/order-response.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import {
+  OrderAdminWithCustomer,
   OrderService,
   OrderWithDetail,
   PaginatedAdminOrders,
@@ -59,11 +63,11 @@ export class OrderAdminController {
     });
   }
 
-  @ApiOperation({ summary: 'Get an order by id' })
-  @ApiOkResponse({ type: OrderResponseDto })
+  @ApiOperation({ summary: 'Get an order by id (with customer info)' })
+  @ApiOkResponse({ type: OrderAdminResponseDto })
   @ApiNotFoundResponse({ description: 'Order not found.' })
   @Get(':id')
-  getOne(@Param('id') id: string): Promise<OrderWithDetail> {
+  getOne(@Param('id') id: string): Promise<OrderAdminWithCustomer> {
     return this.orderService.getForAdmin(id);
   }
 

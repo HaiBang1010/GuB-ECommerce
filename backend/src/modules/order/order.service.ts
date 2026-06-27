@@ -51,6 +51,24 @@ export type PaginatedAdminOrders = {
   pageSize: number;
 };
 
+// Per-user order aggregate for the admin user-detail page. `totalSpentCents` counts
+// only orders the customer actually paid for (PAID/PROCESSING/SHIPPED/DELIVERED) —
+// PENDING_PAYMENT (never paid), CANCELLED and REFUNDED are excluded. `byStatus`
+// still reports the count of EVERY status so the breakdown is complete.
+export type OrderStats = {
+  totalOrders: number;
+  totalSpentCents: number;
+  byStatus: Record<OrderStatus, number>;
+};
+
+// Statuses that represent money actually collected from the customer.
+const SPENT_STATUSES: OrderStatus[] = [
+  OrderStatus.PAID,
+  OrderStatus.PROCESSING,
+  OrderStatus.SHIPPED,
+  OrderStatus.DELIVERED,
+];
+
 type OrderWithItems = Order & { items: OrderItem[] };
 
 @Injectable()
@@ -282,7 +300,10 @@ export class OrderService {
     return { items, total, page, pageSize };
   }
 
-  async getForAdmin(orderId: string): Promise<OrderWithDetail> {
+  // Single order for the admin detail dialog — same payload as the list row,
+  // enriched with the customer's identity (resolved in-process from iam, never a
+  // cross-schema JOIN; ARCHITECTURE §4.3). customer is null if the user is gone.
+  async getForAdmin(orderId: string): Promise<OrderAdminWithCustomer> {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: { items: true, statusHistory: true },
@@ -290,7 +311,51 @@ export class OrderService {
     if (!order) {
       throw new NotFoundException('Order not found.');
     }
-    return order;
+    const user = await this.users.findById(order.userId);
+    return {
+      ...order,
+      customer: user ? { email: user.email, name: user.name } : null,
+    };
+  }
+
+  // Per-user order aggregate for the admin user-detail page. One groupBy over the
+  // user's orders yields the total count, the per-status counts, and the spent
+  // total — all within the `ordering` schema (no cross-schema work).
+  async getStatsForUser(userId: string): Promise<OrderStats> {
+    const groups = await this.prisma.order.groupBy({
+      by: ['status'],
+      where: { userId },
+      _count: { _all: true },
+      _sum: { totalCents: true },
+    });
+    // Seed every status to 0 so the breakdown is complete even for unused states.
+    const byStatus = Object.fromEntries(
+      Object.values(OrderStatus).map((s) => [s, 0]),
+    ) as Record<OrderStatus, number>;
+    let totalOrders = 0;
+    let totalSpentCents = 0;
+    for (const g of groups) {
+      byStatus[g.status] = g._count._all;
+      totalOrders += g._count._all;
+      if (SPENT_STATUSES.includes(g.status)) {
+        totalSpentCents += g._sum.totalCents ?? 0;
+      }
+    }
+    return { totalOrders, totalSpentCents, byStatus };
+  }
+
+  // The user's most recent orders (full detail) for the admin user-detail page.
+  // A separate method from listForUser so the storefront contract stays untouched.
+  async listRecentForUser(
+    userId: string,
+    limit: number,
+  ): Promise<OrderWithDetail[]> {
+    return this.prisma.order.findMany({
+      where: { userId },
+      include: { items: true, statusHistory: true },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
   }
 
   // Advance an order along the fulfillment state machine and append a timeline

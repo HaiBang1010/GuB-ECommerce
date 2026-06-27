@@ -45,7 +45,12 @@ function viewItem(overrides: Record<string, unknown> = {}) {
 
 describe('OrderService', () => {
   let prisma: {
-    order: { findUnique: jest.Mock; findMany: jest.Mock; count: jest.Mock };
+    order: {
+      findUnique: jest.Mock;
+      findMany: jest.Mock;
+      count: jest.Mock;
+      groupBy: jest.Mock;
+    };
     orderItem: { findUnique: jest.Mock };
     $transaction: jest.Mock;
   };
@@ -55,6 +60,7 @@ describe('OrderService', () => {
   let variants: { decrementForOrder: jest.Mock; releaseForOrder: jest.Mock };
   let notifications: { publishOrderStatus: jest.Mock };
   let users: {
+    findById: jest.Mock;
     findManyByIds: jest.Mock;
     searchIdsByNameOrEmail: jest.Mock;
   };
@@ -66,6 +72,7 @@ describe('OrderService', () => {
         findUnique: jest.fn(),
         findMany: jest.fn(),
         count: jest.fn().mockResolvedValue(0),
+        groupBy: jest.fn().mockResolvedValue([]),
       },
       orderItem: { findUnique: jest.fn() },
       $transaction: jest.fn(),
@@ -77,6 +84,7 @@ describe('OrderService', () => {
     notifications = { publishOrderStatus: jest.fn() };
     users = {
       // Default: no enrichment / no search hits — overridden per test.
+      findById: jest.fn().mockResolvedValue(null),
       findManyByIds: jest.fn().mockResolvedValue([]),
       searchIdsByNameOrEmail: jest.fn().mockResolvedValue([]),
     };
@@ -521,6 +529,102 @@ describe('OrderService', () => {
 
       expect(result.items).toEqual([]);
       expect(result.total).toBe(5);
+    });
+  });
+
+  describe('getForAdmin', () => {
+    it('attaches the resolved customer {email,name} to the order', async () => {
+      prisma.order.findUnique.mockResolvedValue({
+        id: 'o1',
+        userId: 'u1',
+        items: [],
+        statusHistory: [],
+      });
+      users.findById.mockResolvedValue({
+        id: 'u1',
+        email: 'jane@example.com',
+        name: 'Jane',
+      });
+
+      const result = await service.getForAdmin('o1');
+
+      expect(users.findById).toHaveBeenCalledWith('u1');
+      expect(result.customer).toEqual({
+        email: 'jane@example.com',
+        name: 'Jane',
+      });
+    });
+
+    it('sets customer to null when the user is gone', async () => {
+      prisma.order.findUnique.mockResolvedValue({
+        id: 'o1',
+        userId: 'ghost',
+        items: [],
+        statusHistory: [],
+      });
+      users.findById.mockResolvedValue(null);
+
+      const result = await service.getForAdmin('o1');
+      expect(result.customer).toBeNull();
+    });
+
+    it('throws NotFound for a missing order', async () => {
+      prisma.order.findUnique.mockResolvedValue(null);
+      await expect(service.getForAdmin('missing')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('getStatsForUser', () => {
+    it('sums totals only over paid statuses and zero-fills every status', async () => {
+      prisma.order.groupBy.mockResolvedValue([
+        { status: 'PENDING_PAYMENT', _count: { _all: 1 }, _sum: { totalCents: 500 } },
+        { status: 'PAID', _count: { _all: 2 }, _sum: { totalCents: 3000 } },
+        { status: 'DELIVERED', _count: { _all: 1 }, _sum: { totalCents: 1500 } },
+        { status: 'CANCELLED', _count: { _all: 1 }, _sum: { totalCents: 999 } },
+      ]);
+
+      const stats = await service.getStatsForUser('u1');
+
+      expect(prisma.order.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          by: ['status'],
+          where: { userId: 'u1' },
+          _count: { _all: true },
+          _sum: { totalCents: true },
+        }),
+      );
+      expect(stats.totalOrders).toBe(5);
+      // Only PAID (3000) + DELIVERED (1500) count toward spend.
+      expect(stats.totalSpentCents).toBe(4500);
+      expect(stats.byStatus.PAID).toBe(2);
+      expect(stats.byStatus.PENDING_PAYMENT).toBe(1);
+      expect(stats.byStatus.CANCELLED).toBe(1);
+      // A status with no orders is present as 0.
+      expect(stats.byStatus.REFUNDED).toBe(0);
+      expect(stats.byStatus.SHIPPED).toBe(0);
+    });
+
+    it('returns all-zero stats when the user has no orders', async () => {
+      prisma.order.groupBy.mockResolvedValue([]);
+      const stats = await service.getStatsForUser('u1');
+      expect(stats.totalOrders).toBe(0);
+      expect(stats.totalSpentCents).toBe(0);
+      expect(stats.byStatus.PAID).toBe(0);
+    });
+  });
+
+  describe('listRecentForUser', () => {
+    it('fetches the latest N orders (take/orderBy/include)', async () => {
+      prisma.order.findMany.mockResolvedValue([]);
+      await service.listRecentForUser('u1', 5);
+      expect(prisma.order.findMany).toHaveBeenCalledWith({
+        where: { userId: 'u1' },
+        include: { items: true, statusHistory: true },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      });
     });
   });
 
