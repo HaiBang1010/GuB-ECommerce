@@ -113,10 +113,15 @@ settle, then redirects a non-admin. The real protection is twofold: `middleware.
 session to enter `/admin` (guests → login), and the backend **`RoleGuard`** rejects every `/admin/*`
 API call from a non-admin (403). A wrong client-side guess can never bypass it.
 
-**Orders** (`/admin/orders`): `useAdminOrders` lists every order (`GET /admin/orders`); each row shows
-id, userId (the payload carries no customer email — no cross-module JOIN), a status badge, the total,
-and a status-advance button (PAID→PROCESSING→SHIPPED→DELIVERED via `POST /admin/orders/:id/status`).
-The frontend only picks the next step; the backend enforces the legal transition.
+**Orders** (`/admin/orders`): `useAdminOrders` fetches a **paginated** page (`GET /admin/orders`); each
+row shows the order id, the **customer** (name + email, enriched server-side via `UserService` — a
+service call, **no cross-module JOIN**), a status badge, the total, and a status-advance button
+(PAID→PROCESSING→SHIPPED→DELIVERED via `POST /admin/orders/:id/status`; the frontend only picks the next
+step, the backend enforces the legal transition). The toolbar adds a **multi-status checkbox filter**, a
+**debounced unified search** (order id / customer name / email), and a **rows-per-page + windowed pager**
+(`page`/`pageSize` + `total`, `keepPreviousData` so paging doesn't flash); any filter/search/page-size
+change resets to page 1. The customer cell links to `/admin/users/[id]`, a **placeholder route (404 for
+now)** — an admin user-detail page is a later slice.
 
 **Review reply** is inline on product detail (§8), not a dedicated admin page, because the backend
 exposes no admin list-all-reviews endpoint — only `POST /admin/reviews/:id/reply` (by review id).

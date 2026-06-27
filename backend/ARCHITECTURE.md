@@ -61,6 +61,7 @@ order ──▶ product   (read price/stock, reserve & decrement stock via produ
 order ──▶ cart      (convert cart → order, then clear cart)
 order ──▶ voucher   (validate + apply, increment usedCount)
 order ──▶ payment   (create PaymentIntent)
+order ──▶ iam       (admin order list: enrich customers + resolve search ids via user.service)
 order ──(QStash)──▶ notification
 review ─▶ order     (verify the OrderItem belongs to user and order is DELIVERED)
 chat  ──▶ (Supabase Realtime, out-of-process)
@@ -182,6 +183,26 @@ consume → verify signature (jose) → handleOrderStatusEvent → ledger insert
 - **Env:** `QSTASH_TOKEN`, `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY`,
   `QSTASH_CONSUMER_URL`, `RESEND_API_KEY`, `RESEND_FROM`, `APP_PUBLIC_URL` — all optional
   locally. Full QStash→email e2e needs deployment (a public consumer URL) + real keys.
+
+### 4.9 Admin order listing (enrich without a JOIN) — Phase 3
+
+`GET /admin/orders` (RoleGuard ADMIN) returns a **paginated** page of orders enriched with customer
+info **without ever JOINing across schemas** (§4.3). `OrderService.listForAdmin({ statuses?, search?,
+page?, pageSize? })`:
+- builds one `where` — status `in [...]` **AND** a search `OR` over the order id and a set of user ids;
+- resolves the search term to user ids in-process via **`UserService.searchIdsByNameOrEmail(q)`** (name/
+  email `contains`, capped at 200), so a customer-name/email search filters `ordering` rows by the scalar
+  `userId` — never a cross-schema query;
+- runs `count` + `findMany` (`skip`/`take`, `orderBy createdAt desc`) over the **same** `where`, so
+  `total` is the filtered count, not the table size;
+- batch-loads the page's customers with **`UserService.findManyByIds(ids)`** and attaches a
+  `{ email, name } | null` `customer` to each row.
+
+Shape: `PaginatedOrdersResponseDto { items: OrderAdminResponseDto[]; total; page; pageSize }` — **only**
+the `list` route uses it; `getOne`/`updateStatus` keep `OrderResponseDto`. This is the order module's
+only dependency on `iam` (§3), and it stays a service call. (Pagination query params arrive as strings —
+the global `ValidationPipe` has no `enableImplicitConversion` — so the DTO `@Transform`s `page`/`pageSize`
+to ints, mirroring the status-array transform.)
 
 ## 5. Data model (Prisma)
 
