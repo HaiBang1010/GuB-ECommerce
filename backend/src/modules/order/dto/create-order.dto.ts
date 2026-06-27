@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreateOrderDto {
   // The shipping address must belong to the caller; verified in the service via
@@ -11,4 +11,15 @@ export class CreateOrderDto {
   @IsString()
   @IsNotEmpty()
   addressId!: string;
+
+  // Optional voucher code. Re-validated server-side against the live cart subtotal
+  // and redeemed inside the checkout transaction (the FE preview is non-binding).
+  @ApiPropertyOptional({
+    example: 'SUMMER10',
+    description: 'Voucher code to apply; re-validated + redeemed at place-order.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  voucherCode?: string;
 }

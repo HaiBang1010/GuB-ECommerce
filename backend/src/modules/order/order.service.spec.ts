@@ -8,6 +8,7 @@ import { ProductService } from '../product/product/product.service';
 import { ProductVariantService } from '../product/variant/variant.service';
 import { NotificationService } from '../notification/notification.service';
 import { UserService } from '../iam/user/user.service';
+import { VoucherService } from '../voucher/voucher.service';
 
 function makeAddress(): Address {
   return {
@@ -64,6 +65,7 @@ describe('OrderService', () => {
     findManyByIds: jest.Mock;
     searchIdsByNameOrEmail: jest.Mock;
   };
+  let vouchers: { validate: jest.Mock; redeem: jest.Mock };
   let service: OrderService;
 
   beforeEach(() => {
@@ -88,6 +90,7 @@ describe('OrderService', () => {
       findManyByIds: jest.fn().mockResolvedValue([]),
       searchIdsByNameOrEmail: jest.fn().mockResolvedValue([]),
     };
+    vouchers = { validate: jest.fn(), redeem: jest.fn() };
     service = new OrderService(
       prisma as unknown as PrismaService,
       cart as unknown as CartService,
@@ -96,6 +99,7 @@ describe('OrderService', () => {
       variants as unknown as ProductVariantService,
       notifications as unknown as NotificationService,
       users as unknown as UserService,
+      vouchers as unknown as VoucherService,
     );
   });
 
@@ -189,6 +193,136 @@ describe('OrderService', () => {
       );
       await expect(service.createFromCart('u1', 'addr1')).rejects.toBeInstanceOf(
         NotFoundException,
+      );
+    });
+
+    it('applies a voucher: snapshots discount + code and redeems inside the tx', async () => {
+      cart.getView.mockResolvedValue({
+        items: [viewItem()],
+        subtotalCents: 2000,
+      });
+      addresses.getOwnedActive.mockResolvedValue(makeAddress());
+      products.getActiveByIds.mockResolvedValue([
+        { id: 'p1', nameVi: 'Áo', nameEn: 'Shirt' },
+      ]);
+      variants.decrementForOrder.mockResolvedValue(undefined);
+      const voucher = { id: 'vch1', code: 'SAVE10' };
+      vouchers.validate.mockResolvedValue({
+        voucher,
+        voucherId: 'vch1',
+        voucherCode: 'SAVE10',
+        discountCents: 500,
+      });
+      vouchers.redeem.mockResolvedValue(undefined);
+      const created = { id: 'o1', items: [], statusHistory: [] };
+      const txMock = { order: { create: jest.fn().mockResolvedValue(created) } };
+      prisma.$transaction.mockImplementation(
+        (cb: (tx: unknown) => unknown) => cb(txMock),
+      );
+      cart.clear.mockResolvedValue({ items: [], subtotalCents: 0 });
+
+      await service.createFromCart('u1', 'addr1', 'save10');
+
+      // Validated against the LIVE subtotal (FE preview is non-binding).
+      expect(vouchers.validate).toHaveBeenCalledWith('save10', 'u1', 2000);
+      // Redeemed with the SAME tx client as the stock decrement (one transaction).
+      expect(vouchers.redeem).toHaveBeenCalledWith(txMock, voucher, 'u1');
+      expect(txMock.order.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            subtotalCents: 2000,
+            discountCents: 500,
+            totalCents: 1500,
+            voucherId: 'vch1',
+            voucherCode: 'SAVE10',
+          }),
+        }),
+      );
+    });
+
+    it('rolls the order back when the voucher redeem fails (cart not cleared)', async () => {
+      cart.getView.mockResolvedValue({
+        items: [viewItem()],
+        subtotalCents: 2000,
+      });
+      addresses.getOwnedActive.mockResolvedValue(makeAddress());
+      products.getActiveByIds.mockResolvedValue([
+        { id: 'p1', nameVi: 'Áo', nameEn: 'Shirt' },
+      ]);
+      variants.decrementForOrder.mockResolvedValue(undefined);
+      vouchers.validate.mockResolvedValue({
+        voucher: { id: 'vch1', code: 'SAVE10' },
+        voucherId: 'vch1',
+        voucherCode: 'SAVE10',
+        discountCents: 500,
+      });
+      // Lost the usage-limit race inside the tx → the whole order rolls back.
+      vouchers.redeem.mockRejectedValue(
+        new ConflictException('This voucher has reached its usage limit.'),
+      );
+      const txMock = { order: { create: jest.fn() } };
+      prisma.$transaction.mockImplementation(
+        (cb: (tx: unknown) => unknown) => cb(txMock),
+      );
+
+      await expect(
+        service.createFromCart('u1', 'addr1', 'SAVE10'),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(txMock.order.create).not.toHaveBeenCalled();
+      expect(cart.clear).not.toHaveBeenCalled();
+    });
+
+    it('does not place the order when the voucher is invalid', async () => {
+      cart.getView.mockResolvedValue({
+        items: [viewItem()],
+        subtotalCents: 2000,
+      });
+      addresses.getOwnedActive.mockResolvedValue(makeAddress());
+      products.getActiveByIds.mockResolvedValue([
+        { id: 'p1', nameVi: 'Áo', nameEn: 'Shirt' },
+      ]);
+      vouchers.validate.mockRejectedValue(
+        new BadRequestException('This voucher has expired.'),
+      );
+
+      await expect(
+        service.createFromCart('u1', 'addr1', 'EXPIRED'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      // Validation happens BEFORE the transaction — no stock movement, no order.
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(variants.decrementForOrder).not.toHaveBeenCalled();
+    });
+
+    it('places an order without a voucher (discountCents stays 0)', async () => {
+      cart.getView.mockResolvedValue({
+        items: [viewItem()],
+        subtotalCents: 2000,
+      });
+      addresses.getOwnedActive.mockResolvedValue(makeAddress());
+      products.getActiveByIds.mockResolvedValue([
+        { id: 'p1', nameVi: 'Áo', nameEn: 'Shirt' },
+      ]);
+      variants.decrementForOrder.mockResolvedValue(undefined);
+      const created = { id: 'o1', items: [], statusHistory: [] };
+      const txMock = { order: { create: jest.fn().mockResolvedValue(created) } };
+      prisma.$transaction.mockImplementation(
+        (cb: (tx: unknown) => unknown) => cb(txMock),
+      );
+      cart.clear.mockResolvedValue({ items: [], subtotalCents: 0 });
+
+      await service.createFromCart('u1', 'addr1');
+
+      expect(vouchers.validate).not.toHaveBeenCalled();
+      expect(vouchers.redeem).not.toHaveBeenCalled();
+      expect(txMock.order.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            discountCents: 0,
+            totalCents: 2000,
+            voucherId: null,
+            voucherCode: null,
+          }),
+        }),
       );
     });
   });

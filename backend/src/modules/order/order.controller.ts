@@ -51,7 +51,7 @@ export class OrderController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateOrderDto,
   ): Promise<OrderWithDetail> {
-    return this.orderService.createFromCart(user.id, dto.addressId);
+    return this.orderService.createFromCart(user.id, dto.addressId, dto.voucherCode);
   }
 
   @ApiOperation({ summary: "List the current user's orders" })

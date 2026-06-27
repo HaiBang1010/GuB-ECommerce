@@ -15,6 +15,7 @@ import {
 } from '../product/variant/variant.service';
 import { NotificationService } from '../notification/notification.service';
 import { UserService } from '../iam/user/user.service';
+import { VoucherService } from '../voucher/voucher.service';
 
 // Default window after which an unpaid order is auto-cancelled and its stock
 // released (the release-expired job; ARCHITECTURE §5.6 / §6).
@@ -84,6 +85,8 @@ export class OrderService {
     private readonly notifications: NotificationService,
     // Resolves customer identity for admin enrichment/search (in-process).
     private readonly users: UserService,
+    // Validates + redeems a voucher at checkout (in-process; never JOINed).
+    private readonly vouchers: VoucherService,
   ) {}
 
   /**
@@ -96,6 +99,7 @@ export class OrderService {
   async createFromCart(
     userId: string,
     addressId: string,
+    voucherCode?: string,
   ): Promise<OrderWithDetail> {
     const view = await this.cart.getView({ userId });
     if (view.items.length === 0) {
@@ -127,7 +131,13 @@ export class OrderService {
         quantity: item.quantity,
       });
     }
-    const discountCents = 0; // vouchers arrive in Phase 4
+    // Validate the voucher (read-only) against the LIVE cart subtotal before the
+    // transaction — the FE preview is non-binding; the backend is the source of
+    // truth for the discount. The atomic redeem happens INSIDE the tx below.
+    const applied = voucherCode
+      ? await this.vouchers.validate(voucherCode, userId, subtotalCents)
+      : null;
+    const discountCents = applied?.discountCents ?? 0;
     const totalCents = subtotalCents - discountCents;
     const stockChanges: StockChange[] = view.items.map((i) => ({
       variantId: i.variantId,
@@ -137,6 +147,12 @@ export class OrderService {
     const order = await this.prisma.$transaction(async (tx) => {
       // The stock-race fix: atomic decrement; throwing here rolls back the order.
       await this.variants.decrementForOrder(tx, stockChanges);
+      // Redeem the voucher in the SAME tx (atomic usedCount + per-user guards) so a
+      // failed order never consumes it: a throw here rolls back the order AND the
+      // redemption together.
+      if (applied) {
+        await this.vouchers.redeem(tx, applied.voucher, userId);
+      }
       return tx.order.create({
         data: {
           userId,
@@ -144,6 +160,9 @@ export class OrderService {
           subtotalCents,
           discountCents,
           totalCents,
+          // Snapshot the voucher onto the order (immutable, ARCHITECTURE §4.4).
+          voucherId: applied?.voucherId ?? null,
+          voucherCode: applied?.voucherCode ?? null,
           shippingAddress: this.snapshotAddress(address),
           placedAt: new Date(),
           items: { createMany: { data: itemsData } },
