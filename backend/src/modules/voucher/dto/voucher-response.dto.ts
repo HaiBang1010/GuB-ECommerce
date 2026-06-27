@@ -9,6 +9,18 @@ export class VoucherResponseDto {
   @ApiProperty({ example: 'SUMMER10' })
   code!: string;
 
+  @ApiProperty({ type: String, nullable: true, example: 'Giảm 10% mùa hè' })
+  titleVi!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, example: 'Summer 10% off' })
+  titleEn!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, example: 'Áp dụng cho mọi đơn hàng.' })
+  descriptionVi!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, example: 'Applies to all orders.' })
+  descriptionEn!: string | null;
+
   @ApiProperty({ enum: VoucherType, example: VoucherType.PERCENT })
   type!: VoucherType;
 

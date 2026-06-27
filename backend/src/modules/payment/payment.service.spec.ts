@@ -133,6 +133,36 @@ describe('PaymentService', () => {
       );
       expect(result).toEqual({ clientSecret: 'cs_new', paymentRecordId: 'pay2' });
     });
+
+    it('charges the DISCOUNTED total — amount = totalCents, not subtotalCents', async () => {
+      // A voucher was applied: subtotal 3000, discount 500 → total 2500. Both the
+      // Stripe charge and the Payment row must use the discounted total, never the
+      // subtotal — this guards the money invariant for the voucher feature.
+      orders.getForUser.mockResolvedValue({
+        id: 'o1',
+        status: 'PENDING_PAYMENT',
+        subtotalCents: 3000,
+        discountCents: 500,
+        totalCents: 2500,
+      });
+      prisma.payment.findFirst.mockResolvedValue(null);
+      stripe.createPaymentIntent.mockResolvedValue({
+        id: 'pi_disc',
+        client_secret: 'cs_disc',
+      });
+      prisma.payment.create.mockResolvedValue({ id: 'pay3' });
+
+      await service.createIntentForOrder('u1', 'o1');
+
+      expect(stripe.createPaymentIntent).toHaveBeenCalledWith(
+        expect.objectContaining({ amountCents: 2500 }),
+      );
+      expect(prisma.payment.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ amountCents: 2500 }),
+        }),
+      );
+    });
   });
 
   describe('handleWebhook', () => {

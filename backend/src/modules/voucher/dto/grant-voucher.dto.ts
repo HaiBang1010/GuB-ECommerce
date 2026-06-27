@@ -1,13 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsEmail, IsNotEmpty } from 'class-validator';
 
-// Admin: grant a (wallet-only) voucher to a specific user so they can redeem it.
+// Admin: grant a (wallet-only) voucher to a user, identified by email.
 export class GrantVoucherDto {
   @ApiProperty({
-    example: 'clx1a2b3c4d5e6f7g8h9usr01',
-    description: 'The iam.User id to grant this voucher to.',
+    example: 'jane@example.com',
+    description: 'Email of the user to grant this voucher to.',
   })
-  @IsString()
+  @IsEmail()
   @IsNotEmpty()
-  userId!: string;
+  email!: string;
 }

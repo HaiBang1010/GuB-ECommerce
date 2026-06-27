@@ -21,6 +21,36 @@ export class CreateVoucherDto {
   @MaxLength(50)
   code!: string;
 
+  @ApiPropertyOptional({ example: 'Giảm 10% mùa hè', description: 'Display title (vi).' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  titleVi?: string;
+
+  @ApiPropertyOptional({ example: 'Summer 10% off', description: 'Display title (en).' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  titleEn?: string;
+
+  @ApiPropertyOptional({
+    example: 'Áp dụng cho mọi đơn hàng.',
+    description: 'Description (vi).',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  descriptionVi?: string;
+
+  @ApiPropertyOptional({
+    example: 'Applies to all orders.',
+    description: 'Description (en).',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  descriptionEn?: string;
+
   @ApiProperty({ enum: VoucherType, example: VoucherType.PERCENT })
   @IsEnum(VoucherType)
   type!: VoucherType;

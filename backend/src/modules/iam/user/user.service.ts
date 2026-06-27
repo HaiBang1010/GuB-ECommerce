@@ -59,6 +59,17 @@ export class UserService {
     return this.prisma.user.findUnique({ where: { id } });
   }
 
+  // Exact (case-insensitive) email lookup — for the admin "grant voucher by email"
+  // flow. Returns null when no user has that email. In-process; the iam schema is
+  // never queried from another module directly.
+  async findByEmail(email: string): Promise<User | null> {
+    const term = email.trim();
+    if (term === '') return null;
+    return this.prisma.user.findFirst({
+      where: { email: { equals: term, mode: 'insensitive' } },
+    });
+  }
+
   // The user plus its Profile (height/weight/measurements), for the admin
   // user-detail page. Profile has no service of its own; this single-relation
   // include stays within the `iam` schema (no cross-schema work).

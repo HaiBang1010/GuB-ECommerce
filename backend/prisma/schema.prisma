@@ -444,6 +444,11 @@ enum VoucherType {
 model Voucher {
   id               String        @id @default(cuid())
   code             String        @unique
+  // Optional bilingual display copy (admin-authored); falls back to `code` when null.
+  titleVi          String?
+  titleEn          String?
+  descriptionVi    String?
+  descriptionEn    String?
   type             VoucherType
   // PUBLIC: any code holder may redeem (bounded by usageLimit/perUserLimit).
   // false = WALLET-ONLY: redeemable only by a user it was granted to (UserVoucher).

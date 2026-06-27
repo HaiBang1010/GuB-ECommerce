@@ -10,6 +10,12 @@ export class VoucherPreviewResponseDto {
   @ApiProperty({ example: 'SUMMER10', description: 'Normalized (UPPERCASE) code.' })
   voucherCode!: string;
 
+  @ApiProperty({ type: String, nullable: true, example: 'Giảm 10% mùa hè' })
+  titleVi!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, example: 'Summer 10% off' })
+  titleEn!: string | null;
+
   @ApiProperty({ example: 1200, description: 'Discount applied (cents).' })
   discountCents!: number;
 

@@ -29,11 +29,16 @@ import { RolesGuard } from '../../common/auth/roles.guard';
 import { SupabaseAuthGuard } from '../iam/auth/supabase-auth.guard';
 import { CreateVoucherDto } from './dto/create-voucher.dto';
 import { GrantVoucherDto } from './dto/grant-voucher.dto';
+import { GrantedUserResponseDto } from './dto/granted-user-response.dto';
 import { ListVouchersQueryDto } from './dto/list-vouchers-query.dto';
 import { PaginatedVouchersResponseDto } from './dto/paginated-vouchers-response.dto';
 import { UpdateVoucherDto } from './dto/update-voucher.dto';
 import { VoucherResponseDto } from './dto/voucher-response.dto';
-import { PaginatedVouchers, VoucherService } from './voucher.service';
+import {
+  GrantedUser,
+  PaginatedVouchers,
+  VoucherService,
+} from './voucher.service';
 
 // Admin voucher management — Supabase JWT + ADMIN role (backend-enforced, not UI-only).
 @ApiTags('voucher')
@@ -96,7 +101,7 @@ export class VoucherAdminController {
     return this.vouchers.archive(id);
   }
 
-  @ApiOperation({ summary: 'Grant a (wallet-only) voucher to a user' })
+  @ApiOperation({ summary: 'Grant a (wallet-only) voucher to a user by email' })
   @ApiOkResponse({ type: VoucherResponseDto })
   @ApiNotFoundResponse({ description: 'Voucher or user not found.' })
   @Post(':id/grant')
@@ -105,6 +110,14 @@ export class VoucherAdminController {
     @Param('id') id: string,
     @Body() dto: GrantVoucherDto,
   ): Promise<Voucher> {
-    return this.vouchers.grant(id, dto.userId);
+    return this.vouchers.grant(id, dto.email);
+  }
+
+  @ApiOperation({ summary: 'List the users a voucher has been granted to' })
+  @ApiOkResponse({ type: [GrantedUserResponseDto] })
+  @ApiNotFoundResponse({ description: 'Voucher not found.' })
+  @Get(':id/grants')
+  grants(@Param('id') id: string): Promise<GrantedUser[]> {
+    return this.vouchers.listGrantsForAdmin(id);
   }
 }

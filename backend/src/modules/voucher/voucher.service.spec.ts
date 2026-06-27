@@ -25,12 +25,19 @@ type UserVoucherDelegate = {
   findMany: jest.Mock;
   create: jest.Mock;
 };
-type UsersMock = { assertActive: jest.Mock };
+type UsersMock = {
+  findByEmail: jest.Mock;
+  findManyByIds: jest.Mock;
+};
 
 function makeVoucher(overrides: Partial<Voucher> = {}): Voucher {
   return {
     id: 'vch1',
     code: 'SAVE10',
+    titleVi: null,
+    titleEn: null,
+    descriptionVi: null,
+    descriptionEn: null,
     type: VoucherType.PERCENT,
     isPublic: true,
     value: 10,
@@ -87,7 +94,10 @@ describe('VoucherService', () => {
         create: jest.fn(),
       },
     };
-    users = { assertActive: jest.fn() };
+    users = {
+      findByEmail: jest.fn(),
+      findManyByIds: jest.fn().mockResolvedValue([]),
+    };
     service = new VoucherService(
       prisma as unknown as PrismaService,
       users as unknown as UserService,
@@ -360,18 +370,64 @@ describe('VoucherService', () => {
   });
 
   describe('grant', () => {
+    it('resolves the user by email then creates the grant', async () => {
+      prisma.voucher.findUnique.mockResolvedValue(makeVoucher());
+      users.findByEmail.mockResolvedValue({ id: 'u1', email: 'jane@x.com' });
+      prisma.userVoucher.create.mockResolvedValue({});
+      await service.grant('vch1', 'jane@x.com');
+      expect(users.findByEmail).toHaveBeenCalledWith('jane@x.com');
+      expect(prisma.userVoucher.create).toHaveBeenCalledWith({
+        data: { userId: 'u1', voucherId: 'vch1' },
+      });
+    });
+
+    it('404s when no user has that email', async () => {
+      prisma.voucher.findUnique.mockResolvedValue(makeVoucher());
+      users.findByEmail.mockResolvedValue(null);
+      await expect(service.grant('vch1', 'ghost@x.com')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(prisma.userVoucher.create).not.toHaveBeenCalled();
+    });
+
     it('is idempotent when the user already has the voucher (P2002)', async () => {
       prisma.voucher.findUnique.mockResolvedValue(makeVoucher());
-      users.assertActive.mockResolvedValue({ id: 'u1' });
+      users.findByEmail.mockResolvedValue({ id: 'u1', email: 'jane@x.com' });
       prisma.userVoucher.create.mockRejectedValue(
         new Prisma.PrismaClientKnownRequestError('dup', {
           code: 'P2002',
           clientVersion: '5.22.0',
         }),
       );
-      await expect(service.grant('vch1', 'u1')).resolves.toMatchObject({
+      await expect(service.grant('vch1', 'jane@x.com')).resolves.toMatchObject({
         id: 'vch1',
       });
+    });
+  });
+
+  describe('listGrantsForAdmin', () => {
+    it('enriches each grant with the email + redemption state (no JOIN)', async () => {
+      prisma.voucher.findUnique.mockResolvedValue(makeVoucher());
+      prisma.userVoucher.findMany.mockResolvedValue([
+        {
+          userId: 'u1',
+          voucherId: 'vch1',
+          usedCount: 1,
+          usedAt: new Date('2026-06-20'),
+          createdAt: new Date('2026-06-10'),
+        },
+      ]);
+      users.findManyByIds.mockResolvedValue([{ id: 'u1', email: 'jane@x.com' }]);
+
+      const result = await service.listGrantsForAdmin('vch1');
+      expect(users.findManyByIds).toHaveBeenCalledWith(['u1']);
+      expect(result).toEqual([
+        expect.objectContaining({
+          userId: 'u1',
+          email: 'jane@x.com',
+          usedCount: 1,
+        }),
+      ]);
     });
   });
 });

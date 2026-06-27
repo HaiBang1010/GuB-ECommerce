@@ -31,10 +31,25 @@ export type PaginatedVouchers = {
 // A wallet entry: the granted voucher + how many times THIS user has redeemed it.
 export type WalletVoucher = Voucher & { userUsedCount: number };
 
+// A user a voucher has been granted to, for the admin grants list.
+export type GrantedUser = {
+  userId: string;
+  email: string | null;
+  usedCount: number;
+  usedAt: Date | null;
+  grantedAt: Date;
+};
+
 // Codes are case-insensitive: stored and looked up UPPERCASE (so the @unique index
 // still applies — no citext needed).
 function normalizeCode(code: string): string {
   return code.trim().toUpperCase();
+}
+
+// Optional display copy: a blank/whitespace string clears the field to null.
+function emptyToNull(value?: string): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
 }
 
 /**
@@ -264,6 +279,10 @@ export class VoucherService {
     );
     const data: Prisma.VoucherCreateInput = {
       code: normalizeCode(dto.code),
+      titleVi: emptyToNull(dto.titleVi),
+      titleEn: emptyToNull(dto.titleEn),
+      descriptionVi: emptyToNull(dto.descriptionVi),
+      descriptionEn: emptyToNull(dto.descriptionEn),
       type: dto.type,
       value: dto.value,
       isPublic: dto.isPublic ?? true,
@@ -306,6 +325,14 @@ export class VoucherService {
 
     const data: Prisma.VoucherUpdateInput = {};
     if (dto.code !== undefined) data.code = normalizeCode(dto.code);
+    if (dto.titleVi !== undefined) data.titleVi = emptyToNull(dto.titleVi);
+    if (dto.titleEn !== undefined) data.titleEn = emptyToNull(dto.titleEn);
+    if (dto.descriptionVi !== undefined) {
+      data.descriptionVi = emptyToNull(dto.descriptionVi);
+    }
+    if (dto.descriptionEn !== undefined) {
+      data.descriptionEn = emptyToNull(dto.descriptionEn);
+    }
     if (dto.type !== undefined) data.type = dto.type;
     if (dto.isPublic !== undefined) data.isPublic = dto.isPublic;
     if (dto.value !== undefined) data.value = dto.value;
@@ -339,12 +366,19 @@ export class VoucherService {
     });
   }
 
-  // Grant a (wallet-only) voucher to a user. Idempotent: re-granting is a no-op.
-  async grant(voucherId: string, userId: string): Promise<Voucher> {
+  // Grant a (wallet-only) voucher to a user identified by EMAIL. Resolves the user
+  // in-process (UserService, no JOIN); 404 when no user has that email. Idempotent:
+  // re-granting is a no-op.
+  async grant(voucherId: string, email: string): Promise<Voucher> {
     const voucher = await this.getById(voucherId);
-    await this.users.assertActive(userId); // 404 if the user is missing/archived
+    const user = await this.users.findByEmail(email);
+    if (!user) {
+      throw new NotFoundException('No user found with that email.');
+    }
     try {
-      await this.prisma.userVoucher.create({ data: { userId, voucherId } });
+      await this.prisma.userVoucher.create({
+        data: { userId: user.id, voucherId },
+      });
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -356,6 +390,27 @@ export class VoucherService {
       throw err;
     }
     return voucher;
+  }
+
+  // List the users a voucher has been granted to, enriched with their email +
+  // redemption state. Email is resolved in-process via UserService (batch, no JOIN).
+  async listGrantsForAdmin(voucherId: string): Promise<GrantedUser[]> {
+    await this.getById(voucherId); // 404 when the voucher doesn't exist
+    const grants = await this.prisma.userVoucher.findMany({
+      where: { voucherId },
+      orderBy: { createdAt: 'desc' },
+    });
+    const users = await this.users.findManyByIds([
+      ...new Set(grants.map((g) => g.userId)),
+    ]);
+    const emailById = new Map(users.map((u) => [u.id, u.email]));
+    return grants.map((g) => ({
+      userId: g.userId,
+      email: emailById.get(g.userId) ?? null,
+      usedCount: g.usedCount,
+      usedAt: g.usedAt,
+      grantedAt: g.createdAt,
+    }));
   }
 
   // ---------------------------------------------------------------------------

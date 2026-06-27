@@ -67,6 +67,8 @@ export class VoucherController {
     return {
       voucherId: result.voucherId,
       voucherCode: result.voucherCode,
+      titleVi: result.voucher.titleVi,
+      titleEn: result.voucher.titleEn,
       discountCents: result.discountCents,
       subtotalCents: cart.subtotalCents,
       totalCents: cart.subtotalCents - result.discountCents,
