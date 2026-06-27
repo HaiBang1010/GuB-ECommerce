@@ -1,6 +1,6 @@
 import { setRequestLocale } from 'next-intl/server';
 
-import { AdminUsersListView } from '@/components/admin-users-list-view';
+import { AdminUsersListView } from '@/features/admin/users/components/admin-users-list-view';
 
 export default async function AdminUsersPage({
   params,

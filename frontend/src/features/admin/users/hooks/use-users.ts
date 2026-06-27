@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { useAuthStore } from '@/stores/auth.store';
-import { getAdminUser, getAdminUsers } from '@/lib/api/users';
+import { getAdminUser, getAdminUsers } from '@/features/admin/users/api/users';
 
 // Admin: a paginated page of customers with optional name/email search. Gated to a
 // logged-in user; the backend RoleGuard rejects non-admins. keepPreviousData avoids

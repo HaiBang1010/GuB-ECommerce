@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
-import { useAdminUsers } from '@/hooks/use-users';
+import { useAdminUsers } from '@/features/admin/users/hooks/use-users';
 import { useDebounce } from '@/features/admin/hooks/use-debounce';
 import { PaginationBar } from '@/features/admin/components/pagination-bar';
 import { Input } from '@/components/ui/input';

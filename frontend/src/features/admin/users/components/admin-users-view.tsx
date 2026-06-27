@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
-import { useAdminUser } from '@/hooks/use-users';
+import { useAdminUser } from '@/features/admin/users/hooks/use-users';
 import { OrderStatusBadge } from '@/components/order-status-badge';
 import { OrderDetailDialog } from '@/features/admin/components/order-detail-dialog';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import { ApiError } from '@/lib/api/client';
 import { formatPriceCents } from '@/lib/money';
 import { formatDate } from '@/lib/datetime';
 import type { OrderStatus } from '@/features/order/api/orders';
-import type { AdminUserDetail } from '@/lib/api/users';
+import type { AdminUserDetail } from '@/features/admin/users/api/users';
 
 // Order statuses in fulfillment order, for the per-status breakdown (only non-zero
 // counts are shown). OrderStatus is a generated union with no runtime enum.
