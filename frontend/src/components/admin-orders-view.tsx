@@ -3,18 +3,17 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import {
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-} from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
 import { Link } from "@/i18n/navigation";
 import { useAdminOrders, useAdminUpdateOrderStatus } from "@/hooks/use-orders";
 import { useDebounce } from "@/hooks/use-debounce";
 import { OrderStatusBadge } from "@/components/order-status-badge";
+import { PaginationBar } from "@/components/admin/pagination-bar";
+import {
+  NEXT_STATUS,
+  OrderDetailDialog,
+} from "@/components/admin/order-detail-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,15 +29,6 @@ import { ApiError } from "@/lib/api/client";
 import { formatPriceCents } from "@/lib/money";
 import type { OrderStatus } from "@/lib/api/orders";
 
-// The single admin-driven fulfillment chain. The backend ADMIN_TRANSITIONS is
-// authoritative — this only decides which advance button to show; an illegal step
-// is still rejected server-side.
-const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
-  PAID: "PROCESSING",
-  PROCESSING: "SHIPPED",
-  SHIPPED: "DELIVERED",
-};
-
 // All order statuses, for the filter checkboxes. OrderStatus is a generated union
 // (no runtime enum), so the list is spelled out; labels reuse order.status.*.
 const STATUSES: OrderStatus[] = [
@@ -51,21 +41,6 @@ const STATUSES: OrderStatus[] = [
   "REFUNDED",
 ];
 
-const PAGE_SIZES = [10, 20, 50, 100];
-
-// Page tokens to render: first … current±1 … last (all pages when there are ≤7).
-function pageItems(current: number, total: number): (number | "ellipsis")[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-  const items: (number | "ellipsis")[] = [1];
-  const start = Math.max(2, current - 1);
-  const end = Math.min(total - 1, current + 1);
-  if (start > 2) items.push("ellipsis");
-  for (let p = start; p <= end; p++) items.push(p);
-  if (end < total - 1) items.push("ellipsis");
-  items.push(total);
-  return items;
-}
-
 export function AdminOrdersView() {
   const t = useTranslations("admin");
   const tStatus = useTranslations("order.status");
@@ -74,6 +49,8 @@ export function AdminOrdersView() {
   const [searchInput, setSearchInput] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  // The order whose detail dialog is open (null = closed).
+  const [openOrderId, setOpenOrderId] = useState<string | null>(null);
   const search = useDebounce(searchInput, 300);
   const { isPending, isError, data } = useAdminOrders(
     selected,
@@ -193,10 +170,15 @@ export function AdminOrdersView() {
                     return (
                       <tr key={o.id} className="border-b last:border-b-0">
                         <td className="py-2 pr-4 font-mono">
-                          #{o.id.slice(-8)}
+                          <button
+                            type="button"
+                            onClick={() => setOpenOrderId(o.id)}
+                            className="hover:underline"
+                          >
+                            #{o.id.slice(-8)}
+                          </button>
                         </td>
                         <td className="py-2 pr-4">
-                          {/* /admin/users/[id] is a placeholder route (404 for now). */}
                           <Link
                             href={`/admin/users/${o.userId}`}
                             className="hover:underline"
@@ -256,115 +238,16 @@ export function AdminOrdersView() {
           ) : null}
         </>
       )}
-    </div>
-  );
-}
 
-function PaginationBar({
-  page,
-  pageSize,
-  total,
-  onPage,
-  onPageSize,
-}: {
-  page: number;
-  pageSize: number;
-  total: number;
-  onPage: (p: number) => void;
-  onPageSize: (s: number) => void;
-}) {
-  const t = useTranslations("admin");
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const items = pageItems(page, totalPages);
-
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div className="flex items-center gap-2 text-sm">
-        <span className="text-muted-foreground">{t("rowsPerPage")}</span>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
-              {pageSize}
-              <ChevronDown className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            {PAGE_SIZES.map((s) => (
-              <DropdownMenuItem key={s} onClick={() => onPageSize(s)}>
-                {s}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <span className="text-muted-foreground text-sm">
-          {t("pageOf", { page, total: totalPages })}
-        </span>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="outline"
-            size="icon"
-            className="size-8"
-            disabled={page <= 1}
-            onClick={() => onPage(1)}
-            aria-label="First page"
-          >
-            <ChevronsLeft className="size-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="size-8"
-            disabled={page <= 1}
-            onClick={() => onPage(page - 1)}
-            aria-label="Previous page"
-          >
-            <ChevronLeft className="size-4" />
-          </Button>
-          {items.map((it, i) =>
-            it === "ellipsis" ? (
-              <span
-                key={`ellipsis-${i}`}
-                className="text-muted-foreground px-1"
-              >
-                …
-              </span>
-            ) : (
-              <Button
-                key={it}
-                variant={it === page ? "default" : "outline"}
-                size="icon"
-                className="size-8"
-                onClick={() => onPage(it)}
-              >
-                {it}
-              </Button>
-            ),
-          )}
-          <Button
-            variant="outline"
-            size="icon"
-            className="size-8"
-            disabled={page >= totalPages}
-            onClick={() => onPage(page + 1)}
-            aria-label="Next page"
-          >
-            <ChevronRight className="size-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="size-8"
-            disabled={page >= totalPages}
-            onClick={() => onPage(totalPages)}
-            aria-label="Last page"
-          >
-            <ChevronsRight className="size-4" />
-          </Button>
-        </div>
-      </div>
+      <OrderDetailDialog
+        orderId={openOrderId}
+        initialOrder={
+          data?.items.find((o) => o.id === openOrderId) ?? undefined
+        }
+        onOpenChange={(open) => {
+          if (!open) setOpenOrderId(null);
+        }}
+      />
     </div>
   );
 }

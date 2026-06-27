@@ -91,6 +91,17 @@ export function getAdminOrders(
   });
 }
 
+// GET /admin/orders/:id — one order with full detail + customer info, for the
+// admin order-detail dialog. ADMIN-only on the backend (RoleGuard).
+export function getAdminOrder(
+  id: string,
+  signal?: AbortSignal,
+): Promise<AdminOrder> {
+  return apiFetch<AdminOrder>(`/admin/orders/${encodeURIComponent(id)}`, {
+    signal,
+  });
+}
+
 // POST /admin/orders/:id/status — advance fulfillment (PAID→PROCESSING→SHIPPED→
 // DELIVERED). The backend enforces the legal transition; an illegal step 400s.
 export function adminUpdateOrderStatus(

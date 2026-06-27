@@ -11,12 +11,12 @@ import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-// Sidebar entries. Only Orders is wired this slice; the rest are honest "coming
-// soon" placeholders (no admin list-all-reviews endpoint exists — admin replies
-// happen inline on product pages; catalog/analytics land in later phases).
+// Sidebar entries. Orders + Reviews are wired; catalog/analytics are honest "coming
+// soon" placeholders (they land in later phases). The customer user-detail page is
+// reached via the customer link on an order, so it needs no sidebar entry.
 const NAV_ITEMS = [
   { key: 'orders', href: '/admin/orders' },
-  { key: 'reviews', href: null },
+  { key: 'reviews', href: '/admin/reviews' },
   { key: 'catalog', href: null },
   { key: 'analytics', href: null },
 ] as const;
