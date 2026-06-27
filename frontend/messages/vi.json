@@ -19,7 +19,8 @@
     "error": "Không thể tải sản phẩm.",
     "brand": "Thương hiệu",
     "color": "Màu sắc",
-    "size": "Kích cỡ"
+    "size": "Kích cỡ",
+    "onSale": "Giảm giá"
   },
   "auth": {
     "login": "Đăng nhập",
@@ -298,6 +299,18 @@
     "noGrants": "Chưa cấp cho ai",
     "back": "Quay lại",
     "userId": "User ID",
-    "copied": "Đã sao chép"
+    "copied": "Đã sao chép",
+    "sales": "Khuyến mãi",
+    "searchProducts": "Tìm sản phẩm",
+    "basePrice": "Giá gốc",
+    "salePrice": "Giá sale",
+    "noSale": "Không sale",
+    "setSale": "Lưu",
+    "clearSale": "Xóa",
+    "saleSaved": "Đã lưu giá sale",
+    "saleCleared": "Đã xóa giá sale",
+    "saleError": "Không thể cập nhật giá sale",
+    "productsError": "Không tải được sản phẩm",
+    "noProducts": "Không có sản phẩm"
   }
 }

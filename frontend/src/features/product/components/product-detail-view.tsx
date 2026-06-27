@@ -78,13 +78,35 @@ function DetailContent({ product }: { product: ProductDetail }) {
     .sort((a, b) => a.position - b.position);
   const mainImage = displayImages[activeImage] ?? displayImages[0];
 
-  const lowestPriceCents =
+  // The price actually charged folds in the product-level sale, but only when it
+  // undercuts the variant's own price (a sale never raises the price). Mirrors the
+  // backend ProductVariantService.effectivePrice so display matches the charge.
+  const effectivePrice = (v: ProductVariant) =>
+    product.salePriceCents !== null && product.salePriceCents < v.priceCents
+      ? product.salePriceCents
+      : v.priceCents;
+
+  const lowestEffectiveCents =
+    product.variants.length > 0
+      ? Math.min(...product.variants.map(effectivePrice))
+      : (product.salePriceCents ?? product.basePriceCents);
+  const lowestBaseCents =
     product.variants.length > 0
       ? Math.min(...product.variants.map((v) => v.priceCents))
       : product.basePriceCents;
-  const priceLabel = selectedVariant
-    ? formatPriceCents(selectedVariant.priceCents)
-    : `${t('from')} ${formatPriceCents(lowestPriceCents)}`;
+
+  // Price shown + the struck-through pre-sale price (null = not discounted).
+  const priceCents = selectedVariant
+    ? effectivePrice(selectedVariant)
+    : lowestEffectiveCents;
+  const compareAtCents = selectedVariant
+    ? priceCents < selectedVariant.priceCents
+      ? selectedVariant.priceCents
+      : null
+    : lowestEffectiveCents < lowestBaseCents
+      ? lowestBaseCents
+      : null;
+  const pricePrefix = selectedVariant ? '' : `${t('from')} `;
 
   const outOfStock = selectedVariant?.stockQty === 0;
   const canAddToCart = selectedVariant !== null && !outOfStock;
@@ -168,7 +190,23 @@ function DetailContent({ product }: { product: ProductDetail }) {
           ) : null}
         </div>
 
-        <p className="text-2xl font-bold">{priceLabel}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-2xl font-bold">
+            {pricePrefix}
+            {formatPriceCents(priceCents)}
+          </p>
+          {compareAtCents !== null ? (
+            <>
+              <span className="text-muted-foreground text-base line-through">
+                {pricePrefix}
+                {formatPriceCents(compareAtCents)}
+              </span>
+              <span className="bg-destructive rounded px-1.5 py-0.5 text-xs font-medium text-white">
+                {t('onSale')}
+              </span>
+            </>
+          ) : null}
+        </div>
 
         {/* Color selector */}
         {colors.length > 0 ? (

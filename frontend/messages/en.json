@@ -19,7 +19,8 @@
     "error": "Could not load product.",
     "brand": "Brand",
     "color": "Color",
-    "size": "Size"
+    "size": "Size",
+    "onSale": "Sale"
   },
   "auth": {
     "login": "Sign in",
@@ -298,6 +299,18 @@
     "noGrants": "Not granted to anyone yet",
     "back": "Back",
     "userId": "User ID",
-    "copied": "Copied"
+    "copied": "Copied",
+    "sales": "Sales",
+    "searchProducts": "Search products",
+    "basePrice": "Base price",
+    "salePrice": "Sale price",
+    "noSale": "No sale",
+    "setSale": "Save",
+    "clearSale": "Clear",
+    "saleSaved": "Sale price saved",
+    "saleCleared": "Sale cleared",
+    "saleError": "Couldn't update the sale price",
+    "productsError": "Couldn't load products",
+    "noProducts": "No products"
   }
 }

@@ -156,7 +156,14 @@ function CartLine({ item }: { item: CartItemView }) {
         <span className="text-muted-foreground text-sm">
           {item.size} · {item.color}
         </span>
-        <span className="text-sm">{formatPriceCents(item.unitPriceCents)}</span>
+        <span className="flex items-center gap-2 text-sm">
+          {formatPriceCents(item.unitPriceCents)}
+          {item.compareAtCents !== null ? (
+            <span className="text-muted-foreground line-through">
+              {formatPriceCents(item.compareAtCents)}
+            </span>
+          ) : null}
+        </span>
 
         {outOfStock ? (
           <span className="text-destructive text-sm font-medium">

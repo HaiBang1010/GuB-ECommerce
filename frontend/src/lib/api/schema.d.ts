@@ -2081,6 +2081,11 @@ export interface components {
              */
             unitPriceCents: number;
             /**
+             * @description Pre-sale unit price (USD cents) when the line is on sale, else null.
+             * @example 1500
+             */
+            compareAtCents: number | null;
+            /**
              * @description unitPriceCents × quantity, USD cents.
              * @example 2400
              */
