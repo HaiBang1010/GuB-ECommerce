@@ -21,7 +21,7 @@ Code is organised **by domain feature**, not by technical layer. Each domain own
 ```
 src/
 ├── app/[locale]/                 # next-intl: /vi, /en — route groups are URL-transparent
-│   ├── (storefront)/             # home · products/[slug] · cart · checkout · orders/[id]{/pay,/confirmation} · auth + Header
+│   ├── (storefront)/             # home · products/[slug] · cart · checkout · auth · account (orders/[id]{/pay,/confirmation} · vouchers) + Header
 │   ├── (admin)/admin/            # orders · users · users/[id] · reviews · vouchers · sales (admin shell)
 │   └── providers.tsx, layout.tsx # QueryClient + Supabase session bridge + <Toaster>
 ├── features/                     # domain-owned UI; each is {components,hooks,api}/ as needed
@@ -39,7 +39,7 @@ src/
 ├── lib/                          # money, datetime, utils, stripe, supabase/ (browser/server/middleware clients)
 ├── stores/                       # Zustand: auth + cart (guest sessionId + display snapshots)
 ├── i18n/ · messages/             # routing/navigation helpers + vi.json / en.json
-└── middleware.ts                 # i18n locale + Supabase session refresh + protect /checkout, /orders, /admin
+└── middleware.ts                 # i18n locale + Supabase session refresh + protect /checkout, /account, /admin
 ```
 
 The admin area lives in a `[locale]/(admin)/admin/` route group with its own shell; the storefront
@@ -75,7 +75,7 @@ product page — one deliberate storefront→admin edge.
 
 - Use `@stripe/stripe-js` + Elements with the **publishable key**. Get the `clientSecret` from the backend, confirm the payment on the client.
 - The **secret** key is never on the frontend.
-- **Durable payment page** `/[locale]/orders/[id]/pay` (its own URL, not an inline checkout step): on every mount it re-fetches the `clientSecret` from the order id via the idempotent `POST /payments/intent`, so a refresh / tab-switch / revisit lands back on a working card field instead of losing it. Shared by checkout (new order) and pay-again. Guards by order status (PAID → confirmation, CANCELLED → notice). The webhook is the source of truth; the confirmation page polls `useOrder` until the status flips.
+- **Durable payment page** `/[locale]/account/orders/[id]/pay` (its own URL, not an inline checkout step): on every mount it re-fetches the `clientSecret` from the order id via the idempotent `POST /payments/intent`, so a refresh / tab-switch / revisit lands back on a working card field instead of losing it. Shared by checkout (new order) and pay-again. Guards by order status (PAID → confirmation, CANCELLED → notice). The webhook is the source of truth; the confirmation page polls `useOrder` until the status flips.
 - **Stock vs. payment at checkout:** a place-order **409** (`OUT_OF_STOCK`) is shown as a per-item "only N left" message and refreshes the cart — distinct from a real payment error; the cart blocks checkout while any line exceeds live stock (auto-capping over-stock lines).
 - `apiFetch` **swallows request cancellations** (an `AbortError` from a query whose page navigated away) instead of surfacing them as runtime errors, while still reporting genuine network failures.
 
@@ -111,7 +111,7 @@ A bell in the header (`features/notification/components/notification-bell.tsx`),
 `useNotifications` (`features/notification/hooks/use-notifications.ts`) fetches the list + `unreadCount`, gated by the
 auth store and polling every 60s (no realtime until Phase 6). The badge shows the unread count; the
 shadcn `DropdownMenu` lists items, each rendering its text from the structured `type` + `payload.orderId`
-via the `notification` i18n namespace — **never** a stored string — linking to `/orders/[id]` and
+via the `notification` i18n namespace — **never** a stored string — linking to `/account/orders/[id]` and
 marking itself read on select (`useMarkNotificationRead`), plus a "mark all read" action
 (`useMarkAllNotificationsRead`). Both mutations invalidate `['notifications']`. The backend is the
 producer (the single async path, backend §4.8); the frontend only reads + acks.
@@ -185,8 +185,8 @@ and returns the discount; the summary then shows `subtotal / discount −X / tot
 the discounted total is the backend's, ARCHITECTURE.md §4.10). A structured voucher error (`code` →
 i18n message: not found / expired / min-order / used-up / user-limit / not-available) is rendered
 distinctly from the out-of-stock 409 and a generic payment error, both at preview time and if the voucher
-becomes invalid between preview and place-order. The customer **wallet** (`GET /me/vouchers`) has a
-fetcher but its UI is deferred. All strings go through the `voucher` (storefront) + `admin` (admin)
+becomes invalid between preview and place-order. The customer **wallet** UI now ships at
+`/account/vouchers` (§13). All strings go through the `voucher` (storefront) + `admin` (admin)
 next-intl namespaces (vi/en).
 
 ## 12. Product discounts — storefront display (Phase 4)
@@ -205,3 +205,30 @@ only renders it. The display is **sale-aware everywhere a price shows**:
   line. No client-side price math.
 
 The "Sale" badge label lives in the `product` + `Products` next-intl namespaces (vi/en).
+
+## 13. Account section & wallet (Phase 4)
+
+The customer's "my" pages live under a single `/account` route group inside `(storefront)`
+(a URL-transparent group → a real `/account` URL segment):
+
+- **Orders moved** `/orders/*` → `/account/orders/*` (`page` · `[id]` · `[id]/pay` ·
+  `[id]/confirmation`, plain `git mv` of the thin route wrappers). Every customer reference was
+  repointed: the locale-aware `Link`/`router` calls in `features/order/*` + `features/checkout`,
+  the notification-bell deep-link (§9), the header "My orders" item, and — critically — the Stripe
+  `confirmPayment` **`return_url`** in `order-payment.tsx` (the one absolute URL that hardcodes the
+  `/${locale}` prefix → now `…/account/orders/[id]/confirmation`). Admin `/admin/orders` is a
+  **different** route group and is unchanged.
+- **Wallet** `/account/vouchers` (`features/voucher/hooks/use-wallet-vouchers` +
+  `components/wallet-view.tsx`): an auth-gated `useQuery(['wallet-vouchers'])` (mirror of
+  `useNotifications`, gated on the auth store, **no polling**) reads `GET /me/vouchers` and renders
+  each grant as a card — locale title (fallback `code`), discount (PERCENT `value%` / FIXED money via
+  `formatPriceCents`), min-order / max-discount / valid-until, the per-user **uses-left**
+  (`perUserLimit − userUsedCount`, "Unlimited" when uncapped), and a **copy-code** button (mirror of
+  the admin `CopyableId` — inline 1.5s feedback, swallows insecure-context clipboard failures).
+  Read-only — applying a voucher still happens at checkout (§11).
+- **Landing** `/account` — a minimal index linking Orders + Vouchers (room for Profile in a later
+  Phase 4 slice).
+- **Gate:** `middleware.ts` `PROTECTED` now matches `/account` (replacing `/orders`) so the whole
+  `/account/*` subtree requires a session (guests → login).
+- **i18n / header:** new `wallet` + `account` next-intl namespaces (vi/en); the header's "Vouchers"
+  dropdown item (previously a disabled "coming soon") now links to `/account/vouchers`.

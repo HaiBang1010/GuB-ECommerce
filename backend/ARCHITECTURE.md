@@ -242,7 +242,8 @@ RoleGuard ADMIN): paginated CRUD (archive, never hard-delete), **grant-by-email*
 grant) and **list grants** (`GET /admin/vouchers/:id/grants` — each `UserVoucher` enriched with the
 grantee's email + `usedCount`/`usedAt` via `UserService.findManyByIds`, batch, no JOIN). Vouchers also
 carry optional **bilingual** `titleVi/En` + `descriptionVi/En`. **Wallet:** `GET /me/vouchers` returns a
-user's still-usable grants (customer UI deferred). **Cron** (birthday grants) is later-Phase-4 work;
+user's still-usable grants (customer wallet UI ships at frontend `/account/vouchers`, frontend §13).
+**Cron** (birthday grants) is later-Phase-4 work;
 **product discounts** ship in §4.11.
 
 ### 4.11 Product discounts (effective sale price) — Phase 4
