@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { SizeSystem } from '@prisma/client';
 
 // Response shape of a product.Category row (mirrors the Prisma model; the
 // `search_tsv` column is internal and never serialized). Used for OpenAPI codegen.
@@ -17,6 +18,9 @@ export class CategoryResponseDto {
 
   @ApiProperty({ type: String, nullable: true, example: null })
   parentId!: string | null;
+
+  @ApiProperty({ enum: SizeSystem, nullable: true, example: null })
+  sizeSystem!: SizeSystem | null;
 
   @ApiProperty({ type: String, format: 'date-time', nullable: true, example: null })
   archivedAt!: Date | null;

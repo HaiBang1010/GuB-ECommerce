@@ -32,19 +32,32 @@ datasource db {
 // ===========================================================================
 
 model Category {
-  id         String     @id @default(cuid())
+  id         String      @id @default(cuid())
   nameVi     String
   nameEn     String
-  slug       String     @unique
+  slug       String      @unique
   parentId   String?
-  parent     Category?  @relation("CategoryTree", fields: [parentId], references: [id])
-  children   Category[] @relation("CategoryTree")
+  parent     Category?   @relation("CategoryTree", fields: [parentId], references: [id])
+  children   Category[]  @relation("CategoryTree")
   products   Product[]
+  // Which standard size chart applies to this category's products (rule-based size
+  // suggestion). null = no suggestion. The size→measurement ranges are code constants
+  // (product/size/size-charts.ts); only this discriminator is persisted.
+  sizeSystem SizeSystem?
   archivedAt DateTime?
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
 
   @@index([parentId])
+  @@schema("product")
+}
+
+// Drives shoes-vs-clothing size suggestion at the category level (no slug-guessing).
+enum SizeSystem {
+  ALPHA_TOPS // S/M/L/XL matched on CHEST
+  ALPHA_BOTTOMS // S/M/L/XL matched on WAIST
+  EU_SHOES // 39..44 matched on FOOT_LENGTH
+
   @@schema("product")
 }
 

@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Category, Prisma } from '@prisma/client';
+import { Category, Prisma, SizeSystem } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
@@ -112,6 +112,8 @@ export class CategoryService {
     if (dto.nameVi !== undefined) data.nameVi = dto.nameVi;
     if (dto.nameEn !== undefined) data.nameEn = dto.nameEn;
     if (dto.slug !== undefined) data.slug = dto.slug;
+    // null clears the size system; a value sets it; absent leaves it untouched.
+    if ('sizeSystem' in dto) data.sizeSystem = dto.sizeSystem ?? null;
 
     // Only touch the parent when the client actually sent `parentId`.
     if ('parentId' in dto) {
@@ -195,6 +197,17 @@ export class CategoryService {
     }
     // Exceeded the depth cap → treat as bad data and hide it.
     return false;
+  }
+
+  // Cross-module (in-process): the category's size system for the rule-based size
+  // suggestion. null when the category has none (or doesn't exist). Lets the size
+  // suggestion pick a chart without another module querying product.Category.
+  async getSizeSystem(categoryId: string): Promise<SizeSystem | null> {
+    const category = await this.prisma.category.findUnique({
+      where: { id: categoryId },
+      select: { sizeSystem: true },
+    });
+    return category?.sizeSystem ?? null;
   }
 
   // The set of category ids visible on the storefront (active + no archived

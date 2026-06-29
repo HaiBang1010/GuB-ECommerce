@@ -1,5 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { SizeSystem } from '@prisma/client';
 import {
+  IsEnum,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -51,4 +53,16 @@ export class UpdateCategoryDto {
   @IsString()
   @IsNotEmpty()
   parentId?: string | null;
+
+  // Size chart system for the rule-based size suggestion (null clears it). The
+  // size→measurement ranges are code constants; this only picks which chart applies.
+  @ApiPropertyOptional({
+    enum: SizeSystem,
+    nullable: true,
+    description: 'Size system for size suggestion; null clears it.',
+  })
+  @IsOptional()
+  @ValidateIf((o: UpdateCategoryDto) => o.sizeSystem !== null)
+  @IsEnum(SizeSystem)
+  sizeSystem?: SizeSystem | null;
 }

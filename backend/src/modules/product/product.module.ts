@@ -15,6 +15,8 @@ import { CloudinaryService } from './image/cloudinary.service';
 import { ImageAdminController } from './image/image-admin.controller';
 import { ImageController } from './image/image.controller';
 import { ProductImageService } from './image/image.service';
+import { SizeSuggestionController } from './size/size-suggestion.controller';
+import { SizeSuggestionService } from './size/size-suggestion.service';
 
 /**
  * Catalog module. Ships the Category, Product, ProductVariant, Collection and
@@ -37,6 +39,7 @@ import { ProductImageService } from './image/image.service';
     CollectionAdminController,
     ImageController,
     ImageAdminController,
+    SizeSuggestionController,
   ],
   providers: [
     CategoryService,
@@ -45,6 +48,7 @@ import { ProductImageService } from './image/image.service';
     CollectionService,
     CloudinaryService,
     ProductImageService,
+    SizeSuggestionService,
   ],
   exports: [
     CategoryService,
