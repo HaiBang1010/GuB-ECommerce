@@ -72,7 +72,7 @@ export function Header() {
                   </DropdownMenuLabel>
                 ) : null}
                 <DropdownMenuItem asChild>
-                  <Link href="/orders">{tNav('myOrders')}</Link>
+                  <Link href="/account/orders">{tNav('myOrders')}</Link>
                 </DropdownMenuItem>
                 {isAdmin(role) ? (
                   <DropdownMenuItem asChild>

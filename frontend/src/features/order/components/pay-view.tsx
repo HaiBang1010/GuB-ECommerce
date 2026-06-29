@@ -29,7 +29,7 @@ export function PayView({ orderId }: { orderId: string }) {
   // the confirmation page (where the poll/summary already lives).
   useEffect(() => {
     if (order.data?.status === 'PAID') {
-      router.replace(`/orders/${orderId}/confirmation`);
+      router.replace(`/account/orders/${orderId}/confirmation`);
     }
   }, [order.data?.status, orderId, router]);
 
@@ -46,7 +46,7 @@ export function PayView({ orderId }: { orderId: string }) {
       <main className="mx-auto flex max-w-5xl flex-col items-start gap-4 px-4 py-8">
         <p className="text-destructive">{tOrder('error')}</p>
         <Button asChild variant="outline">
-          <Link href="/orders">{tOrder('back')}</Link>
+          <Link href="/account/orders">{tOrder('back')}</Link>
         </Button>
       </main>
     );
@@ -82,7 +82,7 @@ export function PayView({ orderId }: { orderId: string }) {
     cancel.mutate(orderId, {
       onSuccess: () => {
         toast.success(tOrder('cancelled'));
-        router.push('/orders');
+        router.push('/account/orders');
       },
       onError: () => toast.error(tOrder('cancelError')),
     });

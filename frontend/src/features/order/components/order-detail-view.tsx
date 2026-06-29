@@ -37,7 +37,7 @@ export function OrderDetailView({ orderId }: { orderId: string }) {
     cancel.mutate(orderId, {
       onSuccess: () => {
         toast.success(t('cancelled'));
-        router.push('/orders');
+        router.push('/account/orders');
       },
       onError: () => toast.error(t('cancelError')),
     });
@@ -56,7 +56,7 @@ export function OrderDetailView({ orderId }: { orderId: string }) {
       <main className="mx-auto flex max-w-3xl flex-col items-start gap-4 px-4 py-8">
         <p className="text-destructive">{t('error')}</p>
         <Button asChild variant="outline">
-          <Link href="/orders">{t('back')}</Link>
+          <Link href="/account/orders">{t('back')}</Link>
         </Button>
       </main>
     );
@@ -99,7 +99,7 @@ export function OrderDetailView({ orderId }: { orderId: string }) {
       {o.status === 'PENDING_PAYMENT' ? (
         <div className="flex gap-3">
           <Button asChild>
-            <Link href={`/orders/${o.id}/pay`}>{t('completePayment')}</Link>
+            <Link href={`/account/orders/${o.id}/pay`}>{t('completePayment')}</Link>
           </Button>
           <Button
             variant="ghost"
@@ -209,7 +209,7 @@ export function OrderDetailView({ orderId }: { orderId: string }) {
       ) : null}
 
       <Button asChild variant="ghost" size="sm" className="self-start">
-        <Link href="/orders">{t('back')}</Link>
+        <Link href="/account/orders">{t('back')}</Link>
       </Button>
     </main>
   );

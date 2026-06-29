@@ -77,7 +77,7 @@ export function ConfirmationView({ orderId }: { orderId: string }) {
 
       <div className="flex gap-3">
         <Button asChild variant="outline">
-          <Link href="/orders">{t('viewOrders')}</Link>
+          <Link href="/account/orders">{t('viewOrders')}</Link>
         </Button>
         <Button asChild>
           <Link href="/products">{t('continueShopping')}</Link>

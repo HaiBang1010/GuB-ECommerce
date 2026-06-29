@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 const stripePromise = getStripe();
 
 // Reusable Stripe Payment Element step, rendered on the durable pay page
-// (/orders/[id]/pay). The clientSecret ALWAYS comes from the backend; a decline
+// (/account/orders/[id]/pay). The clientSecret ALWAYS comes from the backend; a decline
 // keeps the buyer on this form to retry another card (no redirect, no cancel).
 export function OrderPayment({
   orderId,
@@ -49,7 +49,7 @@ function PaymentForm({ orderId }: { orderId: string }) {
     const result = await stripe.confirmPayment({
       elements,
       confirmParams: {
-        return_url: `${window.location.origin}/${locale}/orders/${orderId}/confirmation`,
+        return_url: `${window.location.origin}/${locale}/account/orders/${orderId}/confirmation`,
       },
     });
 

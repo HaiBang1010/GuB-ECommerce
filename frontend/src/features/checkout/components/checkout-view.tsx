@@ -110,7 +110,7 @@ function CheckoutContent() {
     // below is non-binding.
     createOrder.mutate(
       { addressId: selectedAddressId, voucherCode: applied?.code },
-      { onSuccess: (order) => router.push(`/orders/${order.id}/pay`) },
+      { onSuccess: (order) => router.push(`/account/orders/${order.id}/pay`) },
     );
   }
 

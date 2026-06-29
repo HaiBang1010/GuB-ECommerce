@@ -91,7 +91,9 @@ export function NotificationBell() {
             >
               <Link
                 href={
-                  n.payload?.orderId ? `/orders/${n.payload.orderId}` : '/orders'
+                  n.payload?.orderId
+                    ? `/account/orders/${n.payload.orderId}`
+                    : '/account/orders'
                 }
                 className="flex flex-col items-start gap-0.5"
               >

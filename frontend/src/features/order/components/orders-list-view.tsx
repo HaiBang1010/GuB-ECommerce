@@ -62,7 +62,7 @@ export function OrdersListView() {
                 key={o.id}
                 className="rounded-md border transition-colors hover:bg-accent"
               >
-                <Link href={`/orders/${o.id}`} className="block p-4">
+                <Link href={`/account/orders/${o.id}`} className="block p-4">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium">#{o.id.slice(-8)}</span>
                     <OrderStatusBadge status={o.status} />
@@ -78,7 +78,7 @@ export function OrdersListView() {
                 </Link>
                 {o.status === 'PENDING_PAYMENT' ? (
                   <Link
-                    href={`/orders/${o.id}/pay`}
+                    href={`/account/orders/${o.id}/pay`}
                     className="text-primary block px-4 pb-3 text-sm font-medium"
                   >
                     {t('completePayment')} →
