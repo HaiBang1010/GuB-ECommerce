@@ -20,7 +20,14 @@
     "brand": "Thương hiệu",
     "color": "Màu sắc",
     "size": "Kích cỡ",
-    "onSale": "Giảm giá"
+    "onSale": "Giảm giá",
+    "suggestedFor": "Gợi ý cho bạn: {size}",
+    "useThisSize": "Chọn size này",
+    "enterMeasurements": "Nhập số đo để được gợi ý size.",
+    "goToProfile": "Cập nhật hồ sơ",
+    "fitSnug": "Có thể hơi chật",
+    "fitPerfect": "Vừa vặn",
+    "fitLoose": "Có thể hơi rộng"
   },
   "auth": {
     "login": "Đăng nhập",
@@ -183,7 +190,24 @@
     "ordersTitle": "Đơn hàng của tôi",
     "ordersDesc": "Xem lịch sử đơn hàng và theo dõi trạng thái.",
     "vouchersTitle": "Voucher của tôi",
-    "vouchersDesc": "Voucher có sẵn trong ví của bạn."
+    "vouchersDesc": "Voucher có sẵn trong ví của bạn.",
+    "profileTitle": "Hồ sơ của tôi",
+    "profileDesc": "Số đo cơ thể để gợi ý size."
+  },
+  "profile": {
+    "title": "Hồ sơ của tôi",
+    "error": "Không tải được hồ sơ. Vui lòng thử lại.",
+    "heightCm": "Chiều cao (cm)",
+    "weightKg": "Cân nặng (kg)",
+    "chest": "Vòng ngực (cm)",
+    "waist": "Vòng eo (cm)",
+    "hip": "Vòng hông (cm)",
+    "footLength": "Chiều dài bàn chân (cm)",
+    "hint": "Tất cả không bắt buộc. Chỉ dùng để gợi ý size.",
+    "save": "Lưu",
+    "saved": "Đã lưu hồ sơ",
+    "saveError": "Không lưu được hồ sơ. Vui lòng thử lại.",
+    "numberError": "Nhập số hợp lệ"
   },
   "nav": {
     "account": "Tài khoản",

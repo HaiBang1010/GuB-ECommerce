@@ -20,6 +20,11 @@ export default async function AccountPage({
       title: t('vouchersTitle'),
       desc: t('vouchersDesc'),
     },
+    {
+      href: '/account/profile',
+      title: t('profileTitle'),
+      desc: t('profileDesc'),
+    },
   ] as const;
 
   return (

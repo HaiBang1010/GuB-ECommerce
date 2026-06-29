@@ -20,7 +20,14 @@
     "brand": "Brand",
     "color": "Color",
     "size": "Size",
-    "onSale": "Sale"
+    "onSale": "Sale",
+    "suggestedFor": "Suggested for you: {size}",
+    "useThisSize": "Use this size",
+    "enterMeasurements": "Add your measurements for a size suggestion.",
+    "goToProfile": "Update profile",
+    "fitSnug": "Might feel snug",
+    "fitPerfect": "Should fit well",
+    "fitLoose": "Might feel roomy"
   },
   "auth": {
     "login": "Sign in",
@@ -183,7 +190,24 @@
     "ordersTitle": "My orders",
     "ordersDesc": "View your order history and track status.",
     "vouchersTitle": "My vouchers",
-    "vouchersDesc": "Vouchers available in your wallet."
+    "vouchersDesc": "Vouchers available in your wallet.",
+    "profileTitle": "My profile",
+    "profileDesc": "Body measurements for size suggestions."
+  },
+  "profile": {
+    "title": "My Profile",
+    "error": "Couldn't load your profile. Please try again.",
+    "heightCm": "Height (cm)",
+    "weightKg": "Weight (kg)",
+    "chest": "Chest (cm)",
+    "waist": "Waist (cm)",
+    "hip": "Hip (cm)",
+    "footLength": "Foot length (cm)",
+    "hint": "All optional. We use these only to suggest a size.",
+    "save": "Save",
+    "saved": "Profile saved",
+    "saveError": "Couldn't save your profile. Please try again.",
+    "numberError": "Enter a valid number"
   },
   "nav": {
     "account": "Account",

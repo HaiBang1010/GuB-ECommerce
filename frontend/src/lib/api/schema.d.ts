@@ -542,6 +542,23 @@ export interface paths {
         patch: operations["ImageAdminController_update"];
         trace?: never;
     };
+    "/products/{slug}/size-suggestion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Suggested size for the current user (by product slug) */
+        get: operations["SizeSuggestionController_suggest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/addresses": {
         parameters: {
             query?: never;
@@ -609,6 +626,24 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/me/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the current user's profile (measurements) */
+        get: operations["ProfileController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update the current user's profile (measurements) */
+        patch: operations["ProfileController_update"];
         trace?: never;
     };
     "/me": {
@@ -1173,6 +1208,11 @@ export interface components {
             /** @example null */
             parentId: string | null;
             /**
+             * @example null
+             * @enum {string|null}
+             */
+            sizeSystem: "ALPHA_TOPS" | "ALPHA_BOTTOMS" | "EU_SHOES" | null;
+            /**
              * Format: date-time
              * @example null
              */
@@ -1200,6 +1240,11 @@ export interface components {
             slug: string;
             /** @example null */
             parentId: string | null;
+            /**
+             * @example null
+             * @enum {string|null}
+             */
+            sizeSystem: "ALPHA_TOPS" | "ALPHA_BOTTOMS" | "EU_SHOES" | null;
             /**
              * Format: date-time
              * @example null
@@ -1247,6 +1292,11 @@ export interface components {
              * @example clx1a2b3c4d5e6f7g8h9cat01
              */
             parentId?: string | null;
+            /**
+             * @description Size system for size suggestion; null clears it.
+             * @enum {string|null}
+             */
+            sizeSystem?: "ALPHA_TOPS" | "ALPHA_BOTTOMS" | "EU_SHOES" | null;
         };
         ProductResponseDto: {
             /** @example clx1a2b3c4d5e6f7g8h9prd01 */
@@ -1607,6 +1657,25 @@ export interface components {
              */
             position?: number;
         };
+        SizeSuggestionResponseDto: {
+            /**
+             * @example SUGGESTED
+             * @enum {string}
+             */
+            status: "SUGGESTED" | "NO_PROFILE" | "NO_CHART" | "NO_MATCH";
+            /** @example M */
+            suggestedSize: string | null;
+            /**
+             * @description Which body measurement drove the suggestion / is needed.
+             * @example CHEST
+             */
+            measure: string | null;
+            /**
+             * @example PERFECT
+             * @enum {string|null}
+             */
+            fit: "SNUG" | "PERFECT" | "LOOSE" | null;
+        };
         AddressResponseDto: {
             /** @example clx1a2b3c4d5e6f7g8h9adr01 */
             id: string;
@@ -1696,6 +1765,58 @@ export interface components {
             country?: string;
             /** @example 700000 */
             postalCode?: string;
+        };
+        ProfileResponseDto: {
+            /** @example 175 */
+            heightCm: number | null;
+            /** @example 68 */
+            weightKg: number | null;
+            /**
+             * @example {
+             *       "chest": 96,
+             *       "waist": 80,
+             *       "hip": 98,
+             *       "footLength": 26.5
+             *     }
+             */
+            measurements: {
+                [key: string]: unknown;
+            } | null;
+        };
+        MeasurementsDto: {
+            /**
+             * @description Chest circumference (cm).
+             * @example 96
+             */
+            chest?: number;
+            /**
+             * @description Waist circumference (cm).
+             * @example 80
+             */
+            waist?: number;
+            /**
+             * @description Hip circumference (cm).
+             * @example 98
+             */
+            hip?: number;
+            /**
+             * @description Foot length (cm).
+             * @example 26.5
+             */
+            footLength?: number;
+        };
+        UpdateProfileDto: {
+            /**
+             * @description Height (cm).
+             * @example 175
+             */
+            heightCm?: number;
+            /**
+             * @description Weight (kg).
+             * @example 68
+             */
+            weightKg?: number;
+            measurements?: components["schemas"]["MeasurementsDto"];
         };
         MeResponseDto: {
             /**
@@ -4319,6 +4440,41 @@ export interface operations {
             };
         };
     };
+    SizeSuggestionController_suggest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SizeSuggestionResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Product not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     AddressController_list: {
         parameters: {
             query?: never;
@@ -4498,6 +4654,69 @@ export interface operations {
             };
             /** @description Address not found. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProfileController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProfileController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProfileDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileResponseDto"];
+                };
+            };
+            /** @description Validation failed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid token. */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

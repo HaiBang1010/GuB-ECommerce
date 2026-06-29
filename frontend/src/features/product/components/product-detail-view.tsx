@@ -5,6 +5,8 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
 import { useProduct } from '@/features/product/hooks/use-product';
+import { useSizeSuggestion } from '@/features/product/hooks/use-size-suggestion';
+import { SuggestedSize } from '@/features/product/components/suggested-size';
 import { useAddToCart } from '@/features/cart/hooks/use-cart';
 import { useProductReviews } from '@/features/review/hooks/use-reviews';
 import { useCartStore } from '@/stores/cart.store';
@@ -46,6 +48,9 @@ function DetailContent({ product }: { product: ProductDetail }) {
   const t = useTranslations('product');
   const addToCart = useAddToCart();
   const setSnapshot = useCartStore((s) => s.setSnapshot);
+
+  const user = useAuthStore((s) => s.user);
+  const suggestion = useSizeSuggestion(product.slug);
 
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
@@ -231,6 +236,11 @@ function DetailContent({ product }: { product: ProductDetail }) {
               ))}
             </div>
           </div>
+        ) : null}
+
+        {/* Rule-based size suggestion (logged-in users only) */}
+        {user ? (
+          <SuggestedSize suggestion={suggestion.data} onPick={setSelectedSize} />
         ) : null}
 
         {/* Size selector */}
