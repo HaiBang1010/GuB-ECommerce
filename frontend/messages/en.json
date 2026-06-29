@@ -164,6 +164,27 @@
     "errNotAvailable": "This voucher isn't available for your account.",
     "errGeneric": "Couldn't apply this voucher."
   },
+  "wallet": {
+    "title": "My Vouchers",
+    "empty": "You don't have any vouchers yet.",
+    "error": "Couldn't load your vouchers. Please try again.",
+    "discountPercent": "{value}% off",
+    "discountFixed": "{amount} off",
+    "minOrder": "Min order {amount}",
+    "maxDiscount": "Up to {amount} off",
+    "validUntil": "Valid until {date}",
+    "usesLeft": "{count} left",
+    "unlimited": "Unlimited",
+    "copyCode": "Copy code",
+    "copied": "Copied"
+  },
+  "account": {
+    "title": "My Account",
+    "ordersTitle": "My orders",
+    "ordersDesc": "View your order history and track status.",
+    "vouchersTitle": "My vouchers",
+    "vouchersDesc": "Vouchers available in your wallet."
+  },
   "nav": {
     "account": "Account",
     "myOrders": "My orders",

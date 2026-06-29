@@ -164,6 +164,27 @@
     "errNotAvailable": "Voucher này không khả dụng với tài khoản của bạn.",
     "errGeneric": "Không áp dụng được voucher này."
   },
+  "wallet": {
+    "title": "Voucher của tôi",
+    "empty": "Bạn chưa có voucher nào.",
+    "error": "Không tải được voucher. Vui lòng thử lại.",
+    "discountPercent": "Giảm {value}%",
+    "discountFixed": "Giảm {amount}",
+    "minOrder": "Đơn tối thiểu {amount}",
+    "maxDiscount": "Giảm tối đa {amount}",
+    "validUntil": "Hết hạn {date}",
+    "usesLeft": "Còn {count} lượt",
+    "unlimited": "Không giới hạn",
+    "copyCode": "Sao chép mã",
+    "copied": "Đã chép"
+  },
+  "account": {
+    "title": "Tài khoản của tôi",
+    "ordersTitle": "Đơn hàng của tôi",
+    "ordersDesc": "Xem lịch sử đơn hàng và theo dõi trạng thái.",
+    "vouchersTitle": "Voucher của tôi",
+    "vouchersDesc": "Voucher có sẵn trong ví của bạn."
+  },
   "nav": {
     "account": "Tài khoản",
     "myOrders": "Đơn hàng của tôi",
