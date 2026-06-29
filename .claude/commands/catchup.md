@@ -11,7 +11,7 @@ allowed-tools: Read, Glob, Grep, Bash(git log:*), Bash(git status:*)
 ## Task
 Get oriented before we do anything. Do NOT write code yet.
 
-1. Read `CLAUDE.md` and `ARCHITECTURE.md` (root), plus the relevant `backend/` or `frontend/` docs for the area in focus.
+1. Read `CLAUDE.md` and `ARCHITECTURE.md` (root). Then read BOTH `backend/ARCHITECTURE.md` and `frontend/ARCHITECTURE.md` if they exist (don't skip one just because the next task looks backend- or frontend-only — drift hides in the half you ignore). If `$ARGUMENTS` names a focus area, go deeper there but still skim the other half. Also glob the actual `backend/src/` and `frontend/src/` structure — don't infer frontend state from commit messages alone.
 2. From the docs' phase list (ARCHITECTURE.md §7) and the recent commits, tell me concisely:
    - which phase we're in and what's already done,
    - what the next phase/task requires,
