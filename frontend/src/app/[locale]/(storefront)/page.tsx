@@ -4,6 +4,7 @@ import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { BannerCarousel } from '@/features/banner/components/banner-carousel';
 import { CategoryGrid } from '@/features/category/components/category-grid';
+import { FeaturedCollections } from '@/features/collection/components/featured-collections';
 import { ProductRow } from '@/features/product/components/product-row';
 
 export default async function HomePage({
@@ -22,6 +23,9 @@ export default async function HomePage({
 
       {/* Shop-by-category grid — hides itself when there are no categories (Slice 3). */}
       <CategoryGrid />
+
+      {/* Admin-featured collection carousels — self-hides when none curated (Slice 4b). */}
+      <FeaturedCollections />
 
       {/* Themed product rows — each hides itself when empty (Slice 2). */}
       <ProductRow

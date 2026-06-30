@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl';
 
 import { useProducts } from '@/features/product/hooks/use-products';
-import { ProductCard } from '@/features/product/components/product-card';
+import { ProductGrid } from '@/features/product/components/product-grid';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const GRID_CLASS =
@@ -34,11 +34,5 @@ export function ProductsView({ category }: { category?: string }) {
     return <p className="text-muted-foreground">{t('empty')}</p>;
   }
 
-  return (
-    <div className={GRID_CLASS}>
-      {products.map((product) => (
-        <ProductCard key={product.id} product={product} />
-      ))}
-    </div>
-  );
+  return <ProductGrid products={products} />;
 }
