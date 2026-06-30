@@ -18,6 +18,9 @@ const INT = /^\d*$/;
 const DECIMAL = /^\d*\.?\d*$/;
 
 const schema = z.object({
+  // Native <input type="date"> → YYYY-MM-DD (or empty). The backend validates the
+  // date + rejects a future birthday; here we only carry the string.
+  birthday: z.string(),
   heightCm: z.string().regex(INT, 'number'),
   weightKg: z.string().regex(INT, 'number'),
   chest: z.string().regex(DECIMAL, 'number'),
@@ -34,6 +37,8 @@ function toFormValues(profile: Profile): FormValues {
   const meas = (profile.measurements ?? {}) as Record<string, unknown>;
   const s = (v: unknown): string => (typeof v === 'number' ? String(v) : '');
   return {
+    // Backend sends an ISO datetime; the date input wants the YYYY-MM-DD head.
+    birthday: profile.birthday ? profile.birthday.split('T')[0] : '',
     heightCm: profile.heightCm != null ? String(profile.heightCm) : '',
     weightKg: profile.weightKg != null ? String(profile.weightKg) : '',
     chest: s(meas.chest),
@@ -51,6 +56,9 @@ export function ProfileForm({ profile }: { profile: Profile }) {
     resolver: zodResolver(schema),
     defaultValues: toFormValues(profile),
   });
+  // Cap the date picker at today — a birthday can't be in the future (the backend
+  // re-validates).
+  const maxBirthday = new Date().toISOString().slice(0, 10);
 
   function fieldError(name: keyof FormValues): string | null {
     return form.formState.errors[name]?.message ? t('numberError') : null;
@@ -67,6 +75,7 @@ export function ProfileForm({ profile }: { profile: Profile }) {
     }
 
     const payload: UpdateProfileInput = {
+      birthday: values.birthday.trim() === '' ? undefined : values.birthday,
       heightCm: num(values.heightCm),
       weightKg: num(values.weightKg),
       measurements,
@@ -84,6 +93,10 @@ export function ProfileForm({ profile }: { profile: Profile }) {
       className="flex flex-col gap-4"
       noValidate
     >
+      <Field label={t('birthday')}>
+        <Input type="date" max={maxBirthday} {...form.register('birthday')} />
+      </Field>
+
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label={t('heightCm')} error={fieldError('heightCm')}>
           <Input inputMode="numeric" {...form.register('heightCm')} />

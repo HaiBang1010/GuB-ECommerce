@@ -635,14 +635,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get the current user's profile (measurements) */
+        /** Get the current user's profile (measurements + birthday) */
         get: operations["ProfileController_get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** Update the current user's profile (measurements) */
+        /** Update the current user's profile (measurements + birthday) */
         patch: operations["ProfileController_update"];
         trace?: never;
     };
@@ -1029,6 +1029,23 @@ export interface paths {
         get: operations["VoucherAdminController_grants"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/jobs/grant-birthday-vouchers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Grant the year's birthday voucher to today's birthday users (cron) */
+        post: operations["VoucherJobsController_grantBirthday"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1846,6 +1863,11 @@ export interface components {
             measurements: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Format: date
+             * @example 1995-06-15
+             */
+            birthday: string | null;
         };
         MeasurementsDto: {
             /**
@@ -1881,6 +1903,12 @@ export interface components {
              */
             weightKg?: number;
             measurements?: components["schemas"]["MeasurementsDto"];
+            /**
+             * Format: date
+             * @description Birthday (date). Must not be in the future.
+             * @example 1995-06-15
+             */
+            birthday?: string;
         };
         MeResponseDto: {
             /**
@@ -2605,6 +2633,23 @@ export interface components {
              * @example 2026-06-27T00:00:00.000Z
              */
             grantedAt: string;
+        };
+        GrantBirthdayResultDto: {
+            /**
+             * @description How many users newly received the birthday voucher.
+             * @example 2
+             */
+            granted: number;
+            /**
+             * @description How many were skipped — already granted this year (idempotent) or a per-user failure.
+             * @example 1
+             */
+            skipped: number;
+            /**
+             * @description How many users have a birthday today (granted + skipped).
+             * @example 3
+             */
+            total: number;
         };
         PreviewVoucherDto: {
             /** @example SUMMER10 */
@@ -5833,6 +5878,32 @@ export interface operations {
             };
             /** @description Voucher not found. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    VoucherJobsController_grantBirthday: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantBirthdayResultDto"];
+                };
+            };
+            /** @description Missing or invalid x-admin-secret header. */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

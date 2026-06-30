@@ -246,9 +246,12 @@ The customer's "my" pages live under a single `/account` route group inside `(st
   the admin `CopyableId` — inline 1.5s feedback, swallows insecure-context clipboard failures).
   Read-only — applying a voucher still happens at checkout (§11).
 - **Profile** `/account/profile` (`features/profile/`): an auth-gated `useProfile` (`GET /me/profile`)
-  feeds an RHF+zod form (`profile-form.tsx`) — height/weight + body measurements
+  feeds an RHF+zod form (`profile-form.tsx`) — a **birthday** (native `<input type="date">`, `max`=today,
+  round-tripped `YYYY-MM-DD` ↔ the backend ISO `DateTime`) + height/weight + body measurements
   (chest/waist/hip/footLength, all optional) saved via `PATCH /me/profile` (`useUpdateProfile` invalidates
-  `['profile']` + `['size-suggestion']`). Powers the size suggestion (§14).
+  `['profile']` + `['size-suggestion']`). Measurements power the size suggestion (§14); the birthday powers
+  the birthday-voucher cron (backend §4.14) — it's stored on `iam.User`, surfaced through the same
+  `/me/profile` endpoint.
 - **Landing** `/account` — a minimal index linking Orders + Vouchers + Profile.
 - **Gate:** `middleware.ts` `PROTECTED` now matches `/account` (replacing `/orders`) so the whole
   `/account/*` subtree requires a session (guests → login).

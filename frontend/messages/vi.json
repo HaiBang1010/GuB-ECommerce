@@ -197,6 +197,7 @@
   "profile": {
     "title": "Hồ sơ của tôi",
     "error": "Không tải được hồ sơ. Vui lòng thử lại.",
+    "birthday": "Ngày sinh",
     "heightCm": "Chiều cao (cm)",
     "weightKg": "Cân nặng (kg)",
     "chest": "Vòng ngực (cm)",

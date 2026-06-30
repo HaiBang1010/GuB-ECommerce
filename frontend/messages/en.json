@@ -197,6 +197,7 @@
   "profile": {
     "title": "My Profile",
     "error": "Couldn't load your profile. Please try again.",
+    "birthday": "Birthday",
     "heightCm": "Height (cm)",
     "weightKg": "Weight (kg)",
     "chest": "Chest (cm)",
