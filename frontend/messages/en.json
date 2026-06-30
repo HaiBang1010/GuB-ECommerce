@@ -1,7 +1,14 @@
 {
   "Home": {
     "title": "Welcome to GuB",
-    "browse": "Browse products"
+    "browse": "Browse products",
+    "onSaleTitle": "On sale",
+    "newArrivals": "New arrivals",
+    "seeMore": "See more"
+  },
+  "carousel": {
+    "previous": "Previous",
+    "next": "Next"
   },
   "banner": {
     "placeholder": "Banner",

@@ -17,14 +17,20 @@ export type ProductDetail = Product & {
 export interface ProductListParams {
   search?: string;
   category?: string; // category slug
+  onSale?: boolean; // only products currently on sale
+  sort?: 'new'; // 'new' = newest first (else name asc)
+  limit?: number; // cap the result (home carousels)
 }
 
 // GET /products — public storefront read. Returns a bare array (no pagination);
-// search is full-text + fuzzy, capped at 50 server-side. Both params optional.
+// search is full-text + fuzzy, capped at 50 server-side. All params optional.
 export function getProducts(params: ProductListParams = {}): Promise<Product[]> {
   const query = new URLSearchParams();
   if (params.search?.trim()) query.set('search', params.search.trim());
   if (params.category?.trim()) query.set('category', params.category.trim());
+  if (params.onSale) query.set('onSale', 'true');
+  if (params.sort) query.set('sort', params.sort);
+  if (params.limit !== undefined) query.set('limit', String(params.limit));
   const qs = query.toString();
   return apiFetch<Product[]>(`/products${qs ? `?${qs}` : ''}`);
 }

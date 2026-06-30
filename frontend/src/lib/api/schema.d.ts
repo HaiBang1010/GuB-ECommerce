@@ -132,7 +132,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List products (optional ?category, ?search) */
+        /** List products (?category, ?search, ?onSale, ?sort, ?limit) */
         get: operations["ProductController_list"];
         put?: never;
         post?: never;
@@ -339,7 +339,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Active collections (storefront) */
+        /** Active collections (?featured=true → home-featured only) */
         get: operations["CollectionController_list"];
         put?: never;
         post?: never;
@@ -1293,6 +1293,8 @@ export interface components {
             nameEn: string;
             /** @example ao-thun */
             slug: string;
+            /** @example https://res.cloudinary.com/demo/image/upload/v1/gub/categories/tops.jpg */
+            imageUrl: string | null;
             /** @example null */
             parentId: string | null;
             /**
@@ -1326,6 +1328,8 @@ export interface components {
             nameEn: string;
             /** @example ao-thun */
             slug: string;
+            /** @example https://res.cloudinary.com/demo/image/upload/v1/gub/categories/tops.jpg */
+            imageUrl: string | null;
             /** @example null */
             parentId: string | null;
             /**
@@ -1358,6 +1362,8 @@ export interface components {
             nameEn: string;
             /** @example ao-thun */
             slug: string;
+            /** @example https://res.cloudinary.com/demo/image/upload/v1/gub/categories/tops.jpg */
+            imageUrl: string | null;
             /** @example null */
             parentId: string | null;
             /**
@@ -1402,6 +1408,11 @@ export interface components {
              */
             slug: string;
             /**
+             * @description Cover image URL for the home category grid (optional).
+             * @example https://res.cloudinary.com/demo/image/upload/v1/gub/categories/tops.jpg
+             */
+            imageUrl?: string;
+            /**
              * @description Parent category id; omit for a root category.
              * @example clx1a2b3c4d5e6f7g8h9cat01
              */
@@ -1422,6 +1433,11 @@ export interface components {
              * @example ao-thun
              */
             slug?: string;
+            /**
+             * @description Cover image URL for the home category grid; null clears it.
+             * @example https://res.cloudinary.com/demo/image/upload/v1/gub/categories/tops.jpg
+             */
+            imageUrl?: string | null;
             /**
              * @description Parent category id; null moves it to root.
              * @example clx1a2b3c4d5e6f7g8h9cat01
@@ -1460,6 +1476,11 @@ export interface components {
              * @example 999
              */
             salePriceCents: number | null;
+            /**
+             * @description Cover image URL (lowest-position image, generic preferred); null when the product has no image.
+             * @example https://res.cloudinary.com/demo/image/upload/v1/gub/products/ao-thun/white.jpg
+             */
+            primaryImageUrl: string | null;
             /**
              * Format: date-time
              * @example null
@@ -1654,6 +1675,18 @@ export interface components {
             nameEn: string;
             /** @example summer */
             slug: string;
+            /** @example https://res.cloudinary.com/demo/image/upload/v1/gub/collections/summer.jpg */
+            imageUrl: string | null;
+            /**
+             * @description Featured on the home page.
+             * @example false
+             */
+            featuredOnHome: boolean;
+            /**
+             * @description Home ordering (ascending).
+             * @example 0
+             */
+            homeSortOrder: number;
             /**
              * Format: date-time
              * @example 2026-06-01T00:00:00.000Z
@@ -1686,6 +1719,21 @@ export interface components {
              */
             slug: string;
             /**
+             * @description Cover image URL for the home collection showcase (optional).
+             * @example https://res.cloudinary.com/demo/image/upload/v1/gub/collections/summer.jpg
+             */
+            imageUrl?: string;
+            /**
+             * @description Feature on the home page.
+             * @default false
+             */
+            featuredOnHome: boolean;
+            /**
+             * @description Home ordering (ascending).
+             * @example 0
+             */
+            homeSortOrder?: number;
+            /**
              * Format: date-time
              * @example 2026-06-01T00:00:00.000Z
              */
@@ -1703,6 +1751,18 @@ export interface components {
             nameEn?: string;
             /** @example summer */
             slug?: string;
+            /**
+             * @description Cover image URL for the home collection showcase; null clears it.
+             * @example https://res.cloudinary.com/demo/image/upload/v1/gub/collections/summer.jpg
+             */
+            imageUrl?: string | null;
+            /** @description Feature on the home page. */
+            featuredOnHome?: boolean;
+            /**
+             * @description Home ordering (ascending).
+             * @example 0
+             */
+            homeSortOrder?: number;
             /**
              * Format: date-time
              * @example 2026-06-01T00:00:00.000Z
@@ -3418,8 +3478,16 @@ export interface operations {
     ProductController_list: {
         parameters: {
             query?: {
+                /** @description Narrow to one (visible) category by slug. */
                 category?: string;
+                /** @description Full-text + fuzzy search (combinable with category). */
                 search?: string;
+                /** @description Only products currently on sale. */
+                onSale?: boolean;
+                /** @description Sort order; 'new' = newest first. */
+                sort?: "new";
+                /** @description Max items returned (>= 1). */
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -4004,7 +4072,9 @@ export interface operations {
     };
     CollectionController_list: {
         parameters: {
-            query?: never;
+            query?: {
+                featured?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;

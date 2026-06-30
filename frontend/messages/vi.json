@@ -1,7 +1,14 @@
 {
   "Home": {
     "title": "Chào mừng đến với GuB",
-    "browse": "Xem sản phẩm"
+    "browse": "Xem sản phẩm",
+    "onSaleTitle": "Đang giảm giá",
+    "newArrivals": "Mới về",
+    "seeMore": "Xem thêm"
+  },
+  "carousel": {
+    "previous": "Trước",
+    "next": "Sau"
   },
   "banner": {
     "placeholder": "Banner",
