@@ -1,10 +1,12 @@
 'use client';
 
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { ImageOff } from 'lucide-react';
 
 import {
   useCreateCategory,
@@ -26,10 +28,17 @@ const SIZE_SYSTEMS: SizeSystem[] = ['ALPHA_TOPS', 'ALPHA_BOTTOMS', 'EU_SHOES'];
 const SELECT_CLASS =
   'h-9 w-full rounded-md border bg-transparent px-3 text-sm shadow-sm';
 
+// imageUrl is optional ('' = none); when present it must be an absolute URL
+// (re-checked server-side). Mirrors the banner form's URL+preview field.
 const schema = z.object({
   nameVi: z.string().trim().min(1, 'required').max(120),
   nameEn: z.string().trim().min(1, 'required').max(120),
   slug: z.string().trim().regex(SLUG_PATTERN, 'slug'),
+  imageUrl: z
+    .string()
+    .trim()
+    .max(2048)
+    .refine((v) => v === '' || z.string().url().safeParse(v).success, 'url'),
   parentId: z.string(), // '' = root
   sizeSystem: z.string(), // '' = none
 });
@@ -83,10 +92,12 @@ export function CategoryForm({
       nameVi: category?.nameVi ?? '',
       nameEn: category?.nameEn ?? '',
       slug: category?.slug ?? '',
+      imageUrl: category?.imageUrl ?? '',
       parentId: category?.parentId ?? '',
       sizeSystem: category?.sizeSystem ?? '',
     },
   });
+  const imageUrl = form.watch('imageUrl');
 
   const blocked = category
     ? blockedParentIds(categories, category.id)
@@ -98,7 +109,9 @@ export function CategoryForm({
   function fieldError(name: keyof FormValues): string | null {
     const msg = form.formState.errors[name]?.message;
     if (!msg) return null;
-    return msg === 'slug' ? t('slugError') : t('required');
+    if (msg === 'slug') return t('slugError');
+    if (msg === 'url') return t('urlError');
+    return t('required');
   }
 
   function onError(err: unknown) {
@@ -109,11 +122,14 @@ export function CategoryForm({
     const sizeSystem =
       values.sizeSystem === '' ? null : (values.sizeSystem as SizeSystem);
 
+    const trimmedImageUrl = values.imageUrl.trim();
+
     if (isEdit) {
       const body: UpdateCategoryBody = {
         nameVi: values.nameVi.trim(),
         nameEn: values.nameEn.trim(),
         slug: values.slug.trim(),
+        imageUrl: trimmedImageUrl === '' ? null : trimmedImageUrl,
         parentId: values.parentId === '' ? null : values.parentId,
         sizeSystem,
       };
@@ -132,6 +148,7 @@ export function CategoryForm({
         nameVi: values.nameVi.trim(),
         nameEn: values.nameEn.trim(),
         slug: values.slug.trim(),
+        ...(trimmedImageUrl === '' ? {} : { imageUrl: trimmedImageUrl }),
         ...(values.parentId === '' ? {} : { parentId: values.parentId }),
         sizeSystem,
       };
@@ -167,6 +184,17 @@ export function CategoryForm({
         >
           <Input {...form.register('slug')} />
         </Field>
+
+        <Field
+          label={t('categoryImageUrl')}
+          hint={t('categoryImageUrlHint')}
+          error={fieldError('imageUrl')}
+        >
+          <Input {...form.register('imageUrl')} placeholder="https://…" />
+        </Field>
+
+        {/* Live preview of the entered URL (plain <img> — arbitrary host, onError fallback). */}
+        <ImagePreview url={imageUrl} label={t('categoryPreview')} />
 
         <Field label={t('parentCategory')} error={fieldError('parentId')}>
           <select className={SELECT_CLASS} {...form.register('parentId')}>
@@ -208,6 +236,30 @@ const SIZE_SYSTEM_KEY: Record<SizeSystem, string> = {
   ALPHA_BOTTOMS: 'sizeAlphaBottoms',
   EU_SHOES: 'sizeEuShoes',
 };
+
+function ImagePreview({ url, label }: { url: string; label: string }) {
+  const [errored, setErrored] = useState(false);
+  const trimmed = url.trim();
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label>{label}</Label>
+      <div className="bg-muted text-muted-foreground flex aspect-square w-28 items-center justify-center overflow-hidden rounded-md border">
+        {trimmed && !errored ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={trimmed}
+            alt=""
+            onError={() => setErrored(true)}
+            onLoad={() => setErrored(false)}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <ImageOff className="size-6 opacity-50" />
+        )}
+      </div>
+    </div>
+  );
+}
 
 function Field({
   label,

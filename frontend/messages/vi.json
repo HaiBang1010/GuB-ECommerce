@@ -4,7 +4,8 @@
     "browse": "Xem sản phẩm",
     "onSaleTitle": "Đang giảm giá",
     "newArrivals": "Mới về",
-    "seeMore": "Xem thêm"
+    "seeMore": "Xem thêm",
+    "shopByCategory": "Mua theo danh mục"
   },
   "carousel": {
     "previous": "Trước",
@@ -409,6 +410,9 @@
     "noCategories": "Chưa có danh mục",
     "categoriesError": "Không tải được danh mục",
     "categorySaveError": "Không lưu được danh mục",
+    "categoryImageUrl": "URL ảnh",
+    "categoryImageUrlHint": "Dán URL ảnh (vd. Cloudinary). Hiện ở lưới danh mục trang chủ. Không bắt buộc.",
+    "categoryPreview": "Xem trước",
     "productsCount": "{count} sản phẩm",
     "subcategoriesCount": "{count} danh mục con",
     "banners": "Banner",

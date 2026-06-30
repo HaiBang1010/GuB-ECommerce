@@ -3,6 +3,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { BannerCarousel } from '@/features/banner/components/banner-carousel';
+import { CategoryGrid } from '@/features/category/components/category-grid';
 import { ProductRow } from '@/features/product/components/product-row';
 
 export default async function HomePage({
@@ -18,6 +19,9 @@ export default async function HomePage({
   return (
     <>
       <BannerCarousel />
+
+      {/* Shop-by-category grid — hides itself when there are no categories (Slice 3). */}
+      <CategoryGrid />
 
       {/* Themed product rows — each hides itself when empty (Slice 2). */}
       <ProductRow
