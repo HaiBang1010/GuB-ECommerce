@@ -21,11 +21,11 @@ Code is organised **by domain feature**, not by technical layer. Each domain own
 ```
 src/
 ├── app/[locale]/                 # next-intl: /vi, /en — route groups are URL-transparent
-│   ├── (storefront)/             # home (banner carousel) · products/[slug] · cart · checkout · auth · account (orders/[id]{/pay,/confirmation} · vouchers · profile) + Header + Footer
-│   ├── (admin)/admin/            # orders · users · users/[id] · reviews · vouchers · sales · categories · banners (admin shell)
+│   ├── (storefront)/             # home (banners · category grid · featured collections · product rows) · products/[slug] · collections/[slug] · cart · checkout · auth · account (orders/[id]{/pay,/confirmation} · vouchers · profile) + Header + Footer
+│   ├── (admin)/admin/            # orders · users · users/[id] · reviews · vouchers · sales · categories · collections · banners (admin shell)
 │   └── providers.tsx, layout.tsx # QueryClient + Supabase session bridge + <Toaster>
 ├── features/                     # domain-owned UI; each is {components,hooks,api}/ as needed
-│   ├── product/ cart/ checkout/ voucher/  # storefront domains (voucher = preview at checkout)
+│   ├── product/ category/ collection/ cart/ checkout/ voucher/  # storefront domains (voucher = preview at checkout)
 │   ├── order/ review/            #   order (customer) + review (customer) — fetchers/hooks own the
 │   │                             #   canonical core types (e.g. OrderStatus in order/api/orders.ts)
 │   ├── notification/ auth/       #   notification bell + me.ts / is-admin
@@ -119,8 +119,8 @@ producer (the single async path, backend §4.8); the frontend only reads + acks.
 ## 10. Admin (Phase 3)
 
 The admin area is a `[locale]/(admin)/admin/` route group with its own client `AdminLayout` (an admin
-topbar + a sidebar: **Orders · Users · Reviews · Vouchers · Sales · Categories · Banners** are wired, with
-**Analytics** still a "coming soon" placeholder) — separate from the `[locale]/(storefront)/` group that
+topbar + a sidebar: **Orders · Users · Reviews · Vouchers · Sales · Categories · Collections · Banners** are
+wired, with **Analytics** still a "coming soon" placeholder) — separate from the `[locale]/(storefront)/` group that
 renders the storefront `Header`.
 Route groups don't affect the URL, so every customer route is unchanged.
 
@@ -302,3 +302,51 @@ the backend owns the data (`marketing` module, ARCHITECTURE.md §4.15) and the f
   dropped brand icons — `href="#"`), and a dynamic copyright year. Rendered by the **storefront layout** only
   (after `{children}`), so it never appears in the `(admin)` group.
 - **i18n:** new `banner` + `footer` storefront namespaces and banner keys in the existing `admin` namespace (vi/en).
+
+## 16. Home sections & collections (Phase 4)
+
+Commerce-style home: a **fixed section set with admin-curated content** — **no page builder** (the layout
+is in code; admins drive only what fills it). The backend owns the data + ordering (ARCHITECTURE.md §4.16);
+the frontend composes the sections and renders. **Every section self-hides when empty**, so the home never
+shows a blank row.
+
+- **Home composition** (`(storefront)/page.tsx`), top→bottom: `BannerCarousel` → **`CategoryGrid`** →
+  **`FeaturedCollections`** → on-sale `ProductRow` → new-arrivals `ProductRow`. The two `ProductRow`s are the
+  auto rules (`useProducts({ onSale, limit })` / `({ sort:'new', limit })`); admin-featured curation sits
+  above them.
+- **`features/category`** (storefront) — `api/categories.ts` (`getCategories` → `GET /categories`, the public
+  tree) + `use-categories` + `components/category-grid.tsx`: active top-level categories as image tiles
+  (locale name) linking to `/products?category=<slug>`. `/products` now reads that `?category=` param
+  **server-side** (the page passes it to `ProductsView`, which filters via `useProducts({ category })`) — no
+  `useSearchParams`, so no Suspense boundary needed.
+- **`features/collection`** (storefront) — `api/collections.ts` (`getFeaturedCollections` → `?featured=true`;
+  `getCollection(slug)`; `getCollectionProducts(slug)`) + hooks (all public, not auth-gated).
+  `FeaturedCollections` renders one carousel per featured collection (in `homeSortOrder`, the backend's
+  order), each a `CollectionRow` (title = locale name, **See more** → `/collections/<slug>`, reusing the
+  shared `ProductCarousel`); a featured-but-empty collection self-hides.
+- **`/collections/[slug]`** (`(storefront)/collections/[slug]/page.tsx` + `collection-view.tsx`) — the
+  collection name as the heading (from `useCollection`) + its products via `useCollectionProducts`, laid out
+  with the shared `ProductGrid`; skeleton / empty / error states reuse the `Products` namespace.
+- **Shared `ProductGrid`** (`features/product/components/product-grid.tsx`) — the responsive card grid was
+  **extracted** from `ProductsView` so the product list **and** the collection page lay out identically.
+  `ProductsView` keeps its own query + loading/error/empty states and just renders `<ProductGrid>` for the
+  loaded grid (the `?category=` filter is unchanged).
+- **Product card images** — the backend's derived `primaryImageUrl` (§4.16) gave the previously text-only
+  card its cover: `ProductCard` renders it in a fixed `aspect-square` box with a plain `<img>` + `onError`
+  placeholder (arbitrary external host → `next/image` can't whitelist it), so a missing/broken image never
+  breaks the grid. The shared `ProductCarousel` (`components/product-carousel.tsx`) is a scroll-snap row
+  reused by the home product rows and the featured-collection rows.
+- **Admin Collections** (`/admin/collections`, `features/admin/collections/`) — mirrors the vouchers/
+  categories admin: `useAdminCollections` (`GET /admin/collections`, unpaginated), New/Edit in a right-side
+  **Sheet** (`collection-form.tsx`, RHF+zod: nameVi/En, slug, **`imageUrl` + live preview**, validFrom/To
+  `datetime-local`, **`featuredOnHome`** checkbox, **`homeSortOrder`**), archive/restore, and — in edit mode —
+  a **product-membership** manager (`collection-members.tsx`: lists member products resolved against the
+  active product list, add via a search picker / remove, through `GET/POST/DELETE
+  /admin/collections/:id/products`). Mutations invalidate `['admin','collections']` + the public
+  `['collections']` so the home updates. New sidebar tab **Collections** (`NAV_ITEMS`).
+- **Images = pasted URLs (no upload)** — both the category and collection cover images are external URLs the
+  admin pastes (like banners §15); a broken/empty URL degrades to a placeholder. Cloudinary upload stays a
+  future option.
+- **i18n:** new `Home.shopByCategory` + the `carousel` namespace (prev/next) and the admin `collection*` keys
+  (vi/en); the category grid + collection rows reuse `Home.seeMore`, and the collection page reuses
+  `Products.empty/error` — collection/category **titles come from the data**, so no new title keys.

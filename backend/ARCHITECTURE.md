@@ -404,6 +404,43 @@ The `marketing` module owns a single model, `Banner`, and has **no cross-module 
   / `PATCH :id` / `DELETE :id` (archive) — mirrors the voucher admin controller. Full Swagger annotations;
   `BannerResponseDto` keeps the contract typed.
 
+### 4.16 Home sections — cover images, product filters, collection curation — Phase 4
+
+The storefront home is a **fixed section set with admin-curated content** (no page builder, root §2):
+category grid → featured-collection carousels → on-sale → new-arrivals. Three backend additions feed it;
+all stay inside the `product` schema and the in-process boundary (§2.1, §4.3).
+
+- **Cover image for lists (`primaryImageUrl`).** Product list/detail + collection-products responses gain a
+  derived `primaryImageUrl` so the storefront card/grid/carousels show a cover without a second round-trip.
+  `ProductImageService.getPrimaryImageUrls(ids)` resolves it in **one batch query** over `ProductImage`
+  (lowest `position`, preferring a generic `color = null` image, else the first of any color), returning a
+  `productId → url` map; `attachPrimaryImages(rows)` / `attachPrimaryImage(row)` map it onto each row. This
+  is **controller-compose**: the product + collection controllers call it, keeping the product↔image edge
+  **one-way** — `ProductImageService` already depends on `ProductService` (§2.1), so `ProductService` must
+  **not** depend back on it (no cycle). The list type is `ProductWithPrimaryImage = Product &
+  { primaryImageUrl: string | null }`.
+- **Product list filters (the auto rows).** `GET /products` (`ListProductsQueryDto`) takes `onSale` (→
+  `salePriceCents IS NOT NULL`), `sort=new` (→ `createdAt desc`, else the default `nameEn asc`) and `limit`,
+  all wired into `ProductService.getActiveList(opts)`. The on-sale + new-arrivals home rows are just
+  `?onSale=true&limit=` / `?sort=new&limit=`. Query params arrive as strings (the global `ValidationPipe`
+  has no implicit conversion) so the DTO `@Transform`s `onSale`/`limit`. `limit` is a DB `take` on the
+  category path, but applied **after** the in-JS category-visibility filter on the global path (a DB take
+  could otherwise yield fewer than `limit` visible rows).
+- **Featured collections.** `GET /collections?featured=true` →
+  `CollectionService.getActiveList({ featured: true })` narrows to `featuredOnHome` collections ordered by
+  `homeSortOrder asc` (then `nameEn`), still hiding archived + out-of-window seasons. `GET
+  /collections/:slug/products` is enriched with `primaryImageUrl` via the same `attachPrimaryImages`. The
+  n-n membership endpoints (`GET/POST/DELETE /admin/collections/:id/products`, validated through
+  `ProductService.assertManyExist`, §2.1) predate this; the admin UI that drives them is new (frontend §16).
+- **Admin curation = pasted URLs + flags (no upload).** `Category` gains `imageUrl` (the grid tile);
+  `Collection` gains `imageUrl` + `featuredOnHome` + `homeSortOrder` (the showcase). All are **external URLs
+  the admin pastes** (`@IsUrl`, optional; an update sends `null` to clear) — the Cloudinary signed-upload
+  flow (§4.6) is **not** used here (it stays a future option, like banners §4.15); a broken/empty URL
+  degrades to a placeholder on the storefront. Two hand-written **additive** migrations applied with
+  `migrate deploy` (never `migrate dev`, §5.5): `20260701000000_add_category_image` (one nullable column)
+  and `20260701000100_add_collection_home_fields` (`imageUrl` nullable + `featuredOnHome BOOLEAN NOT NULL
+  DEFAULT false` + `homeSortOrder INTEGER NOT NULL DEFAULT 0`).
+
 ## 5. Data model (Prisma)
 
 Full schema: [`prisma/schema.prisma`](./prisma/schema.prisma). It uses the `multiSchema`
@@ -444,7 +481,8 @@ preview feature; each model carries `@@schema("<module>")`.
 ### 5.4 Notable constraints
 - `ProductVariant`: `@@unique([productId, size, color])` and unique `sku`. `stockQty` is the per-variant inventory, guarded by an **atomic decrement at checkout** (Phase 2 — see §4.3).
 - `ProductImage`: unique `publicId` (Cloudinary asset id), added by migration `20260623151010_add_product_image_public_id`; the row stores both the delivery `url` and the `publicId` used to delete the remote asset. Nullable `color` ties an image to a variant color (`null` = generic).
-- `Category`: self-referencing `parentId` (hierarchy; archive cascades at read time). Nullable `sizeSystem` enum (`ALPHA_TOPS`/`ALPHA_BOTTOMS`/`EU_SHOES`) drives the rule-based size suggestion (§4.12); added by the hand-written migration `20260629000000_add_category_size_system`.
+- `Category`: self-referencing `parentId` (hierarchy; archive cascades at read time). Nullable `sizeSystem` enum (`ALPHA_TOPS`/`ALPHA_BOTTOMS`/`EU_SHOES`) drives the rule-based size suggestion (§4.12); added by the hand-written migration `20260629000000_add_category_size_system`. Nullable `imageUrl` (external cover URL for the home category grid, **no upload**) — migration `20260701000000_add_category_image` (§4.16).
+- `Collection`: unique `slug`; a **season** window `validFrom`/`validTo` (nullable bounds — a collection outside its window is storefront-hidden, admin still sees it). Home curation: nullable `imageUrl` (external cover URL, **no upload**) + `featuredOnHome Boolean @default(false)` + `homeSortOrder Int @default(0)` (ascending) — migration `20260701000100_add_collection_home_fields` (§4.16). `ProductCollection` is the n-n membership join (admin-managed; a pure association → detach is a hard delete of the join row, no product touched).
 - `Profile`: 1:1 `User` (`userId @unique`). `measurements Json?` (free-form `{chest,waist,hip,footLength}` cm) + `heightCm`/`weightKg`; user-edited via `PATCH /me/profile` (§4.12).
 - `Review`: `@@unique([userId, productId])` (one review per product per user) + unique `orderItemId` (proof of purchase). The "order must be `DELIVERED`" rule is enforced in the service.
 - `Payment`: unique `idempotencyKey` (no duplicate PaymentIntent) and unique `stripePaymentIntentId`.
