@@ -22,8 +22,9 @@ import { VoucherService } from '../voucher/voucher.service';
 const PENDING_TTL_MINUTES = 15;
 
 // Admin fulfillment state machine. PENDING_PAYMENT/PAID and CANCELLED/REFUNDED are
-// driven by the payment + cancel flows, not the admin status route, so they have
-// no admin-initiated transitions here. DELIVERED is terminal (it unlocks reviews).
+// driven by the payment + cancel flows (REFUNDED via the admin-refund flow,
+// PaymentService.refundOrder -> markRefunded), not the admin status route, so they
+// have no admin-initiated transitions here. DELIVERED is terminal (it unlocks reviews).
 const ADMIN_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.PENDING_PAYMENT]: [],
   [OrderStatus.PAID]: [OrderStatus.PROCESSING],
@@ -33,6 +34,15 @@ const ADMIN_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.CANCELLED]: [],
   [OrderStatus.REFUNDED]: [],
 };
+
+// Statuses an admin may full-refund. DELIVERED is excluded on purpose (refund-after-
+// delivery is a separate return flow); PENDING_PAYMENT has no captured payment, and
+// CANCELLED/REFUNDED are already resolved. Shared with PaymentService.refundOrder.
+export const REFUNDABLE_STATUSES: OrderStatus[] = [
+  OrderStatus.PAID,
+  OrderStatus.PROCESSING,
+  OrderStatus.SHIPPED,
+];
 
 export type OrderWithDetail = Prisma.OrderGetPayload<{
   include: { items: true; statusHistory: true };
@@ -455,6 +465,60 @@ export class OrderService {
       return true;
     }
     return false;
+  }
+
+  // Cross-module (in-process): flip a refundable order to REFUNDED and append a
+  // timeline entry, running inside the refund transaction owned by
+  // PaymentService.refundOrder (which has already issued the Stripe refund). Mirrors
+  // cancelAndReleaseTx's guarded flip: the conditional updateMany is the concurrency
+  // guard, so two overlapping refunds never double-restock. Stock is returned ONLY
+  // for PAID/PROCESSING (goods still in the warehouse); a SHIPPED order's goods have
+  // left, so releasing would phantom-oversell — a physical return is a separate flow.
+  async markRefunded(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+  ): Promise<void> {
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      include: { items: true },
+    });
+    if (!order) {
+      throw new NotFoundException('Order not found.');
+    }
+    if (order.status === OrderStatus.REFUNDED) {
+      return; // already refunded — idempotent no-op
+    }
+    if (!REFUNDABLE_STATUSES.includes(order.status)) {
+      throw new ConflictException(
+        'Only a paid, processing, or shipped order can be refunded.',
+      );
+    }
+    const flip = await tx.order.updateMany({
+      where: { id: orderId, status: order.status },
+      data: { status: OrderStatus.REFUNDED },
+    });
+    if (flip.count !== 1) {
+      throw new ConflictException('Order status changed concurrently.');
+    }
+    if (
+      order.status === OrderStatus.PAID ||
+      order.status === OrderStatus.PROCESSING
+    ) {
+      await this.variants.releaseForOrder(
+        tx,
+        order.items.map((i) => ({
+          variantId: i.variantId,
+          quantity: i.quantity,
+        })),
+      );
+    }
+    await tx.orderStatusHistory.create({
+      data: {
+        orderId,
+        status: OrderStatus.REFUNDED,
+        note: 'Refunded by admin.',
+      },
+    });
   }
 
   // ---------------------------------------------------------------------------

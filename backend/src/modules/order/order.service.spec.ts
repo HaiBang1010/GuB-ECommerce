@@ -493,6 +493,91 @@ describe('OrderService', () => {
     });
   });
 
+  describe('markRefunded', () => {
+    function txFor(status: string, count = 1) {
+      return {
+        order: {
+          findUnique: jest.fn().mockResolvedValue({
+            id: 'o1',
+            status,
+            items: [{ variantId: 'v1', quantity: 2 }],
+          }),
+          updateMany: jest.fn().mockResolvedValue({ count }),
+        },
+        orderStatusHistory: { create: jest.fn() },
+      };
+    }
+
+    it('flips a PAID order to REFUNDED, releases stock, and notes the timeline', async () => {
+      const tx = txFor('PAID');
+      await service.markRefunded(tx as never, 'o1');
+      expect(tx.order.updateMany).toHaveBeenCalledWith({
+        where: { id: 'o1', status: 'PAID' },
+        data: { status: 'REFUNDED' },
+      });
+      expect(variants.releaseForOrder).toHaveBeenCalledWith(tx, [
+        { variantId: 'v1', quantity: 2 },
+      ]);
+      expect(tx.orderStatusHistory.create).toHaveBeenCalledWith({
+        data: { orderId: 'o1', status: 'REFUNDED', note: 'Refunded by admin.' },
+      });
+    });
+
+    it('releases stock for a PROCESSING order (goods still in the warehouse)', async () => {
+      const tx = txFor('PROCESSING');
+      await service.markRefunded(tx as never, 'o1');
+      expect(variants.releaseForOrder).toHaveBeenCalled();
+    });
+
+    it('does NOT release stock for a SHIPPED order, but still flips + notes', async () => {
+      const tx = txFor('SHIPPED');
+      await service.markRefunded(tx as never, 'o1');
+      expect(tx.order.updateMany).toHaveBeenCalledWith({
+        where: { id: 'o1', status: 'SHIPPED' },
+        data: { status: 'REFUNDED' },
+      });
+      expect(variants.releaseForOrder).not.toHaveBeenCalled();
+      expect(tx.orderStatusHistory.create).toHaveBeenCalled();
+    });
+
+    it('rejects a non-refundable status (DELIVERED) without flipping', async () => {
+      const tx = txFor('DELIVERED');
+      await expect(service.markRefunded(tx as never, 'o1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(tx.order.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('is an idempotent no-op when the order is already REFUNDED', async () => {
+      const tx = txFor('REFUNDED');
+      await service.markRefunded(tx as never, 'o1');
+      expect(tx.order.updateMany).not.toHaveBeenCalled();
+      expect(variants.releaseForOrder).not.toHaveBeenCalled();
+    });
+
+    it('throws Conflict when it loses the refund race (count 0)', async () => {
+      const tx = txFor('PAID', 0);
+      await expect(service.markRefunded(tx as never, 'o1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(variants.releaseForOrder).not.toHaveBeenCalled();
+      expect(tx.orderStatusHistory.create).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFound for a missing order', async () => {
+      const tx = {
+        order: {
+          findUnique: jest.fn().mockResolvedValue(null),
+          updateMany: jest.fn(),
+        },
+        orderStatusHistory: { create: jest.fn() },
+      };
+      await expect(service.markRefunded(tx as never, 'missing')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+  });
+
   describe('getDeliveredOrderItemForUser', () => {
     it('returns {id, productId} for an owned, delivered order item', async () => {
       prisma.orderItem.findUnique.mockResolvedValue({

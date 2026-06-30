@@ -40,6 +40,19 @@ export class StripeService {
     return this.stripe().paymentIntents.retrieve(id);
   }
 
+  // Full-refund a charged PaymentIntent. Idempotency-keyed (one key per order) so a
+  // retried admin refund — or a DB failure that re-runs the orchestration — never
+  // issues a second refund: Stripe returns the SAME Refund for a repeated key.
+  async refundPaymentIntent(
+    paymentIntentId: string,
+    idempotencyKey: string,
+  ): Promise<Stripe.Refund> {
+    return this.stripe().refunds.create(
+      { payment_intent: paymentIntentId },
+      { idempotencyKey },
+    );
+  }
+
   // Verifies the Stripe-Signature header against the raw body; throws if the
   // signature is invalid (the caller maps that to a 400).
   constructEvent(payload: Buffer, signature: string): Stripe.Event {

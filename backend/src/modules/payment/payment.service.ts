@@ -1,8 +1,16 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
 import Stripe from 'stripe';
 import { PrismaService } from '../../prisma/prisma.service';
-import { OrderService } from '../order/order.service';
+import {
+  OrderAdminWithCustomer,
+  OrderService,
+  REFUNDABLE_STATUSES,
+} from '../order/order.service';
 import { StripeService } from './stripe.service';
 
 // Currency is LOCKED to USD on purpose — no env override. Stripe `amount` is in
@@ -149,6 +157,63 @@ export class PaymentService {
       await this.orders.emitStatusEvent(effect.paidOrderId, OrderStatus.PAID);
     }
     return { received: true };
+  }
+
+  /**
+   * Admin full-refund of a captured order. Lives here (not in OrderModule) because
+   * issuing the Stripe refund needs StripeService while OrderModule must NOT import
+   * PaymentModule — payment already depends on order (markPaid), so the reverse edge
+   * would be a cycle. The order-side state change is delegated to
+   * OrderService.markRefunded (in-process), mirroring markPaid.
+   *
+   * Order of operations is idempotency-safe: the Stripe refund (idempotency-keyed)
+   * runs BEFORE the DB transaction, so a transaction failure re-runs against the same
+   * Stripe Refund instead of charging a second one. The conditional flip inside
+   * markRefunded guards two concurrent refunds.
+   */
+  async refundOrder(orderId: string): Promise<OrderAdminWithCustomer> {
+    const order = await this.orders.getForAdmin(orderId); // 404 if missing
+    if (order.status === OrderStatus.REFUNDED) {
+      return order; // already refunded — idempotent, no Stripe call
+    }
+    if (!REFUNDABLE_STATUSES.includes(order.status)) {
+      // Reject BEFORE touching Stripe (e.g. DELIVERED, CANCELLED, PENDING_PAYMENT).
+      throw new ConflictException(
+        'Only a paid, processing, or shipped order can be refunded.',
+      );
+    }
+
+    const payment = await this.prisma.payment.findFirst({
+      where: {
+        orderId,
+        status: PaymentStatus.SUCCEEDED,
+        stripePaymentIntentId: { not: null },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!payment?.stripePaymentIntentId) {
+      throw new ConflictException('No captured payment to refund.');
+    }
+
+    // External side-effect FIRST (outside the tx — a Stripe refund can't roll back).
+    // The per-order idempotency key makes a retry return the same Refund.
+    await this.stripe.refundPaymentIntent(
+      payment.stripePaymentIntentId,
+      `refund_${orderId}`,
+    );
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: { status: PaymentStatus.REFUNDED },
+      });
+      // Guarded flip + conditional stock release + timeline entry (in-process).
+      await this.orders.markRefunded(tx, orderId);
+    });
+
+    // Publish AFTER commit (best-effort, never breaks the refund) — same as markPaid.
+    await this.orders.emitStatusEvent(orderId, OrderStatus.REFUNDED);
+    return this.orders.getForAdmin(orderId);
   }
 
   private async applyEvent(

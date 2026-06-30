@@ -20,6 +20,7 @@ const NOTIFY: Partial<Record<OrderStatus, string>> = {
   [OrderStatus.PAID]: 'ORDER_PAID',
   [OrderStatus.SHIPPED]: 'ORDER_SHIPPED',
   [OrderStatus.DELIVERED]: 'ORDER_DELIVERED',
+  [OrderStatus.REFUNDED]: 'ORDER_REFUNDED',
 };
 
 export type NotificationList = {

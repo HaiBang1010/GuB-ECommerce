@@ -38,4 +38,10 @@ describe('StripeService', () => {
       InternalServerErrorException,
     );
   });
+
+  it('refundPaymentIntent fails closed when STRIPE_SECRET_KEY is unset', async () => {
+    await expect(
+      service.refundPaymentIntent('pi_1', 'refund_o1'),
+    ).rejects.toBeInstanceOf(InternalServerErrorException);
+  });
 });

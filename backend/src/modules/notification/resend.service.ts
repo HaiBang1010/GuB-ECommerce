@@ -51,6 +51,7 @@ export class ResendService {
       [OrderStatus.PAID]: 'We received your payment',
       [OrderStatus.SHIPPED]: 'Your order is on the way',
       [OrderStatus.DELIVERED]: 'Your order has been delivered',
+      [OrderStatus.REFUNDED]: 'Your order has been refunded',
     };
     const headline = headlines[status] ?? 'Order update';
     const subject = `GuB · Order #${shortId} — ${headline}`;

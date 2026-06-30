@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PaymentService } from './payment.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -20,11 +20,14 @@ describe('PaymentService', () => {
   let stripe: {
     createPaymentIntent: jest.Mock;
     retrievePaymentIntent: jest.Mock;
+    refundPaymentIntent: jest.Mock;
     constructEvent: jest.Mock;
   };
   let orders: {
     getForUser: jest.Mock;
+    getForAdmin: jest.Mock;
     markPaid: jest.Mock;
+    markRefunded: jest.Mock;
     emitStatusEvent: jest.Mock;
   };
   let service: PaymentService;
@@ -37,11 +40,14 @@ describe('PaymentService', () => {
     stripe = {
       createPaymentIntent: jest.fn(),
       retrievePaymentIntent: jest.fn(),
+      refundPaymentIntent: jest.fn(),
       constructEvent: jest.fn(),
     };
     orders = {
       getForUser: jest.fn(),
+      getForAdmin: jest.fn(),
       markPaid: jest.fn(),
+      markRefunded: jest.fn(),
       emitStatusEvent: jest.fn(),
     };
     service = new PaymentService(
@@ -303,6 +309,61 @@ describe('PaymentService', () => {
         service.handleWebhook(Buffer.from('{}'), 'sig'),
       ).resolves.toEqual({ received: true });
       expect(orders.markPaid).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('refundOrder', () => {
+    it('refunds a PAID order: Stripe refund (idempotency-keyed), Payment REFUNDED, flips + emits', async () => {
+      const refunded = { id: 'o1', status: 'REFUNDED', customer: null };
+      orders.getForAdmin
+        .mockResolvedValueOnce({ id: 'o1', status: 'PAID', customer: null })
+        .mockResolvedValueOnce(refunded);
+      prisma.payment.findFirst.mockResolvedValue({
+        id: 'pay1',
+        stripePaymentIntentId: 'pi_1',
+      });
+      const tx = { payment: { update: jest.fn() } };
+      prisma.$transaction.mockImplementation(
+        (cb: (t: unknown) => unknown) => cb(tx),
+      );
+
+      await expect(service.refundOrder('o1')).resolves.toBe(refunded);
+
+      // External refund first, idempotency-keyed per order.
+      expect(stripe.refundPaymentIntent).toHaveBeenCalledWith('pi_1', 'refund_o1');
+      expect(tx.payment.update).toHaveBeenCalledWith({
+        where: { id: 'pay1' },
+        data: { status: 'REFUNDED' },
+      });
+      expect(orders.markRefunded).toHaveBeenCalledWith(tx, 'o1');
+      // Notify AFTER commit.
+      expect(orders.emitStatusEvent).toHaveBeenCalledWith('o1', 'REFUNDED');
+    });
+
+    it('is idempotent for an already-REFUNDED order — no Stripe call', async () => {
+      const order = { id: 'o1', status: 'REFUNDED', customer: null };
+      orders.getForAdmin.mockResolvedValue(order);
+
+      await expect(service.refundOrder('o1')).resolves.toBe(order);
+      expect(stripe.refundPaymentIntent).not.toHaveBeenCalled();
+      expect(orders.markRefunded).not.toHaveBeenCalled();
+    });
+
+    it('rejects a non-refundable status (DELIVERED) BEFORE touching Stripe', async () => {
+      orders.getForAdmin.mockResolvedValue({ id: 'o1', status: 'DELIVERED' });
+      await expect(service.refundOrder('o1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(stripe.refundPaymentIntent).not.toHaveBeenCalled();
+    });
+
+    it('rejects when there is no captured payment to refund', async () => {
+      orders.getForAdmin.mockResolvedValue({ id: 'o1', status: 'PAID' });
+      prisma.payment.findFirst.mockResolvedValue(null);
+      await expect(service.refundOrder('o1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(stripe.refundPaymentIntent).not.toHaveBeenCalled();
     });
   });
 });
