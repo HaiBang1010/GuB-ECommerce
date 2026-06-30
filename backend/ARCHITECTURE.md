@@ -271,6 +271,41 @@ A product carries one product-level `Product.salePriceCents` (null = not on sale
 **Admin** sets/clears the sale via the existing `PATCH /admin/products/:id { salePriceCents }`
 (number sets, `null` clears; RoleGuard ADMIN, re-validates `sale < base`). No new backend endpoint.
 
+### 4.12 User profile + rule-based size suggestion — Phase 4
+
+**Profile (iam).** The `Profile` row (1:1 with `User`, in-schema; a blank row is auto-created at first
+login) gains a user-facing read/write: `GET`/`PATCH /me/profile` (`ProfileController`, `SupabaseAuthGuard`,
+owner-scoped). `ProfileService.update` **upserts** keyed on `userId` (safe for rows that predate the
+auto-create), writing only the provided fields; `measurements` (free-form `Json`, keys
+`chest/waist/hip/footLength` in cm) is replaced wholesale when present. `UpdateProfileDto` validates
+`heightCm`/`weightKg` (bounded ints) + a nested `MeasurementsDto` (positive numbers). `ProfileService` is
+exported from the `@Global` IamModule so the size suggestion can read measurements in-process.
+
+**Size suggestion (product).** `GET /products/:slug/size-suggestion` (`SupabaseAuthGuard` — reads the
+caller's own measurements) → `SizeSuggestionService.suggest(slug, userId)`:
+1. `ProductService.getActiveBySlug` → `categoryId`; `CategoryService.getSizeSystem(categoryId)`.
+2. `sizeSystem === null` → **`NO_CHART`**. Else pick the **code-constant** chart
+   (`product/size/size-charts.ts`: `SizeSystem → { measure, entries[min,max] }` in cm — `ALPHA_TOPS`→CHEST,
+   `ALPHA_BOTTOMS`→WAIST, `EU_SHOES`→FOOT_LENGTH).
+3. Read `ProfileService.getByUserId(userId).measurements[measureKey]`; missing → **`NO_PROFILE`** (carries
+   the needed `measure` so the FE prompts for it).
+4. Match the value to a size (half-open ranges so a shared boundary picks the larger size); intersect with
+   the product's actual active variant sizes — offered → **`SUGGESTED`** (+ a simple `SNUG`/`PERFECT`/`LOOSE`
+   fit), else **`NO_MATCH`**.
+
+No ML (§8). Fully **in-process / no cross-schema JOIN**: product/variant/category from the own module,
+measurements via the global `ProfileService`. `SizeSuggestionService` lives in `product` and injects
+`ProfileService` (global) — no import cycle (`product` imports neither iam nor order).
+
+**Category catalog admin.** `Category` gains a nullable **`SizeSystem` enum** (hand-written migration
+`20260629000000_add_category_size_system` — never `migrate dev`, §5.5), settable on create + update. The
+admin list `GET /admin/categories` is enriched with **active product / sub-category counts**: the controller
+composes `ProductService.countActiveByCategory()` (a `groupBy`; ProductService owns the product table) with
+`CategoryService.listForAdmin(counts)` (computes child counts in-memory) → `AdminCategoryResponseDto` — no
+Category→Product service cycle (ProductService→CategoryService stays one-way). Archive stays **soft
+(reversible hide)**: products under an archived category are hidden by the read-time cascade, never
+orphaned — the counts drive a UI warning, not a block.
+
 ## 5. Data model (Prisma)
 
 Full schema: [`prisma/schema.prisma`](./prisma/schema.prisma). It uses the `multiSchema`
@@ -287,7 +322,7 @@ preview feature; each model carries `@@schema("<module>")`.
 
 | Postgres schema | Models |
 |---|---|
-| `product` | `Category`, `Product`, `ProductVariant`, `ProductImage`, `Collection`, `ProductCollection` |
+| `product` | `Category`, `Product`, `ProductVariant`, `ProductImage`, `Collection`, `ProductCollection`, enum `SizeSystem` |
 | `iam` | `User`, `Profile`, `Address`, enum `Role` |
 | `cart` | `Cart`, `CartItem` |
 | `ordering` | `Order`, `OrderItem`, `OrderStatusHistory`, enum `OrderStatus` |
@@ -310,6 +345,8 @@ preview feature; each model carries `@@schema("<module>")`.
 ### 5.4 Notable constraints
 - `ProductVariant`: `@@unique([productId, size, color])` and unique `sku`. `stockQty` is the per-variant inventory, guarded by an **atomic decrement at checkout** (Phase 2 — see §4.3).
 - `ProductImage`: unique `publicId` (Cloudinary asset id), added by migration `20260623151010_add_product_image_public_id`; the row stores both the delivery `url` and the `publicId` used to delete the remote asset. Nullable `color` ties an image to a variant color (`null` = generic).
+- `Category`: self-referencing `parentId` (hierarchy; archive cascades at read time). Nullable `sizeSystem` enum (`ALPHA_TOPS`/`ALPHA_BOTTOMS`/`EU_SHOES`) drives the rule-based size suggestion (§4.12); added by the hand-written migration `20260629000000_add_category_size_system`.
+- `Profile`: 1:1 `User` (`userId @unique`). `measurements Json?` (free-form `{chest,waist,hip,footLength}` cm) + `heightCm`/`weightKg`; user-edited via `PATCH /me/profile` (§4.12).
 - `Review`: `@@unique([userId, productId])` (one review per product per user) + unique `orderItemId` (proof of purchase). The "order must be `DELIVERED`" rule is enforced in the service.
 - `Payment`: unique `idempotencyKey` (no duplicate PaymentIntent) and unique `stripePaymentIntentId`.
 - `StripeEvent.id` = the Stripe event id → webhook idempotency ledger.

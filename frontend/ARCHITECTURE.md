@@ -119,13 +119,18 @@ producer (the single async path, backend §4.8); the frontend only reads + acks.
 ## 10. Admin (Phase 3)
 
 The admin area is a `[locale]/(admin)/admin/` route group with its own client `AdminLayout` (an admin
-topbar + a sidebar: **Orders · Users · Reviews** are wired, plus **Catalog/Analytics** "coming soon"
-placeholders) — separate from the `[locale]/(storefront)/` group that renders the storefront `Header`.
+topbar + a sidebar: **Orders · Users · Reviews · Vouchers · Sales · Categories** are wired, with
+**Analytics** still a "coming soon" placeholder) — separate from the `[locale]/(storefront)/` group that
+renders the storefront `Header`.
 Route groups don't affect the URL, so every customer route is unchanged.
 
 **Role is the single source of truth from the backend.** `Providers` calls `GET /me` (which returns
-`iam.User.role`) on the initial session and on `SIGNED_IN`, storing `role` in the auth store (cleared
-on `SIGNED_OUT`); there is **no** Supabase-metadata role sync. `isAdmin(role)` gates the Header's
+`iam.User.role`) on the initial session and on a **genuine `SIGNED_IN` (a new user id)**, storing `role`
+in the auth store (cleared on `SIGNED_OUT`); there is **no** Supabase-metadata role sync. The
+new-user-id guard matters: supabase-js **re-emits `SIGNED_IN` on every tab refocus**, and re-running the
+role sync would flip `roleStatus` back to `loading` → the layout's `resolving` guard would unmount the
+page mid-edit (an open Sheet/form is lost). The guard makes a same-user re-emit a no-op (it also skips a
+redundant guest-cart merge). `isAdmin(role)` gates the Header's
 Admin link and the layout. The client guard is a **convenience** — it waits for the auth store to
 settle, then redirects a non-admin. The real protection is twofold: `middleware.ts` requires a
 session to enter `/admin` (guests → login), and the backend **`RoleGuard`** rejects every `/admin/*`
@@ -173,6 +178,16 @@ price and an integer-cents input with **Save** / **Clear** → `useSetProductSal
 /admin/products/:id { salePriceCents }`, number sets / `null` clears). The backend re-validates
 `sale < base` and the 400 message surfaces via a toast. The sale itself is applied at checkout by the
 backend (ARCHITECTURE.md §4.11); this page is only the input surface.
+
+**Categories** (`/admin/categories`): a full catalog-category manager (`features/admin/categories/`).
+`useAdminCategories` (`GET /admin/categories`) lists every category (incl. archived) with active
+product/sub-category **counts**, rendered as an **indented tree** (depth from the `parentId` chain) with a
+client-side name/slug search. Each row has an **inline `sizeSystem` `<select>`** (PATCH on change — the
+quick path to drive the size suggestion, §14) and **Archive/Restore** (the archive confirm **warns** the
+counts it would hide; archive is a reversible soft-hide, never a delete). **New/Edit** open a right-side
+**Sheet** (`category-form.tsx`, RHF+zod) with a **parent `<select>`** (self + descendants excluded to avoid
+a cycle; the backend re-guards) and the `sizeSystem` picker. Any change invalidates `['admin','categories']`
++ `['size-suggestion']`. This wired **Categories** tab replaces the old "Catalog" placeholder.
 
 ## 11. Vouchers at checkout (Phase 4)
 
@@ -226,9 +241,27 @@ The customer's "my" pages live under a single `/account` route group inside `(st
   (`perUserLimit − userUsedCount`, "Unlimited" when uncapped), and a **copy-code** button (mirror of
   the admin `CopyableId` — inline 1.5s feedback, swallows insecure-context clipboard failures).
   Read-only — applying a voucher still happens at checkout (§11).
-- **Landing** `/account` — a minimal index linking Orders + Vouchers (room for Profile in a later
-  Phase 4 slice).
+- **Profile** `/account/profile` (`features/profile/`): an auth-gated `useProfile` (`GET /me/profile`)
+  feeds an RHF+zod form (`profile-form.tsx`) — height/weight + body measurements
+  (chest/waist/hip/footLength, all optional) saved via `PATCH /me/profile` (`useUpdateProfile` invalidates
+  `['profile']` + `['size-suggestion']`). Powers the size suggestion (§14).
+- **Landing** `/account` — a minimal index linking Orders + Vouchers + Profile.
 - **Gate:** `middleware.ts` `PROTECTED` now matches `/account` (replacing `/orders`) so the whole
   `/account/*` subtree requires a session (guests → login).
 - **i18n / header:** new `wallet` + `account` next-intl namespaces (vi/en); the header's "Vouchers"
-  dropdown item (previously a disabled "coming soon") now links to `/account/vouchers`.
+  dropdown item (previously a disabled "coming soon") now links to `/account/vouchers`. A **Profile** item
+  (`nav.profile`) was added beside it.
+
+## 14. Size suggestion on the product page (Phase 4)
+
+The product detail page shows a **rule-based suggested size** for logged-in users — the backend computes
+it (ARCHITECTURE.md §4.12); the FE only renders. `features/product/api/size-suggestion.ts` +
+`hooks/use-size-suggestion.ts` (an auth-gated `useQuery(['size-suggestion', slug])` that never fires for
+guests) call `GET /products/:slug/size-suggestion`. In `product-detail-view.tsx` `DetailContent` (which
+now also reads `useAuthStore`), a `<SuggestedSize/>` block sits by the size selector and renders by status:
+- `SUGGESTED` → "Suggested for you: {size}" (+ a `SNUG`/`PERFECT`/`LOOSE` fit note) with a button that
+  calls `setSelectedSize(size)`;
+- `NO_PROFILE` → "Add your measurements", linking to `/account/profile`;
+- `NO_CHART` / `NO_MATCH` / guest → renders nothing.
+Suggestion strings live in the `product` namespace; the profile form/page strings in a new `profile`
+namespace (vi/en).
