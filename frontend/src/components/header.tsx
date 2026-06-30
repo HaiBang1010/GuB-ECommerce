@@ -82,6 +82,9 @@ export function Header() {
                 <DropdownMenuItem asChild>
                   <Link href="/account/vouchers">{tNav('vouchers')}</Link>
                 </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/account/profile">{tNav('profile')}</Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem disabled>
                   {tNav('reviews')}
                   <span className="text-muted-foreground text-xs">

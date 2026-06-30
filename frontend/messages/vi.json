@@ -215,6 +215,7 @@
     "admin": "Quản trị",
     "vouchers": "Voucher",
     "reviews": "Đánh giá",
+    "profile": "Hồ sơ",
     "comingSoon": "Sắp có"
   },
   "notification": {
@@ -356,6 +357,31 @@
     "saleCleared": "Đã xóa giá sale",
     "saleError": "Không thể cập nhật giá sale",
     "productsError": "Không tải được sản phẩm",
-    "noProducts": "Không có sản phẩm"
+    "noProducts": "Không có sản phẩm",
+    "restore": "Khôi phục",
+    "categories": "Danh mục",
+    "categoriesTitle": "Danh mục",
+    "newCategory": "Thêm danh mục",
+    "editCategory": "Sửa danh mục",
+    "parentCategory": "Danh mục cha",
+    "rootCategory": "— Không (gốc) —",
+    "sizeSystem": "Hệ size",
+    "sizeSystemNone": "Không",
+    "sizeAlphaTops": "Áo (S/M/L theo ngực)",
+    "sizeAlphaBottoms": "Quần (S/M/L theo eo)",
+    "sizeEuShoes": "Giày (EU theo dài chân)",
+    "searchCategories": "Tìm theo tên hoặc slug",
+    "slugHint": "Chữ thường kebab-case, duy nhất.",
+    "slugError": "Chữ thường kebab-case (chữ, số, gạch nối).",
+    "categoryCreated": "Đã tạo danh mục",
+    "categoryUpdated": "Đã cập nhật danh mục",
+    "categoryArchived": "Đã lưu trữ danh mục",
+    "categoryRestored": "Đã khôi phục danh mục",
+    "archiveCategoryConfirm": "Lưu trữ sẽ ẩn danh mục này cùng {products} sản phẩm + {subcategories} danh mục con. Chúng hiện lại khi khôi phục. Tiếp tục?",
+    "noCategories": "Chưa có danh mục",
+    "categoriesError": "Không tải được danh mục",
+    "categorySaveError": "Không lưu được danh mục",
+    "productsCount": "{count} sản phẩm",
+    "subcategoriesCount": "{count} danh mục con"
   }
 }

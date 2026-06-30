@@ -215,6 +215,7 @@
     "admin": "Admin",
     "vouchers": "Vouchers",
     "reviews": "Reviews",
+    "profile": "Profile",
     "comingSoon": "Coming soon"
   },
   "notification": {
@@ -356,6 +357,31 @@
     "saleCleared": "Sale cleared",
     "saleError": "Couldn't update the sale price",
     "productsError": "Couldn't load products",
-    "noProducts": "No products"
+    "noProducts": "No products",
+    "restore": "Restore",
+    "categories": "Categories",
+    "categoriesTitle": "Categories",
+    "newCategory": "New category",
+    "editCategory": "Edit category",
+    "parentCategory": "Parent",
+    "rootCategory": "— None (root) —",
+    "sizeSystem": "Size system",
+    "sizeSystemNone": "None",
+    "sizeAlphaTops": "Tops (S/M/L by chest)",
+    "sizeAlphaBottoms": "Bottoms (S/M/L by waist)",
+    "sizeEuShoes": "Shoes (EU by foot length)",
+    "searchCategories": "Search by name or slug",
+    "slugHint": "Lowercase kebab-case, unique.",
+    "slugError": "Lowercase kebab-case (letters, digits, hyphens).",
+    "categoryCreated": "Category created",
+    "categoryUpdated": "Category updated",
+    "categoryArchived": "Category archived",
+    "categoryRestored": "Category restored",
+    "archiveCategoryConfirm": "Archiving hides this category and its {products} product(s) + {subcategories} subcategory(ies). They reappear on restore. Continue?",
+    "noCategories": "No categories",
+    "categoriesError": "Couldn't load categories",
+    "categorySaveError": "Couldn't save the category",
+    "productsCount": "{count} products",
+    "subcategoriesCount": "{count} subcategories"
   }
 }

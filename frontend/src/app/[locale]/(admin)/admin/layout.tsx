@@ -19,7 +19,7 @@ const NAV_ITEMS = [
   { key: 'reviews', href: '/admin/reviews' },
   { key: 'vouchers', href: '/admin/vouchers' },
   { key: 'sales', href: '/admin/sales' },
-  { key: 'catalog', href: null },
+  { key: 'categories', href: '/admin/categories' },
   { key: 'analytics', href: null },
 ] as const;
 

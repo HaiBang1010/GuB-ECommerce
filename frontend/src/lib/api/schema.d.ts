@@ -62,7 +62,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List all categories (incl. archived) */
+        /** List all categories (incl. archived) with counts */
         get: operations["CategoryAdminController_list"];
         put?: never;
         /** Create a category */
@@ -1261,6 +1261,48 @@ export interface components {
              */
             updatedAt: string;
         };
+        AdminCategoryResponseDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9cat01 */
+            id: string;
+            /** @example Áo thun */
+            nameVi: string;
+            /** @example T-Shirts */
+            nameEn: string;
+            /** @example ao-thun */
+            slug: string;
+            /** @example null */
+            parentId: string | null;
+            /**
+             * @example null
+             * @enum {string|null}
+             */
+            sizeSystem: "ALPHA_TOPS" | "ALPHA_BOTTOMS" | "EU_SHOES" | null;
+            /**
+             * Format: date-time
+             * @example null
+             */
+            archivedAt: string | null;
+            /**
+             * Format: date-time
+             * @example 2026-06-01T00:00:00.000Z
+             */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @example 2026-06-01T00:00:00.000Z
+             */
+            updatedAt: string;
+            /**
+             * @description Active products directly in this category.
+             * @example 3
+             */
+            productCount: number;
+            /**
+             * @description Active direct sub-categories.
+             * @example 1
+             */
+            childCount: number;
+        };
         CreateCategoryDto: {
             /** @example Áo thun */
             nameVi: string;
@@ -1276,6 +1318,11 @@ export interface components {
              * @example clx1a2b3c4d5e6f7g8h9cat01
              */
             parentId?: string;
+            /**
+             * @description Size system for size suggestion; omit for none.
+             * @enum {string|null}
+             */
+            sizeSystem?: "ALPHA_TOPS" | "ALPHA_BOTTOMS" | "EU_SHOES" | null;
         };
         UpdateCategoryDto: {
             /** @example Áo thun */
@@ -2911,7 +2958,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CategoryResponseDto"][];
+                    "application/json": components["schemas"]["AdminCategoryResponseDto"][];
                 };
             };
             /** @description Missing or invalid token. */
