@@ -219,7 +219,8 @@ order module calls at checkout (never a cross-schema JOIN, §4.3):
 
 - **`validate(code, userId, subtotalCents)` — read-only.** Looks the code up (stored/looked-up
   UPPERCASE), checks the window (`validFrom`/`validTo`), `minOrderCents`, the global `usageLimit`,
-  the per-user `perUserLimit` (via the `UserVoucher` ledger) and — for `isPublic === false`
+  the per-user `perUserLimit` (via the `UserVoucher` ledger), the per-user **`expiresAt`** deadline
+  (`VOUCHER_EXPIRED` when `now > grant.expiresAt`; null skips it — §4.14) and — for `isPublic === false`
   (wallet-only) — that a `UserVoucher` grant exists; then computes the discount. Failures throw a
   **structured 4xx** `{ statusCode, error, message, code, …meta }` whose `code` is a `VoucherErrorCode`
   (`VOUCHER_NOT_FOUND` · `…_EXPIRED` · `…_MIN_ORDER_NOT_MET` (+`minOrderCents`) · `…_USED_UP` ·
@@ -353,18 +354,29 @@ controller-level compose avoids any new service→service edge.
 
 **Birthday cron.** `POST /admin/jobs/grant-birthday-vouchers` (`VoucherJobsController`, **`AdminGuard`**
 `x-admin-secret` — machine-to-machine, mirrors `release-expired`, §6) grants the year's birthday voucher
-to every user whose birthday is **today**. `VoucherService.grantBirthdayVouchers`:
+to every user whose birthday falls in the **last 7 days**. `VoucherService.grantBirthdayVouchers`:
 - the "birthday voucher" is a **year-coded** voucher `code = 'BIRTHDAY-<UTC year>'` the admin pre-creates
-  (no new flag, no migration); a missing/archived one → a logged `{0,0,0}` degrade;
-- `UserService.findIdsWithBirthdayToday()` (iam owns the query — voucher never touches the iam schema)
-  matches **day + month in UTC** (year ignored), fetching non-archived users with a birthday and
-  filtering in Node;
-- per user, the extracted idempotent `grantToUser(voucherId, userId)` creates the `UserVoucher` —
-  **idempotency rides the existing `@@unique([userId, voucherId])`**: a repeat ping hits P2002 (counted
-  `skipped`, never duplicated), so one grant per user per year, while next year's `BIRTHDAY-<year+1>` is a
-  different voucher → a fresh grant. No year-check logic, no schema change;
+  (no new flag) with **no `validTo`** — the deadline is per-user (see below); a missing/archived one → a
+  logged `{0,0,0}` degrade;
+- `UserService.findIdsWithBirthdayInWindow(today, days = 7)` (iam owns the query — voucher never touches
+  the iam schema) matches **day + month in UTC** over the inclusive window `[today − 7d, today]`, so a
+  single missed daily run still catches the birthday. A **Feb 29** birthday is observed on **Mar 1** in a
+  non-leap year. Non-archived users with a birthday are fetched and filtered in Node;
+- **per-user expiry (fair deadline).** Each grant gets `UserVoucher.expiresAt = now + 30 days`
+  (`BIRTHDAY_VALID_DAYS`), measured from when the user actually receives it — not a single shared `validTo`,
+  which would favour early-in-the-year birthdays. `grantToUser(voucherId, userId, expiresAt)` passes it
+  through; a manual admin grant-by-email passes **no** `expiresAt` (null → the voucher's own window applies);
+- **idempotency rides the existing `@@unique([userId, voucherId])`**: a repeat ping hits P2002 (counted
+  `skipped`, never duplicated), so one grant per user per year and the existing row's `expiresAt` is
+  **never overwritten**; next year's `BIRTHDAY-<year+1>` is a different voucher → a fresh grant;
 - **best-effort per user** (a single failure is logged without PII and counted `skipped`, never aborting
   the run); returns `{ granted, skipped, total }`.
+
+**Per-user expiry is enforced everywhere the voucher window is.** `validate` rejects with `VOUCHER_EXPIRED`
+when `now > grant.expiresAt` (in addition to the voucher's own `validFrom`/`validTo`; both must pass —
+`expiresAt` null skips this check). `listWalletForUser` hides a grant once its `expiresAt` is past (mirrors
+`validTo`) and carries `expiresAt` on `WalletVoucherResponseDto` so the FE shows `expiresAt ?? validTo` as
+the deadline.
 
 Local: trigger by hand (`curl -X POST … -H "x-admin-secret: …"`). On deploy, UptimeRobot pings it
 **daily** (mirrors `release-expired`). Granted vouchers surface in the existing wallet
@@ -416,7 +428,7 @@ preview feature; each model carries `@@schema("<module>")`.
 - `StripeEvent.id` = the Stripe event id → webhook idempotency ledger.
 - `Cart`: at most one of `userId` / `sessionId` (both `@unique`).
 - `Voucher`: unique `code` (stored UPPERCASE). `isPublic` flags PUBLIC vs wallet-only; `usedCount` is the global redemption counter (atomic-guarded vs `usageLimit` at redeem, §4.10). Money fields (`value` for FIXED, `minOrderCents`, `maxDiscountCents`) are integer cents; optional bilingual `titleVi/En` + `descriptionVi/En`. `isPublic` + the title/description columns were added by hand-written migrations (`20260627000000_add_voucher_public_and_per_user_count`, `20260627120000_add_voucher_title_description`).
-- `UserVoucher`: `@@unique([userId, voucherId])` — the per-user redemption **ledger** (`usedCount` enforces `perUserLimit`, `usedAt` = last redeemed). A wallet grant pre-creates a row (`usedCount = 0`); a PUBLIC redemption creates it lazily.
+- `UserVoucher`: `@@unique([userId, voucherId])` — the per-user redemption **ledger** (`usedCount` enforces `perUserLimit`, `usedAt` = last redeemed). A wallet grant pre-creates a row (`usedCount = 0`); a PUBLIC redemption creates it lazily. `expiresAt DateTime?` (nullable, hand-written migration `20260630000000_add_user_voucher_expires_at`) is the **per-user deadline** measured from the grant (birthday voucher = grant + 30d); `null` = no per-user deadline → only the voucher's own `validFrom`/`validTo` applies. Enforced in `validate` (`VOUCHER_EXPIRED`) and hidden in the wallet once past — §4.14.
 
 ### 5.5 Full-text + fuzzy search
 `Product` has a **generated** `search_tsv tsvector` column (weighted name=A, brand=B,
@@ -449,8 +461,8 @@ description=C) with a GIN index, plus two `pg_trgm` GIN indexes on **accent-fold
 Jobs: stock-reservation expiry (Phase 2, live); birthday vouchers (Phase 4, live); abandoned-cart cleanup (later).
 - **The DB is Neon, which has no `pg_cron`** (Supabase is Auth-only here) → the pg_cron-in-DB option does **not** apply; scheduling is **external**.
 - **UptimeRobot → `POST /admin/jobs/*`**, guarded by `AdminGuard` (`x-admin-secret` header = `ADMIN_API_SECRET`). Phase 2 ships `POST /admin/jobs/release-expired` (cancel unpaid orders past TTL + release stock); UptimeRobot calls it **~every 5 min**.
-- Phase 4 adds `POST /admin/jobs/grant-birthday-vouchers` (grant the year-coded `BIRTHDAY-<year>` voucher to today's birthday users, §4.14); UptimeRobot calls it **~daily**.
-- Every job must be **idempotent** (cron can fire late or twice) — `release-expired` flips status conditionally so a double-fire never double-restocks; `grant-birthday-vouchers` relies on the `UserVoucher @@unique([userId, voucherId])` constraint so a re-run never double-grants.
+- Phase 4 adds `POST /admin/jobs/grant-birthday-vouchers` (grant the year-coded `BIRTHDAY-<year>` voucher to users whose birthday is in the **last 7 days**, with a per-user `expiresAt = now + 30d`, §4.14); UptimeRobot calls it **~daily**.
+- Every job must be **idempotent** (cron can fire late or twice) — `release-expired` flips status conditionally so a double-fire never double-restocks; `grant-birthday-vouchers` relies on the `UserVoucher @@unique([userId, voucherId])` constraint so a re-run never double-grants (and never overwrites an existing grant's `expiresAt`). The 7-day window means a missed daily run still catches the birthday.
 
 ## 7. Health & keep-alive
 

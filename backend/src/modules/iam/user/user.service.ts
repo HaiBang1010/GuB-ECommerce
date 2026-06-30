@@ -68,13 +68,28 @@ export class UserService {
     });
   }
 
-  // The ids of users whose birthday's day+month is `today` (year ignored) — the
-  // birthday-voucher cron grants to them. Compared in UTC to avoid an off-by-one
-  // across timezones. Owns the iam.User query so the voucher module never touches
-  // the iam schema directly (ARCHITECTURE.md §4.3). `today` is injectable for tests.
-  async findIdsWithBirthdayToday(today: Date = new Date()): Promise<string[]> {
-    const month = today.getUTCMonth();
-    const day = today.getUTCDate();
+  // The ids of users whose birthday (day+month, year ignored) falls in the last
+  // `days` days up to and including `today` — the birthday-voucher cron grants to
+  // them. A window (not just "today") means one missed daily run still catches the
+  // birthday. Compared in UTC to avoid an off-by-one across timezones. A Feb-29
+  // birthday is observed on Mar 1 in a non-leap year. Owns the iam.User query so the
+  // voucher module never touches the iam schema directly (ARCHITECTURE.md §4.3).
+  // `today`/`days` are injectable for tests.
+  async findIdsWithBirthdayInWindow(
+    today: Date = new Date(),
+    days = 7,
+  ): Promise<string[]> {
+    const y = today.getUTCFullYear();
+    const m = today.getUTCMonth();
+    const d = today.getUTCDate();
+    // Keys "<utcMonth>-<utcDate>" for today and the previous `days` days. Date.UTC
+    // normalizes month/year roll-over, so a window crossing Mar 1 / Jan 1 is fine.
+    const window = new Set<string>();
+    for (let i = 0; i <= days; i++) {
+      const day = new Date(Date.UTC(y, m, d - i));
+      window.add(`${day.getUTCMonth()}-${day.getUTCDate()}`);
+    }
+    const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
     const users = await this.prisma.user.findMany({
       where: { birthday: { not: null }, archivedAt: null },
       select: { id: true, birthday: true },
@@ -82,7 +97,14 @@ export class UserService {
     return users
       .filter((u) => {
         const b = u.birthday as Date;
-        return b.getUTCMonth() === month && b.getUTCDate() === day;
+        let bm = b.getUTCMonth();
+        let bd = b.getUTCDate();
+        // Feb 29 birthday in a non-leap year → observed on Mar 1.
+        if (bm === 1 && bd === 29 && !leap) {
+          bm = 2;
+          bd = 1;
+        }
+        return window.has(`${bm}-${bd}`);
       })
       .map((u) => u.id);
   }

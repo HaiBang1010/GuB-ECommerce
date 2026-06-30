@@ -29,8 +29,12 @@ export type PaginatedVouchers = {
   pageSize: number;
 };
 
-// A wallet entry: the granted voucher + how many times THIS user has redeemed it.
-export type WalletVoucher = Voucher & { userUsedCount: number };
+// A wallet entry: the granted voucher + how many times THIS user has redeemed it +
+// the per-user deadline (grant + 30d for the birthday voucher; null for most).
+export type WalletVoucher = Voucher & {
+  userUsedCount: number;
+  expiresAt: Date | null;
+};
 
 // A user a voucher has been granted to, for the admin grants list.
 export type GrantedUser = {
@@ -52,6 +56,11 @@ function emptyToNull(value?: string): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
 }
+
+// The birthday voucher's per-user window: every recipient gets the same 30 days from
+// the moment they're granted (UserVoucher.expiresAt), not a shared validTo skewed by
+// birth month or a late cron run.
+const BIRTHDAY_VALID_DAYS = 30;
 
 /**
  * Owns the `voucher` schema (Voucher + UserVoucher wallet/ledger). The order module
@@ -126,6 +135,11 @@ export class VoucherService {
     const grant = await this.prisma.userVoucher.findUnique({
       where: { userId_voucherId: { userId, voucherId: voucher.id } },
     });
+    // Per-user deadline (e.g. birthday voucher = grant + 30d). null = no per-user
+    // deadline → only the voucher's own validFrom/validTo applies (checked above).
+    if (grant?.expiresAt && grant.expiresAt < now) {
+      this.fail(VoucherErrorCode.EXPIRED, 'This voucher has expired.');
+    }
     if (!voucher.isPublic && !grant) {
       this.fail(
         VoucherErrorCode.NOT_AVAILABLE,
@@ -232,11 +246,17 @@ export class VoucherService {
         const v = g.voucher;
         if (v.validFrom && v.validFrom > now) return false;
         if (v.validTo && v.validTo < now) return false;
+        // Per-user deadline — hide once past (mirrors validTo). null = no deadline.
+        if (g.expiresAt && g.expiresAt < now) return false;
         if (v.usageLimit != null && v.usedCount >= v.usageLimit) return false;
         if (v.perUserLimit != null && g.usedCount >= v.perUserLimit) return false;
         return true;
       })
-      .map((g) => ({ ...g.voucher, userUsedCount: g.usedCount }));
+      .map((g) => ({
+        ...g.voucher,
+        userUsedCount: g.usedCount,
+        expiresAt: g.expiresAt,
+      }));
   }
 
   // ---------------------------------------------------------------------------
@@ -384,14 +404,19 @@ export class VoucherService {
 
   // Create the wallet ledger row for (userId, voucherId). Idempotent via the
   // @@unique([userId, voucherId]) constraint: a repeat grant hits P2002 and is a
-  // no-op. Returns true when a NEW row was created, false when it already existed —
-  // so the birthday cron can count granted vs already-granted.
+  // no-op (the existing row's expiresAt is left untouched). Returns true when a NEW
+  // row was created, false when it already existed — so the birthday cron can count
+  // granted vs already-granted. `expiresAt` is the per-user deadline (null = none →
+  // the voucher's own validFrom/validTo applies); the birthday cron passes grant+30d.
   private async grantToUser(
     voucherId: string,
     userId: string,
+    expiresAt: Date | null = null,
   ): Promise<boolean> {
     try {
-      await this.prisma.userVoucher.create({ data: { userId, voucherId } });
+      await this.prisma.userVoucher.create({
+        data: { userId, voucherId, expiresAt },
+      });
       return true;
     } catch (err) {
       if (
@@ -405,14 +430,17 @@ export class VoucherService {
   }
 
   /**
-   * Grant the year's birthday voucher to every user whose birthday is today. Driven
-   * by the secured cron endpoint (UptimeRobot -> POST /admin/jobs/grant-birthday-
-   * vouchers). The "birthday voucher" is a year-coded voucher `BIRTHDAY-<year>` the
-   * admin pre-creates; the cron looks it up by code. Idempotent WITHOUT extra logic:
-   * the @@unique([userId, voucherId]) constraint makes a repeat ping a no-op (one
-   * grant per user per year), and next year's BIRTHDAY-<year+1> is a different
-   * voucher -> a fresh grant. Best-effort per user: a single failure is logged
-   * (no PII) and counted as skipped, never aborting the rest.
+   * Grant the year's birthday voucher to every user whose birthday falls in the last
+   * 7 days (so a single missed daily run still catches them). Driven by the secured
+   * cron endpoint (UptimeRobot -> POST /admin/jobs/grant-birthday-vouchers). The
+   * "birthday voucher" is a year-coded voucher `BIRTHDAY-<year>` the admin pre-creates;
+   * the cron looks it up by code. Idempotent WITHOUT extra logic: the
+   * @@unique([userId, voucherId]) constraint makes a repeat ping a no-op (one grant per
+   * user per year, and the existing row's expiresAt is never overwritten), and next
+   * year's BIRTHDAY-<year+1> is a different voucher -> a fresh grant. Each recipient
+   * gets a per-user 30-day window (UserVoucher.expiresAt = now + 30d). Best-effort per
+   * user: a single failure is logged (no PII) and counted as skipped, never aborting
+   * the rest.
    */
   async grantBirthdayVouchers(): Promise<{
     granted: number;
@@ -426,14 +454,18 @@ export class VoucherService {
       return { granted: 0, skipped: 0, total: 0 };
     }
 
-    const userIds = await this.users.findIdsWithBirthdayToday();
+    // Per-user deadline measured from NOW (when the user actually receives it), not
+    // the birthday — so everyone gets the same window regardless of birth month or a
+    // late cron run. The grant is wallet-only; checkout enforces this via expiresAt.
+    const expiresAt = new Date(Date.now() + BIRTHDAY_VALID_DAYS * 86_400_000);
+    const userIds = await this.users.findIdsWithBirthdayInWindow();
     let granted = 0;
     let skipped = 0;
     for (const userId of userIds) {
       try {
-        const created = await this.grantToUser(voucher.id, userId);
+        const created = await this.grantToUser(voucher.id, userId, expiresAt);
         if (created) granted++;
-        else skipped++; // already had it (a re-run, or granted earlier today)
+        else skipped++; // already had it (a re-run, or granted earlier in the window)
       } catch {
         // No PII in the log — only the user id + voucher code.
         this.logger.warn(

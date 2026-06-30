@@ -179,20 +179,25 @@ describe('UserService', () => {
     });
   });
 
-  describe('findIdsWithBirthdayToday', () => {
-    it('returns ids whose birthday day+month matches today (UTC), ignoring the year', async () => {
+  describe('findIdsWithBirthdayInWindow', () => {
+    it('matches birthdays in [today-7d, today] (UTC), ignoring the year', async () => {
       const today = new Date('2026-06-15T08:00:00.000Z'); // Jun 15
       prisma.user.findMany.mockResolvedValue([
-        { id: 'match1', birthday: new Date('1990-06-15T00:00:00.000Z') },
-        { id: 'match2', birthday: new Date('2001-06-15T23:30:00.000Z') },
-        { id: 'wrongDay', birthday: new Date('1990-06-16T00:00:00.000Z') },
+        { id: 'today', birthday: new Date('1990-06-15T00:00:00.000Z') },
+        { id: 'today2', birthday: new Date('2001-06-15T23:30:00.000Z') },
+        { id: 'fiveDaysAgo', birthday: new Date('1995-06-10T00:00:00.000Z') },
+        { id: 'edge7d', birthday: new Date('1990-06-08T00:00:00.000Z') },
+        { id: 'tooOld8d', birthday: new Date('1990-06-07T00:00:00.000Z') },
+        { id: 'future', birthday: new Date('1990-06-16T00:00:00.000Z') },
         { id: 'wrongMonth', birthday: new Date('1990-07-15T00:00:00.000Z') },
       ]);
-      await expect(service.findIdsWithBirthdayToday(today)).resolves.toEqual([
-        'match1',
-        'match2',
+      await expect(service.findIdsWithBirthdayInWindow(today)).resolves.toEqual([
+        'today',
+        'today2',
+        'fiveDaysAgo',
+        'edge7d',
       ]);
-      // Only non-archived users with a birthday are fetched; the day+month match is
+      // Only non-archived users with a birthday are fetched; the window match is
       // applied in Node (UTC).
       expect(prisma.user.findMany).toHaveBeenCalledWith({
         where: { birthday: { not: null }, archivedAt: null },
@@ -200,12 +205,55 @@ describe('UserService', () => {
       });
     });
 
-    it('returns [] when nobody has a birthday today', async () => {
+    it('honours a custom window size', async () => {
+      prisma.user.findMany.mockResolvedValue([
+        { id: 'fiveDaysAgo', birthday: new Date('1995-06-10T00:00:00.000Z') },
+      ]);
+      // days=3 → window is Jun 12..15, so the Jun 10 birthday is excluded.
+      await expect(
+        service.findIdsWithBirthdayInWindow(
+          new Date('2026-06-15T00:00:00.000Z'),
+          3,
+        ),
+      ).resolves.toEqual([]);
+    });
+
+    it('observes a Feb 29 birthday on Mar 1 in a non-leap year', async () => {
+      prisma.user.findMany.mockResolvedValue([
+        { id: 'leapling', birthday: new Date('2000-02-29T00:00:00.000Z') },
+      ]);
+      // 2027 is non-leap → Feb 29 is observed on Mar 1, which is today.
+      await expect(
+        service.findIdsWithBirthdayInWindow(
+          new Date('2027-03-01T00:00:00.000Z'),
+        ),
+      ).resolves.toEqual(['leapling']);
+      // ...and NOT on Feb 28 (the day before the substitute date).
+      await expect(
+        service.findIdsWithBirthdayInWindow(
+          new Date('2027-02-28T00:00:00.000Z'),
+        ),
+      ).resolves.toEqual([]);
+    });
+
+    it('matches a Feb 29 birthday on Feb 29 in a leap year', async () => {
+      prisma.user.findMany.mockResolvedValue([
+        { id: 'leapling', birthday: new Date('2000-02-29T00:00:00.000Z') },
+      ]);
+      // 2028 is a leap year → the real Feb 29 matches (no Mar 1 substitution).
+      await expect(
+        service.findIdsWithBirthdayInWindow(
+          new Date('2028-02-29T00:00:00.000Z'),
+        ),
+      ).resolves.toEqual(['leapling']);
+    });
+
+    it('returns [] when nobody has a birthday in the window', async () => {
       prisma.user.findMany.mockResolvedValue([
         { id: 'u1', birthday: new Date('1990-01-02T00:00:00.000Z') },
       ]);
       await expect(
-        service.findIdsWithBirthdayToday(new Date('2026-06-15T00:00:00.000Z')),
+        service.findIdsWithBirthdayInWindow(new Date('2026-06-15T00:00:00.000Z')),
       ).resolves.toEqual([]);
     });
   });

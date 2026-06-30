@@ -28,7 +28,7 @@ type UserVoucherDelegate = {
 type UsersMock = {
   findByEmail: jest.Mock;
   findManyByIds: jest.Mock;
-  findIdsWithBirthdayToday: jest.Mock;
+  findIdsWithBirthdayInWindow: jest.Mock;
 };
 
 function makeVoucher(overrides: Partial<Voucher> = {}): Voucher {
@@ -98,7 +98,7 @@ describe('VoucherService', () => {
     users = {
       findByEmail: jest.fn(),
       findManyByIds: jest.fn().mockResolvedValue([]),
-      findIdsWithBirthdayToday: jest.fn().mockResolvedValue([]),
+      findIdsWithBirthdayInWindow: jest.fn().mockResolvedValue([]),
     };
     service = new VoucherService(
       prisma as unknown as PrismaService,
@@ -222,6 +222,41 @@ describe('VoucherService', () => {
         service.validate('SAVE10', 'u1', 2000),
         VoucherErrorCode.USER_LIMIT,
       );
+    });
+
+    it('EXPIRED when the per-user grant.expiresAt is in the past', async () => {
+      // Voucher has NO validTo (birthday convention) — the deadline lives on the grant.
+      prisma.voucher.findUnique.mockResolvedValue(makeVoucher({ isPublic: false }));
+      prisma.userVoucher.findUnique.mockResolvedValue({
+        usedCount: 0,
+        expiresAt: new Date('2000-01-01T00:00:00.000Z'),
+      });
+      await expectCode(
+        service.validate('SAVE10', 'u1', 2000),
+        VoucherErrorCode.EXPIRED,
+      );
+    });
+
+    it('passes when the per-user grant.expiresAt is still in the future', async () => {
+      prisma.voucher.findUnique.mockResolvedValue(makeVoucher({ isPublic: false }));
+      prisma.userVoucher.findUnique.mockResolvedValue({
+        usedCount: 0,
+        expiresAt: new Date('2999-01-01T00:00:00.000Z'),
+      });
+      await expect(service.validate('SAVE10', 'u1', 2000)).resolves.toMatchObject({
+        voucherId: 'vch1',
+      });
+    });
+
+    it('a null grant.expiresAt does not block (only the voucher window applies)', async () => {
+      prisma.voucher.findUnique.mockResolvedValue(makeVoucher({ isPublic: false }));
+      prisma.userVoucher.findUnique.mockResolvedValue({
+        usedCount: 0,
+        expiresAt: null,
+      });
+      await expect(service.validate('SAVE10', 'u1', 2000)).resolves.toMatchObject({
+        voucherId: 'vch1',
+      });
     });
 
     it('returns the computed discount on the happy path', async () => {
@@ -378,8 +413,9 @@ describe('VoucherService', () => {
       prisma.userVoucher.create.mockResolvedValue({});
       await service.grant('vch1', 'jane@x.com');
       expect(users.findByEmail).toHaveBeenCalledWith('jane@x.com');
+      // Manual admin grant passes no deadline → expiresAt null (voucher window applies).
       expect(prisma.userVoucher.create).toHaveBeenCalledWith({
-        data: { userId: 'u1', voucherId: 'vch1' },
+        data: { userId: 'u1', voucherId: 'vch1', expiresAt: null },
       });
     });
 
@@ -415,32 +451,43 @@ describe('VoucherService', () => {
       });
     }
 
-    it('grants the year voucher to today’s users; an already-granted user is skipped', async () => {
+    it('grants the year voucher to in-window users; an already-granted user is skipped', async () => {
       prisma.voucher.findUnique.mockResolvedValue(
         makeVoucher({ id: 'bday', isPublic: false }),
       );
-      users.findIdsWithBirthdayToday.mockResolvedValue(['u1', 'u2', 'u3']);
+      users.findIdsWithBirthdayInWindow.mockResolvedValue(['u1', 'u2', 'u3']);
       // u1, u2 newly created; u3 already had it (P2002) → idempotent skip.
       prisma.userVoucher.create
         .mockResolvedValueOnce({})
         .mockResolvedValueOnce({})
         .mockRejectedValueOnce(p2002());
 
+      const before = Date.now();
       const result = await service.grantBirthdayVouchers();
+      const after = Date.now();
 
       expect(result).toEqual({ granted: 2, skipped: 1, total: 3 });
       // Looks up the year-coded voucher.
       expect(prisma.voucher.findUnique).toHaveBeenCalledWith({
         where: { code: expect.stringMatching(/^BIRTHDAY-\d{4}$/) },
       });
-      expect(prisma.userVoucher.create).toHaveBeenCalledWith({
-        data: { userId: 'u1', voucherId: 'bday' },
-      });
+      // Each grant carries a per-user deadline ≈ now + 30 days.
+      const call = prisma.userVoucher.create.mock.calls[0][0] as {
+        data: { userId: string; voucherId: string; expiresAt: Date };
+      };
+      expect(call.data).toMatchObject({ userId: 'u1', voucherId: 'bday' });
+      const THIRTY_DAYS = 30 * 86_400_000;
+      expect(call.data.expiresAt.getTime()).toBeGreaterThanOrEqual(
+        before + THIRTY_DAYS - 1000,
+      );
+      expect(call.data.expiresAt.getTime()).toBeLessThanOrEqual(
+        after + THIRTY_DAYS + 1000,
+      );
     });
 
     it('is idempotent on a re-run — every user already granted → 0 granted', async () => {
       prisma.voucher.findUnique.mockResolvedValue(makeVoucher({ id: 'bday' }));
-      users.findIdsWithBirthdayToday.mockResolvedValue(['u1', 'u2']);
+      users.findIdsWithBirthdayInWindow.mockResolvedValue(['u1', 'u2']);
       prisma.userVoucher.create.mockRejectedValue(p2002());
 
       await expect(service.grantBirthdayVouchers()).resolves.toEqual({
@@ -457,7 +504,7 @@ describe('VoucherService', () => {
         skipped: 0,
         total: 0,
       });
-      expect(users.findIdsWithBirthdayToday).not.toHaveBeenCalled();
+      expect(users.findIdsWithBirthdayInWindow).not.toHaveBeenCalled();
       expect(prisma.userVoucher.create).not.toHaveBeenCalled();
     });
 
@@ -470,12 +517,12 @@ describe('VoucherService', () => {
         skipped: 0,
         total: 0,
       });
-      expect(users.findIdsWithBirthdayToday).not.toHaveBeenCalled();
+      expect(users.findIdsWithBirthdayInWindow).not.toHaveBeenCalled();
     });
 
     it('is best-effort: a non-P2002 failure for one user does not abort the rest', async () => {
       prisma.voucher.findUnique.mockResolvedValue(makeVoucher({ id: 'bday' }));
-      users.findIdsWithBirthdayToday.mockResolvedValue(['u1', 'u2']);
+      users.findIdsWithBirthdayInWindow.mockResolvedValue(['u1', 'u2']);
       prisma.userVoucher.create
         .mockRejectedValueOnce(new Error('db blip'))
         .mockResolvedValueOnce({});
@@ -485,6 +532,54 @@ describe('VoucherService', () => {
         skipped: 1,
         total: 2,
       });
+    });
+  });
+
+  describe('listWalletForUser', () => {
+    // A grant row joined to its voucher, the shape listWalletForUser reads.
+    function grantRow(
+      voucher: Voucher,
+      overrides: { usedCount?: number; expiresAt?: Date | null } = {},
+    ) {
+      return {
+        userId: 'u1',
+        voucherId: voucher.id,
+        usedCount: overrides.usedCount ?? 0,
+        expiresAt: overrides.expiresAt ?? null,
+        createdAt: new Date('2026-06-10T00:00:00.000Z'),
+        voucher,
+      };
+    }
+
+    it('carries expiresAt through and keeps a future-dated grant', async () => {
+      const future = new Date('2999-01-01T00:00:00.000Z');
+      prisma.userVoucher.findMany.mockResolvedValue([
+        grantRow(makeVoucher({ id: 'bday', isPublic: false }), {
+          expiresAt: future,
+        }),
+      ]);
+      const result = await service.listWalletForUser('u1');
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({ id: 'bday', expiresAt: future });
+    });
+
+    it('hides a grant whose per-user expiresAt is in the past', async () => {
+      prisma.userVoucher.findMany.mockResolvedValue([
+        grantRow(makeVoucher({ id: 'bday', isPublic: false }), {
+          expiresAt: new Date('2000-01-01T00:00:00.000Z'),
+        }),
+      ]);
+      await expect(service.listWalletForUser('u1')).resolves.toEqual([]);
+    });
+
+    it('keeps a grant with a null expiresAt (only the voucher window applies)', async () => {
+      prisma.userVoucher.findMany.mockResolvedValue([
+        grantRow(makeVoucher({ id: 'v1' }), { expiresAt: null }),
+      ]);
+      const result = await service.listWalletForUser('u1');
+      expect(result).toEqual([
+        expect.objectContaining({ id: 'v1', expiresAt: null, userUsedCount: 0 }),
+      ]);
     });
   });
 

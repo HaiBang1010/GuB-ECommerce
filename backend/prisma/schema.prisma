@@ -491,6 +491,9 @@ model UserVoucher {
   // (enforces Voucher.perUserLimit). A wallet grant starts at 0; usedAt = last redeem.
   usedCount Int       @default(0)
   usedAt    DateTime?
+  // Per-user deadline, measured from the grant (e.g. birthday voucher = grant + 30d).
+  // null = no per-user deadline → the voucher's own validFrom/validTo applies instead.
+  expiresAt DateTime?
   createdAt DateTime  @default(now())
 
   @@unique([userId, voucherId])
