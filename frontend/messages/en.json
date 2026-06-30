@@ -3,6 +3,21 @@
     "title": "Welcome to GuB",
     "browse": "Browse products"
   },
+  "banner": {
+    "placeholder": "Banner",
+    "previous": "Previous banner",
+    "next": "Next banner",
+    "goTo": "Go to banner {n}"
+  },
+  "footer": {
+    "tagline": "Quality shoes & clothing, curated for you.",
+    "shop": "Shop",
+    "products": "Products",
+    "about": "About",
+    "contact": "Contact",
+    "followUs": "Follow us",
+    "rights": "© {year} GuB. All rights reserved."
+  },
   "Products": {
     "title": "Products",
     "empty": "No products yet.",
@@ -388,6 +403,28 @@
     "categoriesError": "Couldn't load categories",
     "categorySaveError": "Couldn't save the category",
     "productsCount": "{count} products",
-    "subcategoriesCount": "{count} subcategories"
+    "subcategoriesCount": "{count} subcategories",
+    "banners": "Banners",
+    "bannersTitle": "Banners",
+    "newBanner": "New banner",
+    "editBanner": "Edit banner",
+    "noBanners": "No banners yet",
+    "bannersError": "Couldn't load banners",
+    "bannerImageUrl": "Image URL",
+    "bannerImageUrlHint": "Paste an image URL (e.g. Cloudinary). No upload.",
+    "bannerLinkUrl": "Link URL",
+    "bannerLinkUrlHint": "Where a click goes — a path (/products) or full URL. Optional.",
+    "bannerTitleLabel": "Title",
+    "bannerAlt": "Alt text",
+    "bannerAltHint": "Describes the image for screen readers.",
+    "bannerSortOrder": "Sort order",
+    "bannerActive": "Active",
+    "bannerPreview": "Preview",
+    "urlError": "Enter a valid URL (including https://)",
+    "bannerCreated": "Banner created",
+    "bannerUpdated": "Banner updated",
+    "bannerArchived": "Banner archived",
+    "archiveBannerConfirm": "Archive this banner?",
+    "bannerSaveError": "Couldn't save the banner"
   }
 }

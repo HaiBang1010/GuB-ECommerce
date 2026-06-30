@@ -3,6 +3,21 @@
     "title": "Chào mừng đến với GuB",
     "browse": "Xem sản phẩm"
   },
+  "banner": {
+    "placeholder": "Banner",
+    "previous": "Banner trước",
+    "next": "Banner sau",
+    "goTo": "Đến banner {n}"
+  },
+  "footer": {
+    "tagline": "Giày & quần áo chất lượng, tuyển chọn cho bạn.",
+    "shop": "Cửa hàng",
+    "products": "Sản phẩm",
+    "about": "Giới thiệu",
+    "contact": "Liên hệ",
+    "followUs": "Theo dõi chúng tôi",
+    "rights": "© {year} GuB. Bảo lưu mọi quyền."
+  },
   "Products": {
     "title": "Sản phẩm",
     "empty": "Chưa có sản phẩm nào.",
@@ -388,6 +403,28 @@
     "categoriesError": "Không tải được danh mục",
     "categorySaveError": "Không lưu được danh mục",
     "productsCount": "{count} sản phẩm",
-    "subcategoriesCount": "{count} danh mục con"
+    "subcategoriesCount": "{count} danh mục con",
+    "banners": "Banner",
+    "bannersTitle": "Banner",
+    "newBanner": "Thêm banner",
+    "editBanner": "Sửa banner",
+    "noBanners": "Chưa có banner nào",
+    "bannersError": "Không tải được banner",
+    "bannerImageUrl": "URL ảnh",
+    "bannerImageUrlHint": "Dán URL ảnh (vd. Cloudinary). Không upload.",
+    "bannerLinkUrl": "URL liên kết",
+    "bannerLinkUrlHint": "Nơi click dẫn tới — đường dẫn (/products) hoặc URL đầy đủ. Tùy chọn.",
+    "bannerTitleLabel": "Tiêu đề",
+    "bannerAlt": "Văn bản thay thế (alt)",
+    "bannerAltHint": "Mô tả ảnh cho trình đọc màn hình.",
+    "bannerSortOrder": "Thứ tự",
+    "bannerActive": "Hiển thị",
+    "bannerPreview": "Xem trước",
+    "urlError": "Nhập URL hợp lệ (gồm https://)",
+    "bannerCreated": "Đã tạo banner",
+    "bannerUpdated": "Đã cập nhật banner",
+    "bannerArchived": "Đã lưu trữ banner",
+    "archiveBannerConfirm": "Lưu trữ banner này?",
+    "bannerSaveError": "Không lưu được banner"
   }
 }

@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { key: 'vouchers', href: '/admin/vouchers' },
   { key: 'sales', href: '/admin/sales' },
   { key: 'categories', href: '/admin/categories' },
+  { key: 'banners', href: '/admin/banners' },
   { key: 'analytics', href: null },
 ] as const;
 

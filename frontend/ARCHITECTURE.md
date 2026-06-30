@@ -11,7 +11,7 @@ Next.js **App Router** on Vercel. Overall system architecture: see [`../ARCHITEC
 - Every UI string goes through **next-intl** (vi/en) — never hardcode language in a component.
 - **Light theme only.**
 
-## 2. Directory structure (actual, Phase 3 — `features/` by domain)
+## 2. Directory structure (actual, Phase 4 — `features/` by domain)
 
 Code is organised **by domain feature**, not by technical layer. Each domain owns its
 `{components,hooks,api}/`; admin is kept **separate** from the storefront business domains
@@ -21,8 +21,8 @@ Code is organised **by domain feature**, not by technical layer. Each domain own
 ```
 src/
 ├── app/[locale]/                 # next-intl: /vi, /en — route groups are URL-transparent
-│   ├── (storefront)/             # home · products/[slug] · cart · checkout · auth · account (orders/[id]{/pay,/confirmation} · vouchers) + Header
-│   ├── (admin)/admin/            # orders · users · users/[id] · reviews · vouchers · sales (admin shell)
+│   ├── (storefront)/             # home (banner carousel) · products/[slug] · cart · checkout · auth · account (orders/[id]{/pay,/confirmation} · vouchers · profile) + Header + Footer
+│   ├── (admin)/admin/            # orders · users · users/[id] · reviews · vouchers · sales · categories · banners (admin shell)
 │   └── providers.tsx, layout.tsx # QueryClient + Supabase session bridge + <Toaster>
 ├── features/                     # domain-owned UI; each is {components,hooks,api}/ as needed
 │   ├── product/ cart/ checkout/ voucher/  # storefront domains (voucher = preview at checkout)
@@ -34,7 +34,7 @@ src/
 │       │                            #   the split order/review fetchers + hooks live here; vouchers + sales are admin-only
 │       ├── components/           #   admin-shared: order-detail-dialog, pagination-bar
 │       └── hooks/                #   admin-shared: use-debounce
-├── components/                   # SHARED leaves only: header, order-status-badge, star-rating + ui/ (shadcn primitives; sheet is a hand-built Radix Dialog wrapper)
+├── components/                   # SHARED leaves only: header, footer, order-status-badge, star-rating + ui/ (shadcn primitives; sheet is a hand-built Radix Dialog wrapper)
 ├── lib/api/                      # infra ONLY: apiFetch client + committed schema.d.ts (NO fetchers here)
 ├── lib/                          # money, datetime, utils, stripe, supabase/ (browser/server/middleware clients)
 ├── stores/                       # Zustand: auth + cart (guest sessionId + display snapshots)
@@ -119,7 +119,7 @@ producer (the single async path, backend §4.8); the frontend only reads + acks.
 ## 10. Admin (Phase 3)
 
 The admin area is a `[locale]/(admin)/admin/` route group with its own client `AdminLayout` (an admin
-topbar + a sidebar: **Orders · Users · Reviews · Vouchers · Sales · Categories** are wired, with
+topbar + a sidebar: **Orders · Users · Reviews · Vouchers · Sales · Categories · Banners** are wired, with
 **Analytics** still a "coming soon" placeholder) — separate from the `[locale]/(storefront)/` group that
 renders the storefront `Header`.
 Route groups don't affect the URL, so every customer route is unchanged.
@@ -276,3 +276,29 @@ now also reads `useAuthStore`), a `<SuggestedSize/>` block sits by the size sele
 - `NO_CHART` / `NO_MATCH` / guest → renders nothing.
 Suggestion strings live in the `product` namespace; the profile form/page strings in a new `profile`
 namespace (vi/en).
+
+## 15. Home banners & footer (Phase 4)
+
+Closes the last Phase 4 item. The banner image is an **external URL** (admin pastes it, no upload);
+the backend owns the data (`marketing` module, ARCHITECTURE.md §4.15) and the frontend only renders.
+
+- **Home carousel** (`features/banner/` — `api/banners.ts` + `hooks/use-banners.ts` + `components/banner-carousel.tsx`).
+  A **public** `useQuery(['banners'])` (NOT auth-gated, unlike wallet/notifications — guests see banners too)
+  reads `GET /banners`. `BannerCarousel` renders inside a fixed **aspect-ratio frame** so the home region
+  **never collapses or jumps** across states: loading → `Skeleton`; **empty (0 banners) → a placeholder**
+  (gray box + icon); one banner → static hero; many → a **hand-built carousel** (no carousel lib — `useState`
+  index + ~5s autoplay `setInterval` + prev/next + dot indicators). Each slide is a plain **`<img>`** (arbitrary
+  external host → `next/image` can't whitelist it; `next.config.ts` has no `images` config) with an **`onError`
+  fallback** to the same placeholder, wrapped in `<a href={linkUrl}>` only when a link is set. Rendered at the
+  **top of the home page** (`(storefront)/page.tsx`), above the existing welcome content.
+- **Admin banners** (`/admin/banners`, `features/admin/banners/`) — mirrors the vouchers page: `useAdminBanners`
+  (`GET /admin/banners`, **unpaginated** like categories/sales), New/Edit in a right-side **Sheet**
+  (`banner-form.tsx`, RHF+zod: `imageUrl` required-URL, `linkUrl`/`title`/`alt`, `sortOrder` int, `isActive`
+  checkbox + a **live image preview**), list rows with a thumbnail, an **inline `isActive` checkbox**
+  (immediate `PATCH`), Edit + Archive (confirm). Mutations invalidate **both** `['admin','banners']` and the
+  public `['banners']`, so the home updates immediately. New sidebar tab **Banners** (`NAV_ITEMS`).
+- **Static footer** (`components/footer.tsx`) — FE-only, no DB. Shop name + tagline, link columns (Products →
+  `/products`; About / Contact → `#` placeholders), social placeholders (generic lucide icons — the package
+  dropped brand icons — `href="#"`), and a dynamic copyright year. Rendered by the **storefront layout** only
+  (after `{children}`), so it never appears in the `(admin)` group.
+- **i18n:** new `banner` + `footer` storefront namespaces and banner keys in the existing `admin` namespace (vi/en).

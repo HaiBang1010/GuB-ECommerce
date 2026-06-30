@@ -1222,6 +1222,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/banners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all banners (incl. inactive) */
+        get: operations["MarketingAdminController_list"];
+        put?: never;
+        /** Create a banner */
+        post: operations["MarketingAdminController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/banners/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one banner */
+        get: operations["MarketingAdminController_getOne"];
+        put?: never;
+        post?: never;
+        /** Archive a banner (soft delete) */
+        delete: operations["MarketingAdminController_archive"];
+        options?: never;
+        head?: never;
+        /** Update a banner */
+        patch: operations["MarketingAdminController_update"];
+        trace?: never;
+    };
+    "/banners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List active home banners (public) */
+        get: operations["MarketingController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2936,6 +2990,99 @@ export interface components {
         AdminReplyDto: {
             /** @example Thanks for the feedback! Glad it fit well. */
             reply: string;
+        };
+        CreateBannerDto: {
+            /**
+             * @description Absolute image URL (admin-provided; no upload).
+             * @example https://res.cloudinary.com/demo/image/upload/v1700000000/gub/banners/summer.jpg
+             */
+            imageUrl: string;
+            /**
+             * @description Click target — relative path or absolute URL. null = not clickable.
+             * @example /products?category=summer
+             */
+            linkUrl?: string;
+            /**
+             * @description Admin label / alt fallback.
+             * @example Summer sale
+             */
+            title?: string;
+            /**
+             * @description Image alt text (a11y).
+             * @example Summer sale up to 50% off
+             */
+            alt?: string;
+            /**
+             * @description Display order (ascending).
+             * @example 0
+             */
+            sortOrder?: number;
+            /**
+             * @description Whether the banner is shown.
+             * @default true
+             */
+            isActive: boolean;
+        };
+        BannerResponseDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9bnr01 */
+            id: string;
+            /** @example https://res.cloudinary.com/demo/image/upload/v1700000000/gub/banners/summer.jpg */
+            imageUrl: string;
+            /** @example /products?category=summer */
+            linkUrl: string | null;
+            /** @example Summer sale */
+            title: string | null;
+            /** @example Summer sale up to 50% off */
+            alt: string | null;
+            /**
+             * @description Display order (ascending).
+             * @example 0
+             */
+            sortOrder: number;
+            /** @example true */
+            isActive: boolean;
+            /**
+             * Format: date-time
+             * @example null
+             */
+            archivedAt: string | null;
+            /**
+             * Format: date-time
+             * @example 2026-06-30T00:00:00.000Z
+             */
+            createdAt: string;
+        };
+        UpdateBannerDto: {
+            /**
+             * @description Absolute image URL (admin-provided; no upload).
+             * @example https://res.cloudinary.com/demo/image/upload/v1700000000/gub/banners/summer.jpg
+             */
+            imageUrl?: string;
+            /**
+             * @description Click target — relative path or absolute URL. null = not clickable.
+             * @example /products?category=summer
+             */
+            linkUrl?: string;
+            /**
+             * @description Admin label / alt fallback.
+             * @example Summer sale
+             */
+            title?: string;
+            /**
+             * @description Image alt text (a11y).
+             * @example Summer sale up to 50% off
+             */
+            alt?: string;
+            /**
+             * @description Display order (ascending).
+             * @example 0
+             */
+            sortOrder?: number;
+            /**
+             * @description Whether the banner is shown.
+             * @default true
+             */
+            isActive: boolean;
         };
     };
     responses: never;
@@ -6327,6 +6474,239 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    MarketingAdminController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BannerResponseDto"][];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MarketingAdminController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBannerDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BannerResponseDto"];
+                };
+            };
+            /** @description Validation failed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MarketingAdminController_getOne: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BannerResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Banner not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MarketingAdminController_archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BannerResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Banner not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MarketingAdminController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateBannerDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BannerResponseDto"];
+                };
+            };
+            /** @description Validation failed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Banner not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MarketingController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BannerResponseDto"][];
+                };
             };
         };
     };
