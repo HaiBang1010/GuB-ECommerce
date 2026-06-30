@@ -36,6 +36,7 @@ model Category {
   nameVi     String
   nameEn     String
   slug       String      @unique
+  imageUrl   String? // cover image for the storefront category grid (external URL)
   parentId   String?
   parent     Category?   @relation("CategoryTree", fields: [parentId], references: [id])
   children   Category[]  @relation("CategoryTree")
@@ -121,16 +122,20 @@ model ProductImage {
 }
 
 model Collection {
-  id         String              @id @default(cuid())
-  nameVi     String
-  nameEn     String
-  slug       String              @unique
+  id             String              @id @default(cuid())
+  nameVi         String
+  nameEn         String
+  slug           String              @unique
+  imageUrl       String? // cover image for the storefront collection showcase (external URL)
+  // Home curation: admin flags a collection to feature on the home page, ordered asc.
+  featuredOnHome Boolean             @default(false)
+  homeSortOrder  Int                 @default(0)
   // A "season" is a Collection with a validity window (auto on/off).
-  validFrom  DateTime?
-  validTo    DateTime?
-  products   ProductCollection[]
-  archivedAt DateTime?
-  createdAt  DateTime            @default(now())
+  validFrom      DateTime?
+  validTo        DateTime?
+  products       ProductCollection[]
+  archivedAt     DateTime?
+  createdAt      DateTime            @default(now())
 
   @@schema("product")
 }

@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUrl,
   Matches,
   MaxLength,
   ValidateIf,
@@ -34,6 +35,16 @@ export class CreateCategoryDto {
     message: 'slug must be lowercase kebab-case (letters, digits, hyphens).',
   })
   slug!: string;
+
+  // Cover image for the storefront category grid (external URL — admin pastes it).
+  @ApiPropertyOptional({
+    example: 'https://res.cloudinary.com/demo/image/upload/v1/gub/categories/tops.jpg',
+    description: 'Cover image URL for the home category grid (optional).',
+  })
+  @IsOptional()
+  @IsUrl({ require_protocol: true })
+  @MaxLength(2048)
+  imageUrl?: string;
 
   // Existence/active-state is validated in the service, not here.
   @ApiPropertyOptional({

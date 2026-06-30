@@ -33,6 +33,15 @@ export class ProductResponseDto {
   @ApiProperty({ type: Number, nullable: true, example: 999, description: 'Sale price in USD cents; null = not on sale.' })
   salePriceCents!: number | null;
 
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: 'https://res.cloudinary.com/demo/image/upload/v1/gub/products/ao-thun/white.jpg',
+    description:
+      'Cover image URL (lowest-position image, generic preferred); null when the product has no image.',
+  })
+  primaryImageUrl!: string | null;
+
   @ApiProperty({ type: String, format: 'date-time', nullable: true, example: null })
   archivedAt!: Date | null;
 

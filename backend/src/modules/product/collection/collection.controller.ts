@@ -1,12 +1,15 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
-import { Collection, Product } from '@prisma/client';
+import { Collection } from '@prisma/client';
 import { CollectionService } from './collection.service';
+import { ProductImageService } from '../image/image.service';
+import { ProductWithPrimaryImage } from '../product/product.service';
 import { ProductResponseDto } from '../product/dto/product-response.dto';
 import { CollectionResponseDto } from './dto/collection-response.dto';
 
@@ -14,13 +17,17 @@ import { CollectionResponseDto } from './dto/collection-response.dto';
 @ApiTags('product')
 @Controller('collections')
 export class CollectionController {
-  constructor(private readonly collectionService: CollectionService) {}
+  constructor(
+    private readonly collectionService: CollectionService,
+    private readonly imageService: ProductImageService,
+  ) {}
 
-  @ApiOperation({ summary: 'Active collections (storefront)' })
+  @ApiOperation({ summary: 'Active collections (?featured=true → home-featured only)' })
+  @ApiQuery({ name: 'featured', required: false, type: Boolean })
   @ApiOkResponse({ type: [CollectionResponseDto] })
   @Get()
-  list(): Promise<Collection[]> {
-    return this.collectionService.getActiveList();
+  list(@Query('featured') featured?: string): Promise<Collection[]> {
+    return this.collectionService.getActiveList({ featured: featured === 'true' });
   }
 
   @ApiOperation({ summary: 'Active collection by slug' })
@@ -35,7 +42,10 @@ export class CollectionController {
   @ApiOkResponse({ type: [ProductResponseDto] })
   @ApiNotFoundResponse({ description: 'Collection not found.' })
   @Get(':slug/products')
-  getProducts(@Param('slug') slug: string): Promise<Product[]> {
-    return this.collectionService.getActiveProducts(slug);
+  async getProducts(
+    @Param('slug') slug: string,
+  ): Promise<ProductWithPrimaryImage[]> {
+    const products = await this.collectionService.getActiveProducts(slug);
+    return this.imageService.attachPrimaryImages(products);
   }
 }

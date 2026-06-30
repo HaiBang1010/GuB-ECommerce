@@ -35,6 +35,9 @@ function makeCollection(overrides: Partial<Collection> = {}): Collection {
     nameVi: 'Đồ chạy bộ',
     nameEn: 'Running Gear',
     slug: 'running-gear',
+    imageUrl: null,
+    featuredOnHome: false,
+    homeSortOrder: 0,
     validFrom: null,
     validTo: null,
     archivedAt: null,
@@ -211,6 +214,19 @@ describe('CollectionService', () => {
       ]);
       const result = await service.getActiveList();
       expect(result.map((c) => c.id)).toEqual(['always', 'live']);
+    });
+
+    it('narrows to featured collections ordered by homeSortOrder', async () => {
+      jest.useFakeTimers().setSystemTime(NOW);
+      prisma.collection.findMany.mockResolvedValue([
+        makeCollection({ id: 'f1', featuredOnHome: true, homeSortOrder: 0 }),
+      ]);
+      const result = await service.getActiveList({ featured: true });
+      expect(prisma.collection.findMany).toHaveBeenCalledWith({
+        where: { archivedAt: null, featuredOnHome: true },
+        orderBy: [{ homeSortOrder: 'asc' }, { nameEn: 'asc' }],
+      });
+      expect(result.map((c) => c.id)).toEqual(['f1']);
     });
   });
 

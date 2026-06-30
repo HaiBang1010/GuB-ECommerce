@@ -1,10 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsDate,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUrl,
   Matches,
   MaxLength,
 } from 'class-validator';
@@ -33,6 +36,27 @@ export class CreateCollectionDto {
     message: 'slug must be lowercase kebab-case (letters, digits, hyphens).',
   })
   slug!: string;
+
+  // Cover image for the storefront collection showcase (external URL — admin pastes it).
+  @ApiPropertyOptional({
+    example: 'https://res.cloudinary.com/demo/image/upload/v1/gub/collections/summer.jpg',
+    description: 'Cover image URL for the home collection showcase (optional).',
+  })
+  @IsOptional()
+  @IsUrl({ require_protocol: true })
+  @MaxLength(2048)
+  imageUrl?: string;
+
+  // Home curation: feature this collection on the home page, ordered by homeSortOrder.
+  @ApiPropertyOptional({ default: false, description: 'Feature on the home page.' })
+  @IsOptional()
+  @IsBoolean()
+  featuredOnHome?: boolean;
+
+  @ApiPropertyOptional({ example: 0, description: 'Home ordering (ascending).' })
+  @IsOptional()
+  @IsInt()
+  homeSortOrder?: number;
 
   // A "season" is a Collection with a validity window: the service auto-hides it
   // on the storefront outside [validFrom, validTo]. Either bound may be omitted.

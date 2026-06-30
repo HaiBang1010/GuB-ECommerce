@@ -16,6 +16,13 @@ export class CategoryResponseDto {
   @ApiProperty({ example: 'ao-thun' })
   slug!: string;
 
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: 'https://res.cloudinary.com/demo/image/upload/v1/gub/categories/tops.jpg',
+  })
+  imageUrl!: string | null;
+
   @ApiProperty({ type: String, nullable: true, example: null })
   parentId!: string | null;
 

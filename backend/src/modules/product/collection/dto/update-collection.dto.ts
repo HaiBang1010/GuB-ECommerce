@@ -1,10 +1,13 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsDate,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUrl,
   Matches,
   MaxLength,
   ValidateIf,
@@ -36,6 +39,30 @@ export class UpdateCollectionDto {
     message: 'slug must be lowercase kebab-case (letters, digits, hyphens).',
   })
   slug?: string;
+
+  // Cover image URL; null clears it. ValidateIf lets an explicit null bypass @IsUrl;
+  // the service distinguishes the three cases via `'imageUrl' in dto`.
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    example: 'https://res.cloudinary.com/demo/image/upload/v1/gub/collections/summer.jpg',
+    description: 'Cover image URL for the home collection showcase; null clears it.',
+  })
+  @IsOptional()
+  @ValidateIf((o: UpdateCollectionDto) => o.imageUrl !== null)
+  @IsUrl({ require_protocol: true })
+  @MaxLength(2048)
+  imageUrl?: string | null;
+
+  @ApiPropertyOptional({ description: 'Feature on the home page.' })
+  @IsOptional()
+  @IsBoolean()
+  featuredOnHome?: boolean;
+
+  @ApiPropertyOptional({ example: 0, description: 'Home ordering (ascending).' })
+  @IsOptional()
+  @IsInt()
+  homeSortOrder?: number;
 
   // `null` clears the bound (always-on edge); a date sets it; absent leaves it
   // untouched. ValidateIf lets an explicit null bypass the @IsDate check; the

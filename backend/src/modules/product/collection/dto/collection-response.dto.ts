@@ -14,6 +14,19 @@ export class CollectionResponseDto {
   @ApiProperty({ example: 'summer' })
   slug!: string;
 
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: 'https://res.cloudinary.com/demo/image/upload/v1/gub/collections/summer.jpg',
+  })
+  imageUrl!: string | null;
+
+  @ApiProperty({ example: false, description: 'Featured on the home page.' })
+  featuredOnHome!: boolean;
+
+  @ApiProperty({ example: 0, description: 'Home ordering (ascending).' })
+  homeSortOrder!: number;
+
   @ApiProperty({ type: String, format: 'date-time', nullable: true, example: '2026-06-01T00:00:00.000Z' })
   validFrom!: Date | null;
 

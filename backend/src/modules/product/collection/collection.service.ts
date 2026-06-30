@@ -24,11 +24,15 @@ export class CollectionService {
   // validity window, are hidden.
   // ---------------------------------------------------------------------------
 
-  async getActiveList(): Promise<Collection[]> {
+  // `featured: true` narrows to collections an admin flagged for the home page,
+  // ordered by homeSortOrder. Either way, out-of-window seasons are hidden.
+  async getActiveList(opts: { featured?: boolean } = {}): Promise<Collection[]> {
     const now = new Date();
     const active = await this.prisma.collection.findMany({
-      where: { archivedAt: null },
-      orderBy: { nameEn: 'asc' },
+      where: { archivedAt: null, ...(opts.featured ? { featuredOnHome: true } : {}) },
+      orderBy: opts.featured
+        ? [{ homeSortOrder: 'asc' }, { nameEn: 'asc' }]
+        : { nameEn: 'asc' },
     });
     return active.filter((c) => this.isInWindow(c, now));
   }
@@ -77,6 +81,9 @@ export class CollectionService {
       nameVi: dto.nameVi,
       nameEn: dto.nameEn,
       slug: dto.slug,
+      imageUrl: dto.imageUrl ?? null,
+      featuredOnHome: dto.featuredOnHome ?? false,
+      homeSortOrder: dto.homeSortOrder ?? 0,
       validFrom: dto.validFrom ?? null,
       validTo: dto.validTo ?? null,
     };
@@ -102,6 +109,10 @@ export class CollectionService {
     if (dto.nameVi !== undefined) data.nameVi = dto.nameVi;
     if (dto.nameEn !== undefined) data.nameEn = dto.nameEn;
     if (dto.slug !== undefined) data.slug = dto.slug;
+    // null clears the image; a url sets it; absent leaves it untouched.
+    if ('imageUrl' in dto) data.imageUrl = dto.imageUrl ?? null;
+    if (dto.featuredOnHome !== undefined) data.featuredOnHome = dto.featuredOnHome;
+    if (dto.homeSortOrder !== undefined) data.homeSortOrder = dto.homeSortOrder;
     if ('validFrom' in dto) data.validFrom = dto.validFrom ?? null;
     if ('validTo' in dto) data.validTo = dto.validTo ?? null;
 

@@ -218,6 +218,40 @@ describe('ProductImageService', () => {
     });
   });
 
+  describe('getPrimaryImageUrls', () => {
+    it('returns an empty map without querying for no ids', async () => {
+      await expect(service.getPrimaryImageUrls([])).resolves.toEqual(new Map());
+      expect(prisma.productImage.findMany).not.toHaveBeenCalled();
+    });
+
+    it('prefers a generic (color=null) image, else the lowest-position image', async () => {
+      // Returned already position-sorted (as the real orderBy would).
+      prisma.productImage.findMany.mockResolvedValue([
+        makeImage({ id: 'a', productId: 'p1', color: 'Red', position: 0, url: 'red.jpg' }),
+        makeImage({ id: 'b', productId: 'p1', color: null, position: 1, url: 'generic.jpg' }),
+        makeImage({ id: 'c', productId: 'p2', color: 'Blue', position: 0, url: 'blue.jpg' }),
+      ]);
+      const map = await service.getPrimaryImageUrls(['p1', 'p2', 'p3']);
+      expect(map.get('p1')).toBe('generic.jpg'); // generic beats the color image
+      expect(map.get('p2')).toBe('blue.jpg'); // no generic → first by position
+      expect(map.has('p3')).toBe(false); // no images → absent
+    });
+  });
+
+  describe('attachPrimaryImages', () => {
+    it('attaches primaryImageUrl (null when the product has none)', async () => {
+      prisma.productImage.findMany.mockResolvedValue([
+        makeImage({ productId: 'p1', color: null, url: 'cover.jpg' }),
+      ]);
+      await expect(
+        service.attachPrimaryImages([{ id: 'p1' }, { id: 'p2' }]),
+      ).resolves.toEqual([
+        { id: 'p1', primaryImageUrl: 'cover.jpg' },
+        { id: 'p2', primaryImageUrl: null },
+      ]);
+    });
+  });
+
   describe('getActiveForProductSlug', () => {
     it('returns that color plus generic images for a visible product', async () => {
       productService.getActiveBySlug.mockResolvedValue({ id: 'p9' });

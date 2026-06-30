@@ -43,6 +43,54 @@ export class ProductImageService {
     });
   }
 
+  // Cover-image resolution for product lists (home carousels, grid). Returns a
+  // productId -> cover URL map: the lowest-position image, preferring a generic
+  // (color = null) image over a color-specific one. Owns the ProductImage table, so
+  // sibling slices/controllers compose this instead of querying images themselves.
+  async getPrimaryImageUrls(
+    productIds: string[],
+  ): Promise<Map<string, string>> {
+    if (productIds.length === 0) return new Map();
+    const images = await this.prisma.productImage.findMany({
+      where: { productId: { in: productIds } },
+      orderBy: [{ position: 'asc' }, { id: 'asc' }],
+    });
+    const generic = new Map<string, string>(); // first generic (color=null) image
+    const anyImage = new Map<string, string>(); // first image of any color (fallback)
+    for (const img of images) {
+      if (!anyImage.has(img.productId)) anyImage.set(img.productId, img.url);
+      if (img.color === null && !generic.has(img.productId)) {
+        generic.set(img.productId, img.url);
+      }
+    }
+    const result = new Map<string, string>();
+    for (const id of productIds) {
+      const url = generic.get(id) ?? anyImage.get(id);
+      if (url !== undefined) result.set(id, url);
+    }
+    return result;
+  }
+
+  // Attach `primaryImageUrl` to each product row. Controller-compose helper: keeps the
+  // product↔image edge one-way (this service already depends on ProductService, so
+  // ProductService must not depend back on it). See ARCHITECTURE.md §2.1 / §4.3.
+  async attachPrimaryImages<T extends { id: string }>(
+    products: T[],
+  ): Promise<Array<T & { primaryImageUrl: string | null }>> {
+    const urls = await this.getPrimaryImageUrls(products.map((p) => p.id));
+    return products.map((p) => ({
+      ...p,
+      primaryImageUrl: urls.get(p.id) ?? null,
+    }));
+  }
+
+  async attachPrimaryImage<T extends { id: string }>(
+    product: T,
+  ): Promise<T & { primaryImageUrl: string | null }> {
+    const [withImage] = await this.attachPrimaryImages([product]);
+    return withImage;
+  }
+
   // ---------------------------------------------------------------------------
   // Admin — sees everything.
   // ---------------------------------------------------------------------------

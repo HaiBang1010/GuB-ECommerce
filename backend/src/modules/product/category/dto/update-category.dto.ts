@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUrl,
   Matches,
   MaxLength,
   ValidateIf,
@@ -38,6 +39,20 @@ export class UpdateCategoryDto {
     message: 'slug must be lowercase kebab-case (letters, digits, hyphens).',
   })
   slug?: string;
+
+  // Cover image URL; null clears it. ValidateIf lets an explicit null bypass @IsUrl;
+  // the service distinguishes the three cases via `'imageUrl' in dto`.
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    example: 'https://res.cloudinary.com/demo/image/upload/v1/gub/categories/tops.jpg',
+    description: 'Cover image URL for the home category grid; null clears it.',
+  })
+  @IsOptional()
+  @ValidateIf((o: UpdateCategoryDto) => o.imageUrl !== null)
+  @IsUrl({ require_protocol: true })
+  @MaxLength(2048)
+  imageUrl?: string | null;
 
   // `null` explicitly moves the category to root; a string re-parents it; absent
   // leaves the parent untouched. ValidateIf lets an explicit null bypass the

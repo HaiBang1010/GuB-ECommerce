@@ -10,6 +10,20 @@ import { CategoryService } from '../category/category.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
+// A product row plus its cover image URL (resolved by ProductImageService and attached
+// at the controller layer — keeps the product↔image dependency one-way, §2.1).
+export type ProductWithPrimaryImage = Product & {
+  primaryImageUrl: string | null;
+};
+
+// Storefront list options. `onSale`/`sort`/`limit` drive the home carousels.
+export type ActiveListOptions = {
+  categorySlug?: string;
+  onSale?: boolean;
+  sort?: 'new';
+  limit?: number;
+};
+
 @Injectable()
 export class ProductService {
   constructor(
@@ -25,23 +39,33 @@ export class ProductService {
   // CategoryService, mirroring the category cascade-at-read-time philosophy.
   // ---------------------------------------------------------------------------
 
-  async getActiveList(categorySlug?: string): Promise<Product[]> {
-    if (categorySlug !== undefined) {
+  async getActiveList(opts: ActiveListOptions = {}): Promise<Product[]> {
+    const where: Prisma.ProductWhereInput = { archivedAt: null };
+    if (opts.onSale) where.salePriceCents = { not: null };
+    const orderBy: Prisma.ProductOrderByWithRelationInput =
+      opts.sort === 'new' ? { createdAt: 'desc' } : { nameEn: 'asc' };
+
+    if (opts.categorySlug !== undefined) {
       // getActiveBySlug resolves visibility too: it throws 404 when the category
       // or any ancestor is archived, so an invisible category yields no listing.
-      const category = await this.categoryService.getActiveBySlug(categorySlug);
+      const category = await this.categoryService.getActiveBySlug(
+        opts.categorySlug,
+      );
       return this.prisma.product.findMany({
-        where: { archivedAt: null, categoryId: category.id },
-        orderBy: { nameEn: 'asc' },
+        where: { ...where, categoryId: category.id },
+        orderBy,
+        ...(opts.limit !== undefined ? { take: opts.limit } : {}),
       });
     }
 
-    const products = await this.prisma.product.findMany({
-      where: { archivedAt: null },
-      orderBy: { nameEn: 'asc' },
-    });
+    const products = await this.prisma.product.findMany({ where, orderBy });
     const visibleCategoryIds = await this.categoryService.getVisibleCategoryIds();
-    return products.filter((p) => visibleCategoryIds.has(p.categoryId));
+    const visible = products.filter((p) =>
+      visibleCategoryIds.has(p.categoryId),
+    );
+    // Visibility is filtered in JS, so a limit is applied AFTER (a DB take could
+    // return fewer than `limit` visible rows).
+    return opts.limit !== undefined ? visible.slice(0, opts.limit) : visible;
   }
 
   // Cross-module (in-process): active product counts keyed by categoryId. The admin

@@ -122,6 +122,7 @@ export class CategoryService {
       nameVi: dto.nameVi,
       nameEn: dto.nameEn,
       slug: dto.slug,
+      imageUrl: dto.imageUrl ?? null,
       parentId: dto.parentId ?? null,
       sizeSystem: dto.sizeSystem ?? null,
     };
@@ -143,6 +144,8 @@ export class CategoryService {
     if (dto.nameVi !== undefined) data.nameVi = dto.nameVi;
     if (dto.nameEn !== undefined) data.nameEn = dto.nameEn;
     if (dto.slug !== undefined) data.slug = dto.slug;
+    // null clears the image; a url sets it; absent leaves it untouched.
+    if ('imageUrl' in dto) data.imageUrl = dto.imageUrl ?? null;
     // null clears the size system; a value sets it; absent leaves it untouched.
     if ('sizeSystem' in dto) data.sizeSystem = dto.sizeSystem ?? null;
 

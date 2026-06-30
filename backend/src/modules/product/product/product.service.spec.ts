@@ -271,7 +271,7 @@ describe('ProductService', () => {
         makeProduct({ id: 'p1', categoryId: 'c9' }),
       ]);
 
-      const result = await service.getActiveList('tops');
+      const result = await service.getActiveList({ categorySlug: 'tops' });
       expect(categoryService.getActiveBySlug).toHaveBeenCalledWith('tops');
       expect(prisma.product.findMany).toHaveBeenCalledWith({
         where: { archivedAt: null, categoryId: 'c9' },
@@ -284,10 +284,52 @@ describe('ProductService', () => {
       categoryService.getActiveBySlug.mockRejectedValue(
         new NotFoundException('Category not found.'),
       );
-      await expect(service.getActiveList('ghost')).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+      await expect(
+        service.getActiveList({ categorySlug: 'ghost' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.product.findMany).not.toHaveBeenCalled();
+    });
+
+    it('filters to on-sale products when onSale is set', async () => {
+      prisma.product.findMany.mockResolvedValue([]);
+      categoryService.getVisibleCategoryIds.mockResolvedValue(new Set<string>());
+      await service.getActiveList({ onSale: true });
+      expect(prisma.product.findMany).toHaveBeenCalledWith({
+        where: { archivedAt: null, salePriceCents: { not: null } },
+        orderBy: { nameEn: 'asc' },
+      });
+    });
+
+    it("orders by newest first when sort='new'", async () => {
+      prisma.product.findMany.mockResolvedValue([]);
+      categoryService.getVisibleCategoryIds.mockResolvedValue(new Set<string>());
+      await service.getActiveList({ sort: 'new' });
+      expect(prisma.product.findMany).toHaveBeenCalledWith({
+        where: { archivedAt: null },
+        orderBy: { createdAt: 'desc' },
+      });
+    });
+
+    it('applies the limit AFTER the visibility filter (no category)', async () => {
+      prisma.product.findMany.mockResolvedValue([
+        makeProduct({ id: 'p1', categoryId: 'v' }),
+        makeProduct({ id: 'p2', categoryId: 'v' }),
+        makeProduct({ id: 'p3', categoryId: 'v' }),
+      ]);
+      categoryService.getVisibleCategoryIds.mockResolvedValue(new Set(['v']));
+      const result = await service.getActiveList({ limit: 2 });
+      expect(result.map((p) => p.id)).toEqual(['p1', 'p2']);
+    });
+
+    it('passes take to the query for a category + limit', async () => {
+      categoryService.getActiveBySlug.mockResolvedValue({ id: 'c9' });
+      prisma.product.findMany.mockResolvedValue([]);
+      await service.getActiveList({ categorySlug: 'tops', limit: 5 });
+      expect(prisma.product.findMany).toHaveBeenCalledWith({
+        where: { archivedAt: null, categoryId: 'c9' },
+        orderBy: { nameEn: 'asc' },
+        take: 5,
+      });
     });
   });
 
