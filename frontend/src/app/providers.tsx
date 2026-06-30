@@ -38,6 +38,11 @@ export function Providers({ children }: { children: ReactNode }) {
   useEffect(() => {
     const supabase = createClient();
     let active = true;
+    // supabase-js re-emits SIGNED_IN on every tab refocus. We track the last
+    // already-synced user id so a redundant same-user re-emit is a no-op — otherwise
+    // it would reset roleStatus to 'loading' (unmounting admin pages mid-edit) and
+    // re-run the guest-cart merge on every focus. Only a NEW user id is a real login.
+    let lastUserId: string | null = null;
 
     // Resolve the app role from the backend (reads iam.User.role) — the single
     // source of truth. roleStatus goes loading→loaded so the admin guard can tell
@@ -62,20 +67,27 @@ export function Providers({ children }: { children: ReactNode }) {
       if (!active) return;
       setUser(data.session?.user ?? null);
       setLoading(false);
+      lastUserId = data.session?.user?.id ?? null;
       syncRole(!!data.session);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+      const uid = session?.user?.id ?? null;
       setUser(session?.user ?? null);
       setLoading(false);
 
-      if (event === 'SIGNED_IN') {
+      // Only a NEW user id is a genuine sign-in / account switch. A redundant
+      // SIGNED_IN re-emitted for the already-synced user (fired on every tab
+      // refocus) is skipped — so it never flips roleStatus back to 'loading'
+      // (which would unmount admin pages and lose in-progress form state), nor
+      // re-runs the guest-cart merge.
+      if (event === 'SIGNED_IN' && uid !== lastUserId) {
+        lastUserId = uid;
         syncRole(true);
         // Fold the guest cart (X-Cart-Session) into the user cart, then start a
-        // fresh empty guest session. mergeCart no-ops when there's no guest cart,
-        // so a repeated SIGNED_IN (e.g. token refresh) is harmless.
+        // fresh empty guest session.
         void mergeCart()
           .catch(() => undefined)
           .finally(() => {
@@ -84,6 +96,7 @@ export function Providers({ children }: { children: ReactNode }) {
           });
       }
       if (event === 'SIGNED_OUT') {
+        lastUserId = null;
         clearRole();
         useCartStore.getState().clear();
         void queryClient.invalidateQueries({ queryKey: ['cart'] });
