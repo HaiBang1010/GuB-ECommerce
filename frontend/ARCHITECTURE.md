@@ -244,7 +244,11 @@ The customer's "my" pages live under a single `/account` route group inside `(st
   `formatPriceCents`), min-order / max-discount / valid-until, the per-user **uses-left**
   (`perUserLimit − userUsedCount`, "Unlimited" when uncapped), and a **copy-code** button (mirror of
   the admin `CopyableId` — inline 1.5s feedback, swallows insecure-context clipboard failures).
-  Read-only — applying a voucher still happens at checkout (§11).
+  The **valid-until** deadline shows `deadline = v.expiresAt ?? v.validTo`: the per-user `expiresAt`
+  (e.g. the birthday voucher = grant + 30d, backend §4.14) takes precedence over the voucher's own
+  `validTo`. No "expired" badge — the backend already hides a grant once its `expiresAt` is past (mirrors
+  `validTo`), so any shown deadline is still in the future. Read-only — applying a voucher still happens
+  at checkout (§11).
 - **Profile** `/account/profile` (`features/profile/`): an auth-gated `useProfile` (`GET /me/profile`)
   feeds an RHF+zod form (`profile-form.tsx`) — a **birthday** (native `<input type="date">`, `max`=today,
   round-tripped `YYYY-MM-DD` ↔ the backend ISO `DateTime`) + height/weight + body measurements

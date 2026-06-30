@@ -2767,6 +2767,12 @@ export interface components {
              * @example 0
              */
             userUsedCount: number;
+            /**
+             * Format: date-time
+             * @description Per-user deadline (e.g. birthday voucher = grant + 30d). null = none; the voucher's own validTo applies instead.
+             * @example 2026-07-30T00:00:00.000Z
+             */
+            expiresAt: string | null;
         };
         CreateIntentDto: {
             /**

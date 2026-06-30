@@ -59,6 +59,10 @@ function WalletVoucherCard({ voucher: v }: { voucher: WalletVoucher }) {
     v.perUserLimit != null
       ? t('usesLeft', { count: Math.max(0, v.perUserLimit - v.userUsedCount) })
       : t('unlimited');
+  // The deadline shown: the per-user expiresAt (e.g. birthday voucher = grant + 30d)
+  // takes precedence over the voucher's own validTo. Per-user-expired vouchers are
+  // already hidden by the backend, so a shown deadline is always still in the future.
+  const deadline = v.expiresAt ?? v.validTo;
 
   return (
     <li className="flex flex-col gap-2 rounded-md border p-3">
@@ -88,8 +92,8 @@ function WalletVoucherCard({ voucher: v }: { voucher: WalletVoucher }) {
             {t('maxDiscount', { amount: formatPriceCents(v.maxDiscountCents) })}
           </span>
         ) : null}
-        {v.validTo ? (
-          <span>{t('validUntil', { date: formatDate(v.validTo, locale) })}</span>
+        {deadline ? (
+          <span>{t('validUntil', { date: formatDate(deadline, locale) })}</span>
         ) : null}
       </div>
     </li>
