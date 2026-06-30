@@ -24,7 +24,7 @@ datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
   extensions = [pg_trgm]
-  schemas    = ["product", "iam", "cart", "ordering", "payment", "review", "notification", "chat", "voucher", "activity"]
+  schemas    = ["product", "iam", "cart", "ordering", "payment", "review", "notification", "chat", "voucher", "activity", "marketing"]
 }
 
 // ===========================================================================
@@ -514,4 +514,25 @@ model ActivityLog {
 
   @@index([userId, createdAt])
   @@schema("activity")
+}
+
+// ===========================================================================
+// MODULE: marketing  (home banners)
+// ===========================================================================
+
+// A storefront home banner. Image is an external URL (admin pastes it — no upload).
+// Soft-deleted via archivedAt (convention); isActive toggles visibility without
+// deleting. The storefront shows active, non-archived banners ordered by sortOrder.
+model Banner {
+  id         String    @id @default(cuid())
+  imageUrl   String
+  linkUrl    String? // where a click goes (relative path or absolute URL); null = not clickable
+  title      String? // optional admin label / alt fallback
+  alt        String? // image alt text (a11y)
+  sortOrder  Int       @default(0)
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  archivedAt DateTime?
+
+  @@schema("marketing")
 }

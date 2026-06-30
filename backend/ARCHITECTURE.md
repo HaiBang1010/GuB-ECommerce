@@ -26,8 +26,9 @@ src/modules/
 ├── notification/  queue consumer → in-app + email (Resend)                       → schema: notification
 ├── review/        review tied to orderItemId, admin reply                        → schema: review
 ├── chat/          Conversation/ChatMessage, push via Supabase Realtime           → schema: chat
-└── voucher/       Voucher, UserVoucher (wallet), apply at checkout               → schema: voucher
-                   ActivityLog (audit / analytics)                                → schema: activity
+├── voucher/       Voucher, UserVoucher (wallet), apply at checkout               → schema: voucher
+│                  ActivityLog (audit / analytics)                                → schema: activity
+└── marketing/     Banner (home banners; admin CRUD, image = external URL)        → schema: marketing
 ```
 
 Each module folder: `*.module.ts · *.controller.ts · *.service.ts · dto/ · *.service.spec.ts`.
@@ -68,6 +69,7 @@ voucher ─▶ cart     (preview reads the live cart subtotal server-side)
 voucher ─▶ iam      (grant-by-email + wallet: resolve the user via user.service)
 review ─▶ order     (verify the OrderItem belongs to user and order is DELIVERED)
 chat  ──▶ (Supabase Realtime, out-of-process)
+marketing ──▶ (none — Banner references no other module; storefront read + admin CRUD only)
 ```
 
 No dependency cycles. `payment → order` is a one-way **synchronous in-process** edge:
@@ -382,6 +384,26 @@ Local: trigger by hand (`curl -X POST … -H "x-admin-secret: …"`). On deploy,
 **daily** (mirrors `release-expired`). Granted vouchers surface in the existing wallet
 (`GET /me/vouchers`, `/account/vouchers`).
 
+### 4.15 Home banners (marketing) — Phase 4
+
+The `marketing` module owns a single model, `Banner`, and has **no cross-module dependency**
+(a banner references nothing in another schema). Closes the last deferred Phase 4 item.
+
+- **Image = external URL, no upload.** The admin pastes an absolute `imageUrl` (`CreateBannerDto`
+  validates it with `@IsUrl`); `linkUrl` is free text (a relative path like `/products` or an absolute
+  URL, so it is **not** URL-validated). `title`/`alt` are optional (alt for a11y). This deliberately
+  skips the Cloudinary signed-upload flow (§4.6) — a low-churn surface doesn't justify it, and the
+  storefront degrades a broken/empty URL to a placeholder.
+- **Visibility = `isActive` + soft delete.** `MarketingService.listActive()` (storefront) returns
+  `isActive && archivedAt == null`, ordered `sortOrder asc, createdAt asc`; `listForAdmin()` returns all
+  non-archived (incl. inactive). `archive()` soft-deletes (never hard-delete, convention). `isActive`
+  toggles visibility without deleting.
+- **Routes.** Public `GET /banners` (`MarketingController`, **no guard** — like the public product reads)
+  feeds the home carousel. Admin CRUD under `MarketingAdminController` (`@UseGuards(SupabaseAuthGuard,
+  RolesGuard) @Roles(ADMIN)`, `@Controller('admin/banners')`): `POST` / `GET` (listForAdmin) / `GET :id`
+  / `PATCH :id` / `DELETE :id` (archive) — mirrors the voucher admin controller. Full Swagger annotations;
+  `BannerResponseDto` keeps the contract typed.
+
 ## 5. Data model (Prisma)
 
 Full schema: [`prisma/schema.prisma`](./prisma/schema.prisma). It uses the `multiSchema`
@@ -408,6 +430,7 @@ preview feature; each model carries `@@schema("<module>")`.
 | `chat` | `Conversation`, `ChatMessage`, enum `Sender` |
 | `voucher` | `Voucher`, `UserVoucher`, enum `VoucherType` |
 | `activity` | `ActivityLog` |
+| `marketing` | `Banner` |
 
 ### 5.3 Relations vs. scalar references
 
@@ -429,6 +452,7 @@ preview feature; each model carries `@@schema("<module>")`.
 - `Cart`: at most one of `userId` / `sessionId` (both `@unique`).
 - `Voucher`: unique `code` (stored UPPERCASE). `isPublic` flags PUBLIC vs wallet-only; `usedCount` is the global redemption counter (atomic-guarded vs `usageLimit` at redeem, §4.10). Money fields (`value` for FIXED, `minOrderCents`, `maxDiscountCents`) are integer cents; optional bilingual `titleVi/En` + `descriptionVi/En`. `isPublic` + the title/description columns were added by hand-written migrations (`20260627000000_add_voucher_public_and_per_user_count`, `20260627120000_add_voucher_title_description`).
 - `UserVoucher`: `@@unique([userId, voucherId])` — the per-user redemption **ledger** (`usedCount` enforces `perUserLimit`, `usedAt` = last redeemed). A wallet grant pre-creates a row (`usedCount = 0`); a PUBLIC redemption creates it lazily. `expiresAt DateTime?` (nullable, hand-written migration `20260630000000_add_user_voucher_expires_at`) is the **per-user deadline** measured from the grant (birthday voucher = grant + 30d); `null` = no per-user deadline → only the voucher's own `validFrom`/`validTo` applies. Enforced in `validate` (`VOUCHER_EXPIRED`) and hidden in the wallet once past — §4.14.
+- `Banner`: home-banner content (schema `marketing`, added by `20260630120000_add_banner`). `imageUrl` (external URL, no upload) + optional `linkUrl`/`title`/`alt`, `sortOrder Int @default(0)`, `isActive Boolean @default(true)`, soft-delete `archivedAt`. No unique constraints beyond the PK; no cross-module references (§4.15).
 
 ### 5.5 Full-text + fuzzy search
 `Product` has a **generated** `search_tsv tsvector` column (weighted name=A, brand=B,
