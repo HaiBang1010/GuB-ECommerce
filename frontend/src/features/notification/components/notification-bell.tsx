@@ -27,6 +27,7 @@ const TYPE_KEY: Record<string, string> = {
   ORDER_PAID: 'orderPaid',
   ORDER_SHIPPED: 'orderShipped',
   ORDER_DELIVERED: 'orderDelivered',
+  ORDER_REFUNDED: 'orderRefunded',
 };
 
 export function NotificationBell() {

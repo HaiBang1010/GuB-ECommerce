@@ -224,7 +224,8 @@
     "noNotifications": "Chưa có thông báo",
     "orderPaid": "Đơn #{orderId} đã thanh toán",
     "orderShipped": "Đơn #{orderId} đang được giao",
-    "orderDelivered": "Đơn #{orderId} đã giao"
+    "orderDelivered": "Đơn #{orderId} đã giao",
+    "orderRefunded": "Đơn #{orderId} đã được hoàn tiền"
   },
   "admin": {
     "title": "GuB Admin",
@@ -253,6 +254,10 @@
     "advanceTo": "Chuyển sang {status}",
     "statusUpdated": "Đã cập nhật trạng thái đơn",
     "updateError": "Không cập nhật được đơn hàng",
+    "refund": "Hoàn tiền",
+    "refundConfirm": "Hoàn tiền toàn bộ đơn này? Thao tác này sẽ hoàn tiền qua Stripe và không thể hoàn tác.",
+    "refundSuccess": "Đã hoàn tiền đơn hàng",
+    "refundError": "Không hoàn tiền được đơn hàng",
     "reply": "Phản hồi",
     "replyPlaceholder": "Viết phản hồi cho đánh giá này",
     "replied": "Đã gửi phản hồi",

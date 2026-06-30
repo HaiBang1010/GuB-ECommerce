@@ -224,7 +224,8 @@
     "noNotifications": "No notifications",
     "orderPaid": "Order #{orderId} paid",
     "orderShipped": "Order #{orderId} is on the way",
-    "orderDelivered": "Order #{orderId} delivered"
+    "orderDelivered": "Order #{orderId} delivered",
+    "orderRefunded": "Order #{orderId} refunded"
   },
   "admin": {
     "title": "GuB Admin",
@@ -253,6 +254,10 @@
     "advanceTo": "Advance to {status}",
     "statusUpdated": "Order status updated",
     "updateError": "Couldn't update the order",
+    "refund": "Refund",
+    "refundConfirm": "Refund this entire order? This issues a Stripe refund and can't be undone.",
+    "refundSuccess": "Order refunded",
+    "refundError": "Couldn't refund the order",
     "reply": "Reply",
     "replyPlaceholder": "Write a reply to this review",
     "replied": "Reply sent",

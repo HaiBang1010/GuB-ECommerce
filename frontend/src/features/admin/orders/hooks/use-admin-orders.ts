@@ -7,6 +7,7 @@ import {
 
 import { useAuthStore } from '@/stores/auth.store';
 import {
+  adminRefundOrder,
   adminUpdateOrderStatus,
   getAdminOrder,
   getAdminOrders,
@@ -65,6 +66,20 @@ export function useAdminUpdateOrderStatus() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: UpdateOrderStatusBody }) =>
       adminUpdateOrderStatus(id, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'orders'] });
+      void qc.invalidateQueries({ queryKey: ['admin', 'order'] });
+      void qc.invalidateQueries({ queryKey: ['admin', 'user'] });
+    },
+  });
+}
+
+// Admin: full-refund an order. Same invalidations as a status change — the list,
+// the open detail, and any user-detail page (total-spent excludes REFUNDED).
+export function useRefundOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => adminRefundOrder(id),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['admin', 'orders'] });
       void qc.invalidateQueries({ queryKey: ['admin', 'order'] });

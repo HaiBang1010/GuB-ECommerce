@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import {
   useAdminOrderDetail,
   useAdminUpdateOrderStatus,
+  useRefundOrder,
 } from '@/features/admin/orders/hooks/use-admin-orders';
 import { OrderStatusBadge } from '@/components/order-status-badge';
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,14 @@ export const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
   SHIPPED: 'DELIVERED',
 };
 
+// Statuses an admin may full-refund (mirrors the backend REFUNDABLE_STATUSES). The
+// backend re-validates + 409s otherwise; this only decides whether to show the button.
+const REFUNDABLE: ReadonlySet<OrderStatus> = new Set<OrderStatus>([
+  'PAID',
+  'PROCESSING',
+  'SHIPPED',
+]);
+
 // Admin order-detail dialog. Open iff `orderId` is non-null; fetches full detail by
 // id (seeded by the list row so it paints instantly). Reused from the orders table
 // and the user-detail page's recent orders.
@@ -51,6 +60,7 @@ export function OrderDetailDialog({
     initialOrder,
   );
   const advance = useAdminUpdateOrderStatus();
+  const refund = useRefundOrder();
 
   function handleAdvance(id: string, next: OrderStatus) {
     advance.mutate(
@@ -61,6 +71,15 @@ export function OrderDetailDialog({
           toast.error(err instanceof ApiError ? err.message : t('updateError')),
       },
     );
+  }
+
+  function handleRefund(id: string) {
+    if (!window.confirm(t('refundConfirm'))) return;
+    refund.mutate(id, {
+      onSuccess: () => toast.success(t('refundSuccess')),
+      onError: (err) =>
+        toast.error(err instanceof ApiError ? err.message : t('refundError')),
+    });
   }
 
   return (
@@ -83,7 +102,9 @@ export function OrderDetailDialog({
             tStatus={tStatus}
             tOrder={tOrder}
             advancing={advance.isPending}
+            refunding={refund.isPending}
             onAdvance={handleAdvance}
+            onRefund={handleRefund}
           />
         )}
       </DialogContent>
@@ -98,7 +119,9 @@ function OrderDetailBody({
   tStatus,
   tOrder,
   advancing,
+  refunding,
   onAdvance,
+  onRefund,
 }: {
   order: AdminOrder;
   locale: string;
@@ -106,7 +129,9 @@ function OrderDetailBody({
   tStatus: ReturnType<typeof useTranslations>;
   tOrder: ReturnType<typeof useTranslations>;
   advancing: boolean;
+  refunding: boolean;
   onAdvance: (id: string, next: OrderStatus) => void;
+  onRefund: (id: string) => void;
 }) {
   const addr = order.shippingAddress;
   const addrLine = [
@@ -123,6 +148,7 @@ function OrderDetailBody({
     a.createdAt.localeCompare(b.createdAt),
   );
   const next = NEXT_STATUS[order.status];
+  const canRefund = REFUNDABLE.has(order.status);
 
   return (
     <>
@@ -216,16 +242,28 @@ function OrderDetailBody({
         </ol>
       </section>
 
-      {/* Advance fulfillment, if a next step exists */}
-      {next ? (
-        <div className="flex justify-end">
-          <Button
-            size="sm"
-            disabled={advancing}
-            onClick={() => onAdvance(order.id, next)}
-          >
-            {t('advanceTo', { status: tStatus(next) })}
-          </Button>
+      {/* Refund (destructive) + advance fulfillment, when applicable */}
+      {canRefund || next ? (
+        <div className="flex justify-end gap-2">
+          {canRefund ? (
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={refunding}
+              onClick={() => onRefund(order.id)}
+            >
+              {t('refund')}
+            </Button>
+          ) : null}
+          {next ? (
+            <Button
+              size="sm"
+              disabled={advancing}
+              onClick={() => onAdvance(order.id, next)}
+            >
+              {t('advanceTo', { status: tStatus(next) })}
+            </Button>
+          ) : null}
         </div>
       ) : null}
     </>

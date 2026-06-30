@@ -57,3 +57,12 @@ export function adminUpdateOrderStatus(
     body: JSON.stringify(body),
   });
 }
+
+// POST /admin/orders/:id/refund — full-refund a paid/processing/shipped order
+// (Stripe refund + conditional stock release on the backend). ADMIN-only. A non-
+// refundable status (DELIVERED/CANCELLED/…) 409s. Returns the refreshed order.
+export function adminRefundOrder(id: string): Promise<AdminOrder> {
+  return apiFetch<AdminOrder>(`/admin/orders/${encodeURIComponent(id)}/refund`, {
+    method: 'POST',
+  });
+}
