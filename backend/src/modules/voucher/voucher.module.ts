@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { CartModule } from '../cart/cart.module';
 import { VoucherAdminController } from './voucher-admin.controller';
+import { VoucherJobsController } from './voucher-jobs.controller';
 import { VoucherController, WalletController } from './voucher.controller';
 import { VoucherService } from './voucher.service';
 
@@ -13,7 +14,12 @@ import { VoucherService } from './voucher.service';
  */
 @Module({
   imports: [CartModule],
-  controllers: [VoucherAdminController, VoucherController, WalletController],
+  controllers: [
+    VoucherAdminController,
+    VoucherJobsController,
+    VoucherController,
+    WalletController,
+  ],
   providers: [VoucherService],
   exports: [VoucherService],
 })

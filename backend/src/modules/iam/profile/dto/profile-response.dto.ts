@@ -17,4 +17,13 @@ export class ProfileResponseDto {
     example: { chest: 96, waist: 80, hip: 98, footLength: 26.5 },
   })
   measurements!: Record<string, unknown> | null;
+
+  // Stored on iam.User; surfaced here so the profile form can read/write it.
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    format: 'date',
+    example: '1995-06-15',
+  })
+  birthday!: Date | null;
 }

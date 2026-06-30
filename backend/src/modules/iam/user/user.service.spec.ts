@@ -6,6 +6,7 @@ import { SupabaseClaims } from '../auth/supabase-jwt.service';
 
 type UserDelegateMock = {
   upsert: jest.Mock;
+  update: jest.Mock;
   findUnique: jest.Mock;
   findMany: jest.Mock;
   count: jest.Mock;
@@ -37,6 +38,7 @@ describe('UserService', () => {
     prisma = {
       user: {
         upsert: jest.fn(),
+        update: jest.fn(),
         findUnique: jest.fn(),
         findMany: jest.fn(),
         count: jest.fn().mockResolvedValue(0),
@@ -162,6 +164,49 @@ describe('UserService', () => {
         where: { id: 'u1' },
         include: { profile: true },
       });
+    });
+  });
+
+  describe('setBirthday', () => {
+    it('updates the user birthday', async () => {
+      prisma.user.update.mockResolvedValue(makeUser());
+      const d = new Date('1995-06-15T00:00:00.000Z');
+      await service.setBirthday('u1', d);
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'u1' },
+        data: { birthday: d },
+      });
+    });
+  });
+
+  describe('findIdsWithBirthdayToday', () => {
+    it('returns ids whose birthday day+month matches today (UTC), ignoring the year', async () => {
+      const today = new Date('2026-06-15T08:00:00.000Z'); // Jun 15
+      prisma.user.findMany.mockResolvedValue([
+        { id: 'match1', birthday: new Date('1990-06-15T00:00:00.000Z') },
+        { id: 'match2', birthday: new Date('2001-06-15T23:30:00.000Z') },
+        { id: 'wrongDay', birthday: new Date('1990-06-16T00:00:00.000Z') },
+        { id: 'wrongMonth', birthday: new Date('1990-07-15T00:00:00.000Z') },
+      ]);
+      await expect(service.findIdsWithBirthdayToday(today)).resolves.toEqual([
+        'match1',
+        'match2',
+      ]);
+      // Only non-archived users with a birthday are fetched; the day+month match is
+      // applied in Node (UTC).
+      expect(prisma.user.findMany).toHaveBeenCalledWith({
+        where: { birthday: { not: null }, archivedAt: null },
+        select: { id: true, birthday: true },
+      });
+    });
+
+    it('returns [] when nobody has a birthday today', async () => {
+      prisma.user.findMany.mockResolvedValue([
+        { id: 'u1', birthday: new Date('1990-01-02T00:00:00.000Z') },
+      ]);
+      await expect(
+        service.findIdsWithBirthdayToday(new Date('2026-06-15T00:00:00.000Z')),
+      ).resolves.toEqual([]);
     });
   });
 

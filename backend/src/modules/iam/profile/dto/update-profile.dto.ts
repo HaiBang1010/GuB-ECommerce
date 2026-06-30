@@ -1,11 +1,13 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  IsDate,
   IsInt,
   IsNumber,
   IsOptional,
   IsPositive,
   Max,
+  MaxDate,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -65,4 +67,18 @@ export class UpdateProfileDto {
   @ValidateNested()
   @Type(() => MeasurementsDto)
   measurements?: MeasurementsDto;
+
+  // Birthday is stored on iam.User (not Profile) — it also drives the birthday-voucher
+  // cron. Accepts an ISO date string, transformed to a Date; must not be in the future.
+  @ApiPropertyOptional({
+    type: String,
+    format: 'date',
+    example: '1995-06-15',
+    description: 'Birthday (date). Must not be in the future.',
+  })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  @MaxDate(() => new Date(), { message: 'birthday must not be in the future' })
+  birthday?: Date;
 }

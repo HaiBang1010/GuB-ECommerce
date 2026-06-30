@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, Voucher, VoucherType } from '@prisma/client';
@@ -60,6 +61,8 @@ function emptyToNull(value?: string): string | null {
  */
 @Injectable()
 export class VoucherService {
+  private readonly logger = new Logger(VoucherService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     // Resolve/validate a grantee for wallet grants (in-process, never iam tables).
@@ -375,21 +378,71 @@ export class VoucherService {
     if (!user) {
       throw new NotFoundException('No user found with that email.');
     }
+    await this.grantToUser(voucherId, user.id);
+    return voucher;
+  }
+
+  // Create the wallet ledger row for (userId, voucherId). Idempotent via the
+  // @@unique([userId, voucherId]) constraint: a repeat grant hits P2002 and is a
+  // no-op. Returns true when a NEW row was created, false when it already existed —
+  // so the birthday cron can count granted vs already-granted.
+  private async grantToUser(
+    voucherId: string,
+    userId: string,
+  ): Promise<boolean> {
     try {
-      await this.prisma.userVoucher.create({
-        data: { userId: user.id, voucherId },
-      });
+      await this.prisma.userVoucher.create({ data: { userId, voucherId } });
+      return true;
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === 'P2002'
       ) {
-        // Already granted — idempotent.
-        return voucher;
+        return false; // already granted — idempotent
       }
       throw err;
     }
-    return voucher;
+  }
+
+  /**
+   * Grant the year's birthday voucher to every user whose birthday is today. Driven
+   * by the secured cron endpoint (UptimeRobot -> POST /admin/jobs/grant-birthday-
+   * vouchers). The "birthday voucher" is a year-coded voucher `BIRTHDAY-<year>` the
+   * admin pre-creates; the cron looks it up by code. Idempotent WITHOUT extra logic:
+   * the @@unique([userId, voucherId]) constraint makes a repeat ping a no-op (one
+   * grant per user per year), and next year's BIRTHDAY-<year+1> is a different
+   * voucher -> a fresh grant. Best-effort per user: a single failure is logged
+   * (no PII) and counted as skipped, never aborting the rest.
+   */
+  async grantBirthdayVouchers(): Promise<{
+    granted: number;
+    skipped: number;
+    total: number;
+  }> {
+    const code = `BIRTHDAY-${new Date().getUTCFullYear()}`;
+    const voucher = await this.prisma.voucher.findUnique({ where: { code } });
+    if (!voucher || voucher.archivedAt !== null) {
+      this.logger.warn(`No active birthday voucher '${code}' — nothing granted.`);
+      return { granted: 0, skipped: 0, total: 0 };
+    }
+
+    const userIds = await this.users.findIdsWithBirthdayToday();
+    let granted = 0;
+    let skipped = 0;
+    for (const userId of userIds) {
+      try {
+        const created = await this.grantToUser(voucher.id, userId);
+        if (created) granted++;
+        else skipped++; // already had it (a re-run, or granted earlier today)
+      } catch {
+        // No PII in the log — only the user id + voucher code.
+        this.logger.warn(
+          `Birthday grant failed for user ${userId} (voucher ${code}).`,
+        );
+        skipped++;
+      }
+    }
+    return { granted, skipped, total: userIds.length };
   }
 
   // List the users a voucher has been granted to, enriched with their email +

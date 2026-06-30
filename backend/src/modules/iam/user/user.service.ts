@@ -59,6 +59,34 @@ export class UserService {
     return this.prisma.user.findUnique({ where: { id } });
   }
 
+  // Set the caller's birthday (from the customer profile form). birthday lives on
+  // iam.User (this service's own table) — it also drives the birthday-voucher cron.
+  async setBirthday(userId: string, birthday: Date): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { birthday },
+    });
+  }
+
+  // The ids of users whose birthday's day+month is `today` (year ignored) — the
+  // birthday-voucher cron grants to them. Compared in UTC to avoid an off-by-one
+  // across timezones. Owns the iam.User query so the voucher module never touches
+  // the iam schema directly (ARCHITECTURE.md §4.3). `today` is injectable for tests.
+  async findIdsWithBirthdayToday(today: Date = new Date()): Promise<string[]> {
+    const month = today.getUTCMonth();
+    const day = today.getUTCDate();
+    const users = await this.prisma.user.findMany({
+      where: { birthday: { not: null }, archivedAt: null },
+      select: { id: true, birthday: true },
+    });
+    return users
+      .filter((u) => {
+        const b = u.birthday as Date;
+        return b.getUTCMonth() === month && b.getUTCDate() === day;
+      })
+      .map((u) => u.id);
+  }
+
   // Exact (case-insensitive) email lookup — for the admin "grant voucher by email"
   // flow. Returns null when no user has that email. In-process; the iam schema is
   // never queried from another module directly.

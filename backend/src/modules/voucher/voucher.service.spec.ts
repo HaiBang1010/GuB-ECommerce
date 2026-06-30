@@ -28,6 +28,7 @@ type UserVoucherDelegate = {
 type UsersMock = {
   findByEmail: jest.Mock;
   findManyByIds: jest.Mock;
+  findIdsWithBirthdayToday: jest.Mock;
 };
 
 function makeVoucher(overrides: Partial<Voucher> = {}): Voucher {
@@ -97,6 +98,7 @@ describe('VoucherService', () => {
     users = {
       findByEmail: jest.fn(),
       findManyByIds: jest.fn().mockResolvedValue([]),
+      findIdsWithBirthdayToday: jest.fn().mockResolvedValue([]),
     };
     service = new VoucherService(
       prisma as unknown as PrismaService,
@@ -401,6 +403,87 @@ describe('VoucherService', () => {
       );
       await expect(service.grant('vch1', 'jane@x.com')).resolves.toMatchObject({
         id: 'vch1',
+      });
+    });
+  });
+
+  describe('grantBirthdayVouchers', () => {
+    function p2002() {
+      return new Prisma.PrismaClientKnownRequestError('dup', {
+        code: 'P2002',
+        clientVersion: '5.22.0',
+      });
+    }
+
+    it('grants the year voucher to today’s users; an already-granted user is skipped', async () => {
+      prisma.voucher.findUnique.mockResolvedValue(
+        makeVoucher({ id: 'bday', isPublic: false }),
+      );
+      users.findIdsWithBirthdayToday.mockResolvedValue(['u1', 'u2', 'u3']);
+      // u1, u2 newly created; u3 already had it (P2002) → idempotent skip.
+      prisma.userVoucher.create
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({})
+        .mockRejectedValueOnce(p2002());
+
+      const result = await service.grantBirthdayVouchers();
+
+      expect(result).toEqual({ granted: 2, skipped: 1, total: 3 });
+      // Looks up the year-coded voucher.
+      expect(prisma.voucher.findUnique).toHaveBeenCalledWith({
+        where: { code: expect.stringMatching(/^BIRTHDAY-\d{4}$/) },
+      });
+      expect(prisma.userVoucher.create).toHaveBeenCalledWith({
+        data: { userId: 'u1', voucherId: 'bday' },
+      });
+    });
+
+    it('is idempotent on a re-run — every user already granted → 0 granted', async () => {
+      prisma.voucher.findUnique.mockResolvedValue(makeVoucher({ id: 'bday' }));
+      users.findIdsWithBirthdayToday.mockResolvedValue(['u1', 'u2']);
+      prisma.userVoucher.create.mockRejectedValue(p2002());
+
+      await expect(service.grantBirthdayVouchers()).resolves.toEqual({
+        granted: 0,
+        skipped: 2,
+        total: 2,
+      });
+    });
+
+    it('degrades to {0,0,0} when no birthday voucher is configured (never queries users)', async () => {
+      prisma.voucher.findUnique.mockResolvedValue(null);
+      await expect(service.grantBirthdayVouchers()).resolves.toEqual({
+        granted: 0,
+        skipped: 0,
+        total: 0,
+      });
+      expect(users.findIdsWithBirthdayToday).not.toHaveBeenCalled();
+      expect(prisma.userVoucher.create).not.toHaveBeenCalled();
+    });
+
+    it('skips an archived birthday voucher', async () => {
+      prisma.voucher.findUnique.mockResolvedValue(
+        makeVoucher({ archivedAt: new Date('2026-01-01') }),
+      );
+      await expect(service.grantBirthdayVouchers()).resolves.toEqual({
+        granted: 0,
+        skipped: 0,
+        total: 0,
+      });
+      expect(users.findIdsWithBirthdayToday).not.toHaveBeenCalled();
+    });
+
+    it('is best-effort: a non-P2002 failure for one user does not abort the rest', async () => {
+      prisma.voucher.findUnique.mockResolvedValue(makeVoucher({ id: 'bday' }));
+      users.findIdsWithBirthdayToday.mockResolvedValue(['u1', 'u2']);
+      prisma.userVoucher.create
+        .mockRejectedValueOnce(new Error('db blip'))
+        .mockResolvedValueOnce({});
+
+      await expect(service.grantBirthdayVouchers()).resolves.toEqual({
+        granted: 1,
+        skipped: 1,
+        total: 2,
       });
     });
   });

@@ -338,6 +338,38 @@ route — it's driven by this refund flow, not `updateStatus`). No `charge.refun
 refund is driven synchronously and the Stripe idempotency key makes it safe; webhook reconciliation is
 out of scope.
 
+### 4.14 User birthday + birthday-voucher cron — Phase 4
+
+Two ends of the birthday-voucher feature; the schema needed **no change** (`User.birthday DateTime?`
+already existed).
+
+**Birthday on the profile.** `birthday` lives on **`iam.User`** (not `Profile`). The customer reads/
+writes it through `/me/profile` (`SupabaseAuthGuard`, owner-scoped): `UpdateProfileDto` /
+`ProfileResponseDto` gain `birthday` (ISO date; `@MaxDate(() => new Date())` rejects a future date),
+`UserService.setBirthday(userId, date)` writes the column, and `ProfileController` **composes** the two
+iam tables — `ProfileService.getByUserId` (measurements) + `UserService.findById().birthday` — into the
+response. `ProfileService` stays Profile-only, so the size suggestion's `getByUserId` is untouched; the
+controller-level compose avoids any new service→service edge.
+
+**Birthday cron.** `POST /admin/jobs/grant-birthday-vouchers` (`VoucherJobsController`, **`AdminGuard`**
+`x-admin-secret` — machine-to-machine, mirrors `release-expired`, §6) grants the year's birthday voucher
+to every user whose birthday is **today**. `VoucherService.grantBirthdayVouchers`:
+- the "birthday voucher" is a **year-coded** voucher `code = 'BIRTHDAY-<UTC year>'` the admin pre-creates
+  (no new flag, no migration); a missing/archived one → a logged `{0,0,0}` degrade;
+- `UserService.findIdsWithBirthdayToday()` (iam owns the query — voucher never touches the iam schema)
+  matches **day + month in UTC** (year ignored), fetching non-archived users with a birthday and
+  filtering in Node;
+- per user, the extracted idempotent `grantToUser(voucherId, userId)` creates the `UserVoucher` —
+  **idempotency rides the existing `@@unique([userId, voucherId])`**: a repeat ping hits P2002 (counted
+  `skipped`, never duplicated), so one grant per user per year, while next year's `BIRTHDAY-<year+1>` is a
+  different voucher → a fresh grant. No year-check logic, no schema change;
+- **best-effort per user** (a single failure is logged without PII and counted `skipped`, never aborting
+  the run); returns `{ granted, skipped, total }`.
+
+Local: trigger by hand (`curl -X POST … -H "x-admin-secret: …"`). On deploy, UptimeRobot pings it
+**daily** (mirrors `release-expired`). Granted vouchers surface in the existing wallet
+(`GET /me/vouchers`, `/account/vouchers`).
+
 ## 5. Data model (Prisma)
 
 Full schema: [`prisma/schema.prisma`](./prisma/schema.prisma). It uses the `multiSchema`
@@ -414,10 +446,11 @@ description=C) with a GIN index, plus two `pg_trgm` GIN indexes on **accent-fold
 
 ## 6. Cron / scheduled jobs
 
-Jobs: stock-reservation expiry (Phase 2, live); birthday vouchers, abandoned-cart cleanup (later).
+Jobs: stock-reservation expiry (Phase 2, live); birthday vouchers (Phase 4, live); abandoned-cart cleanup (later).
 - **The DB is Neon, which has no `pg_cron`** (Supabase is Auth-only here) → the pg_cron-in-DB option does **not** apply; scheduling is **external**.
 - **UptimeRobot → `POST /admin/jobs/*`**, guarded by `AdminGuard` (`x-admin-secret` header = `ADMIN_API_SECRET`). Phase 2 ships `POST /admin/jobs/release-expired` (cancel unpaid orders past TTL + release stock); UptimeRobot calls it **~every 5 min**.
-- Every job must be **idempotent** (cron can fire late or twice) — `release-expired` flips status conditionally so a double-fire never double-restocks.
+- Phase 4 adds `POST /admin/jobs/grant-birthday-vouchers` (grant the year-coded `BIRTHDAY-<year>` voucher to today's birthday users, §4.14); UptimeRobot calls it **~daily**.
+- Every job must be **idempotent** (cron can fire late or twice) — `release-expired` flips status conditionally so a double-fire never double-restocks; `grant-birthday-vouchers` relies on the `UserVoucher @@unique([userId, voucherId])` constraint so a re-run never double-grants.
 
 ## 7. Health & keep-alive
 
