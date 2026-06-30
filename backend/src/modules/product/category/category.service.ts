@@ -12,6 +12,13 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 // A category plus its nested active children (storefront tree node).
 export type CategoryTreeNode = Category & { children: CategoryTreeNode[] };
 
+// A category enriched with counts for the admin list (so the UI can warn what an
+// archive would hide). `productCount`/`childCount` are ACTIVE only.
+export type AdminCategory = Category & {
+  productCount: number;
+  childCount: number;
+};
+
 // Defensive cap against cyclic parentId data when walking the category tree.
 const MAX_TREE_DEPTH = 50;
 
@@ -75,6 +82,29 @@ export class CategoryService {
     return this.prisma.category.findMany({ orderBy: { nameEn: 'asc' } });
   }
 
+  // Admin list enriched with counts. `productCounts` (active products per categoryId)
+  // is supplied by the controller via ProductService — this service NEVER queries the
+  // product table (slice boundary, §4.3). `childCount` (active sub-categories) is
+  // computed in-memory from the category rows. Both counts drive the archive warning.
+  async listForAdmin(
+    productCounts: Record<string, number>,
+  ): Promise<AdminCategory[]> {
+    const categories = await this.prisma.category.findMany({
+      orderBy: { nameEn: 'asc' },
+    });
+    const childCount = new Map<string, number>();
+    for (const c of categories) {
+      if (c.parentId !== null && c.archivedAt === null) {
+        childCount.set(c.parentId, (childCount.get(c.parentId) ?? 0) + 1);
+      }
+    }
+    return categories.map((c) => ({
+      ...c,
+      productCount: productCounts[c.id] ?? 0,
+      childCount: childCount.get(c.id) ?? 0,
+    }));
+  }
+
   async findOneForAdmin(id: string): Promise<Category> {
     const category = await this.prisma.category.findUnique({ where: { id } });
     if (!category) {
@@ -93,6 +123,7 @@ export class CategoryService {
       nameEn: dto.nameEn,
       slug: dto.slug,
       parentId: dto.parentId ?? null,
+      sizeSystem: dto.sizeSystem ?? null,
     };
 
     try {

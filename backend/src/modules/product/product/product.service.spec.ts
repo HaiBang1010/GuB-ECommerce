@@ -13,6 +13,7 @@ type ProductDelegateMock = {
   findUnique: jest.Mock;
   create: jest.Mock;
   update: jest.Mock;
+  groupBy: jest.Mock;
 };
 
 type PrismaMock = {
@@ -81,6 +82,7 @@ describe('ProductService', () => {
         findUnique: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        groupBy: jest.fn(),
       },
       $queryRaw: jest.fn(),
     };
@@ -94,6 +96,25 @@ describe('ProductService', () => {
       prisma as unknown as PrismaService,
       categoryService as unknown as CategoryService,
     );
+  });
+
+  describe('countActiveByCategory', () => {
+    it('maps the groupBy result to a categoryId -> count record', async () => {
+      prisma.product.groupBy.mockResolvedValue([
+        { categoryId: 'c1', _count: { _all: 3 } },
+        { categoryId: 'c2', _count: { _all: 1 } },
+      ]);
+
+      await expect(service.countActiveByCategory()).resolves.toEqual({
+        c1: 3,
+        c2: 1,
+      });
+      expect(prisma.product.groupBy).toHaveBeenCalledWith({
+        by: ['categoryId'],
+        where: { archivedAt: null },
+        _count: { _all: true },
+      });
+    });
   });
 
   describe('create', () => {

@@ -21,11 +21,13 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { Category, Role } from '@prisma/client';
+import { AdminCategoryResponseDto } from './dto/admin-category-response.dto';
 import { CategoryResponseDto } from './dto/category-response.dto';
 import { Roles } from '../../../common/auth/roles.decorator';
 import { RolesGuard } from '../../../common/auth/roles.guard';
 import { SupabaseAuthGuard } from '../../../modules/iam/auth/supabase-auth.guard';
-import { CategoryService } from './category.service';
+import { ProductService } from '../product/product.service';
+import { AdminCategory, CategoryService } from './category.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 
@@ -38,13 +40,20 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 @Roles(Role.ADMIN)
 @Controller('admin/categories')
 export class CategoryAdminController {
-  constructor(private readonly categoryService: CategoryService) {}
+  constructor(
+    private readonly categoryService: CategoryService,
+    // Product counts come from ProductService (it owns the product table); the
+    // controller composes them into the category list. No service cycle:
+    // ProductService → CategoryService is one-way.
+    private readonly productService: ProductService,
+  ) {}
 
-  @ApiOperation({ summary: 'List all categories (incl. archived)' })
-  @ApiOkResponse({ type: [CategoryResponseDto] })
+  @ApiOperation({ summary: 'List all categories (incl. archived) with counts' })
+  @ApiOkResponse({ type: [AdminCategoryResponseDto] })
   @Get()
-  list(): Promise<Category[]> {
-    return this.categoryService.findAllForAdmin();
+  async list(): Promise<AdminCategory[]> {
+    const productCounts = await this.productService.countActiveByCategory();
+    return this.categoryService.listForAdmin(productCounts);
   }
 
   @ApiOperation({ summary: 'Get a category by id' })

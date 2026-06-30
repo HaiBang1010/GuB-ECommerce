@@ -1,10 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { SizeSystem } from '@prisma/client';
 import {
+  IsEnum,
   IsNotEmpty,
   IsOptional,
   IsString,
   Matches,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
 
 // Lowercase kebab-case: "tops", "running-shoes".
@@ -41,4 +44,15 @@ export class CreateCategoryDto {
   @IsString()
   @IsNotEmpty()
   parentId?: string;
+
+  // Size chart system for the rule-based size suggestion (omit / null = none).
+  @ApiPropertyOptional({
+    enum: SizeSystem,
+    nullable: true,
+    description: 'Size system for size suggestion; omit for none.',
+  })
+  @IsOptional()
+  @ValidateIf((o: CreateCategoryDto) => o.sizeSystem !== null)
+  @IsEnum(SizeSystem)
+  sizeSystem?: SizeSystem | null;
 }

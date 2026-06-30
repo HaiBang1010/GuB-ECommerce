@@ -84,6 +84,46 @@ describe('CategoryService', () => {
         service.create({ nameVi: 'a', nameEn: 'b', slug: 'x', parentId: 'p1' }),
       ).resolves.toEqual(created);
     });
+
+    it('persists sizeSystem on create', async () => {
+      const created = makeCategory({ id: 'c3', slug: 'shoes', sizeSystem: 'EU_SHOES' });
+      prisma.category.create.mockResolvedValue(created);
+      await service.create({
+        nameVi: 'a',
+        nameEn: 'b',
+        slug: 'shoes',
+        sizeSystem: 'EU_SHOES',
+      });
+      expect(prisma.category.create).toHaveBeenCalledWith({
+        data: {
+          nameVi: 'a',
+          nameEn: 'b',
+          slug: 'shoes',
+          parentId: null,
+          sizeSystem: 'EU_SHOES',
+        },
+      });
+    });
+  });
+
+  describe('listForAdmin', () => {
+    it('merges product counts and computes active child counts', async () => {
+      const root = makeCategory({ id: 'c1', parentId: null });
+      const child = makeCategory({ id: 'c2', parentId: 'c1' });
+      const archivedChild = makeCategory({
+        id: 'c3',
+        parentId: 'c1',
+        archivedAt: new Date(),
+      });
+      prisma.category.findMany.mockResolvedValue([root, child, archivedChild]);
+
+      // c1 has one ACTIVE child (c2); the archived c3 is not counted.
+      await expect(service.listForAdmin({ c1: 5, c2: 2 })).resolves.toEqual([
+        { ...root, productCount: 5, childCount: 1 },
+        { ...child, productCount: 2, childCount: 0 },
+        { ...archivedChild, productCount: 0, childCount: 0 },
+      ]);
+    });
   });
 
   describe('update', () => {

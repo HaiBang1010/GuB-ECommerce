@@ -44,6 +44,20 @@ export class ProductService {
     return products.filter((p) => visibleCategoryIds.has(p.categoryId));
   }
 
+  // Cross-module (in-process): active product counts keyed by categoryId. The admin
+  // category list uses it to warn what an archive would hide. ProductService owns the
+  // product table, so CategoryService asks here instead of querying it (§4.3).
+  async countActiveByCategory(): Promise<Record<string, number>> {
+    const grouped = await this.prisma.product.groupBy({
+      by: ['categoryId'],
+      where: { archivedAt: null },
+      _count: { _all: true },
+    });
+    return Object.fromEntries(
+      grouped.map((g) => [g.categoryId, g._count._all]),
+    );
+  }
+
   async getActiveBySlug(slug: string): Promise<Product> {
     const product = await this.prisma.product.findUnique({ where: { slug } });
     if (!product || product.archivedAt !== null) {
