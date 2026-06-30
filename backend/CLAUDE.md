@@ -8,8 +8,9 @@
 - Test 1 file:  `npm run test -- <path>`
 - Lint:         `npm run lint`
 - Typecheck:    `npm run typecheck`
-- Migration:    `npx prisma migrate dev --name <name>`
+- Migration:    hand-write `migrations/<ts>_<name>/migration.sql` + `npx prisma migrate deploy` (NEVER `migrate dev` — it drops the FTS/pg_trgm objects, see ARCHITECTURE §5.5)
 - Generate:     `npx prisma generate`
+- Seed (demo):  `npm run db:seed` (DB up first) — idempotent demo catalog (`prisma/seed.ts`)
 
 ## Module boundaries (MANDATORY)
 - Each module = one folder in `src/modules/<name>/` containing: `*.module.ts`, `*.controller.ts`, `*.service.ts`, `dto/`, `*.service.spec.ts`.
