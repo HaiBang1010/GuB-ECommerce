@@ -61,20 +61,22 @@ delegate** (e.g. the variant spec has no `product` delegate), so a stray cross-t
 order ──▶ product   (read price/stock, reserve & decrement stock via product.service)
 order ──▶ cart      (convert cart → order, then clear cart)
 order ──▶ voucher   (validate read-only, then redeem inside the checkout tx — increments usedCount)
-order ──▶ payment   (create PaymentIntent)
 order ──▶ iam       (admin order list: enrich customers + resolve search ids via user.service)
 order ──(QStash)──▶ notification
+payment ─▶ order    (createIntent reads the order; webhook markPaid; admin refund markRefunded + emit, §4.13)
 voucher ─▶ cart     (preview reads the live cart subtotal server-side)
 voucher ─▶ iam      (grant-by-email + wallet: resolve the user via user.service)
 review ─▶ order     (verify the OrderItem belongs to user and order is DELIVERED)
 chat  ──▶ (Supabase Realtime, out-of-process)
 ```
 
-No dependency cycles. `payment` does **not** call `order` synchronously; the webhook
-updates order state by emitting an event / calling `order.service.markPaid()`. `voucher`
-is one-way too — it resolves users/carts via `iam`/`cart` but **never** calls `order`, so
-the per-user redemption count lives on `UserVoucher` (in the `voucher` schema), not by
-querying `ordering` (§4.10).
+No dependency cycles. `payment → order` is a one-way **synchronous in-process** edge:
+`payment` reads the order and transitions it (`markPaid` on the webhook, `markRefunded`
+on an admin refund), but `order` **never** imports `payment` — which is exactly why the
+admin refund route lives in the payment module (§4.13). `voucher` is one-way too — it
+resolves users/carts via `iam`/`cart` but **never** calls `order`, so the per-user
+redemption count lives on `UserVoucher` (in the `voucher` schema), not by querying
+`ordering` (§4.10).
 
 ## 4. Key flows
 
@@ -305,6 +307,36 @@ composes `ProductService.countActiveByCategory()` (a `groupBy`; ProductService o
 Category→Product service cycle (ProductService→CategoryService stays one-way). Archive stays **soft
 (reversible hide)**: products under an archived category are hidden by the read-time cascade, never
 orphaned — the counts drive a UI warning, not a block.
+
+### 4.13 Admin refund of a captured order — Phase 4
+
+Closes the Phase 2 debt (admin-cancel/refund of a PAID order). An admin full-refunds an order at
+`POST /admin/orders/:id/refund` (RoleGuard ADMIN, `OrderStatus.REFUNDED` is full-refund — **no partial**).
+
+- **Where it lives (no cycle).** `PaymentModule` already imports `OrderModule` (the webhook calls
+  `OrderService.markPaid`), so `OrderModule` **must not** import `PaymentModule`. The refund needs Stripe,
+  so the orchestration lives in **`PaymentService.refundOrder`** and the route in a payment-module
+  controller (`PaymentAdminController`, declared under `admin/orders` for a RESTful/FE-consistent path).
+  The order-side state change is delegated to a new **`OrderService.markRefunded(tx, …)`** — called
+  in-process, mirroring `markPaid`. The dependency edge stays one-way (`payment → order`).
+- **Flow.** `refundOrder` reads the order via `getForAdmin` (404 if missing); an already-`REFUNDED` order
+  returns idempotently with **no** Stripe call; a non-refundable status → **409 before touching Stripe**.
+  It then finds the `SUCCEEDED` `Payment`, issues the Stripe refund **first** (outside the tx,
+  idempotency key `refund_<orderId>` — a retry returns the same Refund, never a second one), then in ONE
+  transaction marks `Payment → REFUNDED` **and** `markRefunded(tx, orderId)`. The `ORDER_REFUNDED`
+  notification is emitted **post-commit** (best-effort, §4.8).
+- **`markRefunded` (the guarded flip).** Mirrors `cancelAndReleaseTx`: a conditional `updateMany`
+  (`where: { id, status: <observed> }`) is the concurrency guard — only the winner flips and restocks, so
+  two overlapping refunds never double-release. **Stock is returned only for `PAID`/`PROCESSING`** (goods
+  still in the warehouse) via `releaseForOrder`; a **`SHIPPED`** order's goods have left, so releasing
+  would phantom-oversell — a physical return is a separate future flow. Refundable set
+  (`REFUNDABLE_STATUSES = [PAID, PROCESSING, SHIPPED]`) is exported from `order.service` and shared by
+  `refundOrder`'s pre-check; `DELIVERED`/`CANCELLED`/`PENDING_PAYMENT` → 409.
+
+The fulfillment `ADMIN_TRANSITIONS` map is unchanged (REFUNDED has no inbound transition via the status
+route — it's driven by this refund flow, not `updateStatus`). No `charge.refunded` webhook handler: the
+refund is driven synchronously and the Stripe idempotency key makes it safe; webhook reconciliation is
+out of scope.
 
 ## 5. Data model (Prisma)
 

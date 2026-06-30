@@ -145,7 +145,11 @@ step, the backend enforces the legal transition). The toolbar adds a **multi-sta
 (`page`/`pageSize` + `total`, `keepPreviousData` so paging doesn't flash); any filter/search/page-size
 change resets to page 1. Clicking an order id opens a shared **order-detail dialog** (`useAdminOrderDetail`
 → `GET /admin/orders/:id`: full items, shipping snapshot, status timeline, customer, and the advance-status
-action). The customer cell links to the **user-detail page** at `/admin/users/[id]`.
+action). For a refundable order (`PAID`/`PROCESSING`/`SHIPPED`) the dialog also shows a destructive
+**Refund** button (`useRefundOrder` → `POST /admin/orders/:id/refund`) behind a `window.confirm`; the
+backend issues the Stripe refund, conditionally restocks, and flips the order to `REFUNDED` (ARCHITECTURE.md
+§4.13). On success the list/detail/user queries invalidate and the status badge (which already maps
+`REFUNDED`) updates. The customer cell links to the **user-detail page** at `/admin/users/[id]`.
 
 **Users** (`/admin/users` + `/admin/users/[id]`): the list (`useAdminUsers` → `GET /admin/users`) is
 paginated with a debounced name/email search; each row links to the detail page. The detail page
