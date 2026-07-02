@@ -16,20 +16,23 @@ export function ProductCard({ product }: { product: Product }) {
   const sale = product.salePriceCents;
 
   return (
-    <Link href={`/products/${product.slug}`} className="block">
-      <Card className="h-full overflow-hidden transition-shadow hover:shadow-md">
+    // h-full on the link + card so a grid/flex cell stretches the card to the row's
+    // tallest; the price block is pushed to the bottom (mt-auto) so prices align across
+    // cards regardless of brand / name length.
+    <Link href={`/products/${product.slug}`} className="block h-full">
+      <Card className="flex h-full flex-col overflow-hidden transition-shadow hover:shadow-md">
         {/* Cover image (backend primaryImageUrl). Fixed aspect box + graceful
             placeholder so the card never collapses on a missing/broken image. */}
         <CardImage url={product.primaryImageUrl} alt={name} />
         <CardHeader>
-          <CardTitle>{name}</CardTitle>
+          <CardTitle className="line-clamp-2">{name}</CardTitle>
           {product.brand ? (
             <span className="text-muted-foreground text-sm">
               {product.brand}
             </span>
           ) : null}
         </CardHeader>
-        <CardContent className="flex items-center gap-2">
+        <CardContent className="mt-auto flex items-center gap-2">
           {sale !== null ? (
             <>
               <span className="text-base font-semibold">
