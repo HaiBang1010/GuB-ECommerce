@@ -1378,6 +1378,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get (or create) my conversation with its message history */
+        get: operations["ChatController_getThread"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/chat/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send a message to support (persisted first) */
+        post: operations["ChatController_send"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/chat/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark the incoming (admin) messages in my conversation read */
+        post: operations["ChatController_markRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/chat/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List conversations, paginated (?search by customer name/email) */
+        get: operations["ChatAdminController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/chat/conversations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one conversation with its message history */
+        get: operations["ChatAdminController_getOne"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/chat/conversations/{id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reply to a conversation as admin (persisted first) */
+        post: operations["ChatAdminController_reply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/chat/conversations/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark a conversation's incoming (customer) messages read */
+        post: operations["ChatAdminController_markRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3398,6 +3517,118 @@ export interface components {
             color: string;
             /** @example 2 */
             stockQty: number;
+        };
+        ConversationResponseDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9cnv01 */
+            id: string;
+            /**
+             * @description Owning customer user id (scalar → iam.User.id).
+             * @example clx1a2b3c4d5e6f7g8h9usr01
+             */
+            userId: string;
+            /**
+             * Format: date-time
+             * @description Timestamp of the most recent message (null = no messages yet).
+             * @example 2026-07-02T10:15:00.000Z
+             */
+            lastMessageAt: string | null;
+            /**
+             * Format: date-time
+             * @example 2026-07-01T09:00:00.000Z
+             */
+            createdAt: string;
+        };
+        ChatMessageResponseDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9msg01 */
+            id: string;
+            /** @example clx1a2b3c4d5e6f7g8h9cnv01 */
+            conversationId: string;
+            /**
+             * @example USER
+             * @enum {string}
+             */
+            sender: "USER" | "ADMIN";
+            /** @example Hi, is this available in size 42? */
+            body: string;
+            /**
+             * Format: date-time
+             * @description When the recipient marked it read (null = unread).
+             * @example null
+             */
+            readAt: string | null;
+            /**
+             * Format: date-time
+             * @example 2026-07-02T10:15:00.000Z
+             */
+            createdAt: string;
+        };
+        ChatThreadResponseDto: {
+            conversation: components["schemas"]["ConversationResponseDto"];
+            messages: components["schemas"]["ChatMessageResponseDto"][];
+        };
+        SendMessageDto: {
+            /**
+             * @description Message text.
+             * @example Hi, is this available in size 42?
+             */
+            body: string;
+        };
+        MarkReadResponseDto: {
+            /**
+             * @description Number of messages marked read.
+             * @example 2
+             */
+            updated: number;
+        };
+        ChatCustomerDto: {
+            /** @example jane@example.com */
+            email: string;
+            /** @example Jane Doe */
+            name: string | null;
+        };
+        AdminConversationResponseDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9cnv01 */
+            id: string;
+            /**
+             * @description Owning customer user id (scalar → iam.User.id).
+             * @example clx1a2b3c4d5e6f7g8h9usr01
+             */
+            userId: string;
+            /**
+             * Format: date-time
+             * @description Timestamp of the most recent message (null = no messages yet).
+             * @example 2026-07-02T10:15:00.000Z
+             */
+            lastMessageAt: string | null;
+            /**
+             * Format: date-time
+             * @example 2026-07-01T09:00:00.000Z
+             */
+            createdAt: string;
+            customer: components["schemas"]["ChatCustomerDto"] | null;
+            /**
+             * @description Unread customer→admin messages.
+             * @example 3
+             */
+            unreadCount: number;
+        };
+        PaginatedAdminConversationsResponseDto: {
+            items: components["schemas"]["AdminConversationResponseDto"][];
+            /**
+             * @description Total rows matching the filter.
+             * @example 42
+             */
+            total: number;
+            /**
+             * @description 1-based current page.
+             * @example 1
+             */
+            page: number;
+            /**
+             * @description Rows per page.
+             * @example 10
+             */
+            pageSize: number;
         };
     };
     responses: never;
@@ -7258,6 +7489,270 @@ export interface operations {
             };
             /** @description Requires ADMIN role. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChatController_getThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatThreadResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChatController_send: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendMessageDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatMessageResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many messages — slow down. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChatController_markRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkReadResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChatAdminController_list: {
+        parameters: {
+            query?: {
+                /** @description Search by customer name or email (substring). */
+                search?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedAdminConversationsResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChatAdminController_getOne: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatThreadResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conversation not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChatAdminController_reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendMessageDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatMessageResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conversation not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many messages — slow down. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChatAdminController_markRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkReadResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conversation not found. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

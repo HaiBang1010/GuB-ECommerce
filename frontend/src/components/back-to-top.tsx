@@ -26,7 +26,7 @@ export function BackToTop() {
       aria-label={t('backToTop')}
       onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
       className={cn(
-        'bg-primary text-primary-foreground fixed right-5 bottom-5 z-50 rounded-full p-3 shadow-lg transition-all duration-300 hover:brightness-110',
+        'bg-primary text-primary-foreground fixed bottom-5 left-5 z-50 rounded-full p-3 shadow-lg transition-all duration-300 hover:brightness-110',
         visible
           ? 'scale-100 opacity-100'
           : 'pointer-events-none scale-90 opacity-0',

@@ -252,7 +252,19 @@
     "orderPaid": "Order #{orderId} paid",
     "orderShipped": "Order #{orderId} is on the way",
     "orderDelivered": "Order #{orderId} delivered",
-    "orderRefunded": "Order #{orderId} refunded"
+    "orderRefunded": "Order #{orderId} refunded",
+    "chatReply": "Support replied to your message"
+  },
+  "chat": {
+    "launcher": "Chat with support",
+    "close": "Close",
+    "title": "Support",
+    "placeholder": "Type a message…",
+    "send": "Send",
+    "empty": "Start a conversation with our support team.",
+    "you": "You",
+    "support": "Support",
+    "sendError": "Couldn't send your message. Please try again."
   },
   "admin": {
     "title": "GuB Admin",

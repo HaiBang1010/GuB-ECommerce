@@ -78,6 +78,13 @@ export function Providers({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
       setLoading(false);
 
+      // Keep Supabase Realtime authorized with the freshest token so an open private
+      // chat channel (chat:user:<id>) survives a token refresh (fires on
+      // INITIAL_SESSION / SIGNED_IN / TOKEN_REFRESHED). No-op when signed out.
+      if (session) {
+        void supabase.realtime.setAuth(session.access_token);
+      }
+
       // Only a NEW user id is a genuine sign-in / account switch. A redundant
       // SIGNED_IN re-emitted for the already-synced user (fired on every tab
       // refocus) is skipped — so it never flips roleStatus back to 'loading'

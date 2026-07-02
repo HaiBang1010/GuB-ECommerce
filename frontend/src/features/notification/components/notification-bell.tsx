@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatDate } from '@/lib/datetime';
+import { useChatUiStore } from '@/stores/chat-ui.store';
 import type { NotificationItem } from '@/features/notification/api/notifications';
 
 // Map a notification `type` to an i18n key — the text is rendered from structured
@@ -28,6 +29,7 @@ const TYPE_KEY: Record<string, string> = {
   ORDER_SHIPPED: 'orderShipped',
   ORDER_DELIVERED: 'orderDelivered',
   ORDER_REFUNDED: 'orderRefunded',
+  CHAT_REPLY: 'chatReply',
 };
 
 export function NotificationBell() {
@@ -36,6 +38,7 @@ export function NotificationBell() {
   const { data } = useNotifications();
   const markRead = useMarkNotificationRead();
   const markAll = useMarkAllNotificationsRead();
+  const openChat = useChatUiStore((s) => s.open);
 
   const items = data?.items ?? [];
   const unread = data?.unreadCount ?? 0;
@@ -82,22 +85,9 @@ export function NotificationBell() {
             {t('noNotifications')}
           </p>
         ) : (
-          items.map((n) => (
-            <DropdownMenuItem
-              key={n.id}
-              asChild
-              onSelect={() => {
-                if (!n.readAt) markRead.mutate(n.id);
-              }}
-            >
-              <Link
-                href={
-                  n.payload?.orderId
-                    ? `/account/orders/${n.payload.orderId}`
-                    : '/account/orders'
-                }
-                className="flex flex-col items-start gap-0.5"
-              >
+          items.map((n) => {
+            const body = (
+              <>
                 <span className="flex items-center gap-1.5">
                   {!n.readAt ? (
                     <span
@@ -112,9 +102,45 @@ export function NotificationBell() {
                 <span className="text-muted-foreground text-xs">
                   {formatDate(n.createdAt, locale)}
                 </span>
-              </Link>
-            </DropdownMenuItem>
-          ))
+              </>
+            );
+            // A chat reply opens the floating widget (its payload has no orderId to
+            // deep-link to); order notifications link to the order page as before.
+            if (n.type === 'CHAT_REPLY') {
+              return (
+                <DropdownMenuItem
+                  key={n.id}
+                  className="flex flex-col items-start gap-0.5"
+                  onSelect={() => {
+                    if (!n.readAt) markRead.mutate(n.id);
+                    openChat();
+                  }}
+                >
+                  {body}
+                </DropdownMenuItem>
+              );
+            }
+            return (
+              <DropdownMenuItem
+                key={n.id}
+                asChild
+                onSelect={() => {
+                  if (!n.readAt) markRead.mutate(n.id);
+                }}
+              >
+                <Link
+                  href={
+                    n.payload?.orderId
+                      ? `/account/orders/${n.payload.orderId}`
+                      : '/account/orders'
+                  }
+                  className="flex flex-col items-start gap-0.5"
+                >
+                  {body}
+                </Link>
+              </DropdownMenuItem>
+            );
+          })
         )}
       </DropdownMenuContent>
     </DropdownMenu>

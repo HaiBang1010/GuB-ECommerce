@@ -3,6 +3,7 @@ import { ChatMessage, Conversation, Prisma, Sender } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 import { UserService } from '../iam/user/user.service';
+import { ChatRealtimeService } from './chat-realtime.service';
 
 // A conversation plus its (chronological) message history — the customer's GET and
 // the admin conversation detail share this shape.
@@ -48,6 +49,9 @@ export class ChatService {
     // In-process, synchronous in-app notification (NOT the order async path) so an
     // offline customer still sees an admin reply via the notification bell.
     private readonly notifications: NotificationService,
+    // Pushes an admin reply to the customer's private Realtime channel (persist-first
+    // — mirrors an already-saved message; degrades to the client poll when unset).
+    private readonly realtime: ChatRealtimeService,
   ) {}
 
   // One support thread per customer. `userId` is indexed (not unique), so we
@@ -153,11 +157,13 @@ export class ChatService {
   }
 
   // Admin reply, persisted first (404 when the conversation doesn't exist). After
-  // the message commits, notify the customer (offline path — the bell) best-effort.
+  // the message commits, notify the customer (offline path — the bell) and broadcast
+  // to their live widget — both best-effort, neither ever breaks the reply.
   async sendAsAdmin(conversationId: string, body: string): Promise<ChatMessage> {
     const conversation = await this.assertConversation(conversationId);
     const message = await this.appendMessage(conversationId, Sender.ADMIN, body);
     await this.notifyCustomer(conversation.userId, conversationId);
+    await this.broadcastToCustomer(conversation.userId, conversationId, message.id);
     return message;
   }
 
@@ -232,6 +238,24 @@ export class ChatService {
       });
     } catch {
       this.logger.warn(`Chat notification failed for user ${userId}.`);
+    }
+  }
+
+  // Push the reply to the customer's private Realtime channel so an open widget
+  // updates live. Best-effort: a broadcast failure (or unconfigured Supabase) is
+  // logged and swallowed — the message is already persisted and the client polls.
+  private async broadcastToCustomer(
+    userId: string,
+    conversationId: string,
+    messageId: string,
+  ): Promise<void> {
+    try {
+      await this.realtime.broadcastToUser(userId, {
+        conversationId,
+        id: messageId,
+      });
+    } catch {
+      this.logger.warn(`Chat broadcast failed for user ${userId}.`);
     }
   }
 

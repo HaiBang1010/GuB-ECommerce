@@ -2,6 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { Sender } from '@prisma/client';
 import { ChatService } from './chat.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ChatRealtimeService } from './chat-realtime.service';
 import { NotificationService } from '../notification/notification.service';
 import { UserService } from '../iam/user/user.service';
 
@@ -30,6 +31,7 @@ describe('ChatService', () => {
   };
   let users: { findManyByIds: jest.Mock; searchIdsByNameOrEmail: jest.Mock };
   let notifications: { createInApp: jest.Mock };
+  let realtime: { broadcastToUser: jest.Mock };
   let service: ChatService;
 
   beforeEach(() => {
@@ -54,10 +56,12 @@ describe('ChatService', () => {
       searchIdsByNameOrEmail: jest.fn().mockResolvedValue([]),
     };
     notifications = { createInApp: jest.fn().mockResolvedValue({ id: 'n1' }) };
+    realtime = { broadcastToUser: jest.fn().mockResolvedValue(undefined) };
     service = new ChatService(
       prisma as unknown as PrismaService,
       users as unknown as UserService,
       notifications as unknown as NotificationService,
+      realtime as unknown as ChatRealtimeService,
     );
   });
 
@@ -220,14 +224,20 @@ describe('ChatService', () => {
         type: 'CHAT_REPLY',
         payload: { conversationId: 'c1' },
       });
+      // Live path: broadcast to the customer's private channel (persist-first mirror).
+      expect(realtime.broadcastToUser).toHaveBeenCalledWith('u1', {
+        conversationId: 'c1',
+        id: 'm9',
+      });
     });
 
-    it('sendAsAdmin still returns the message when the notification fails (best-effort)', async () => {
+    it('sendAsAdmin still returns the message when notify OR broadcast fails (best-effort)', async () => {
       prisma.conversation.findUnique.mockResolvedValue({ id: 'c1', userId: 'u1' });
       const tx = txRun();
       const created = { id: 'm9', conversationId: 'c1', createdAt: new Date() };
       tx.chatMessage.create.mockResolvedValue(created);
       notifications.createInApp.mockRejectedValue(new Error('notify down'));
+      realtime.broadcastToUser.mockRejectedValue(new Error('realtime down'));
       await expect(service.sendAsAdmin('c1', 'sure')).resolves.toBe(created);
     });
 
@@ -241,6 +251,7 @@ describe('ChatService', () => {
       });
       await service.sendAsUser('u1', 'hello');
       expect(notifications.createInApp).not.toHaveBeenCalled();
+      expect(realtime.broadcastToUser).not.toHaveBeenCalled();
     });
   });
 

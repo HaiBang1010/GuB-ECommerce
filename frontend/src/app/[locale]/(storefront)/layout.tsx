@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { BackToTop } from '@/components/back-to-top';
+import { ChatWidget } from '@/features/chat/components/chat-widget';
 
 // Storefront chrome: the shared Header + Footer wrap every public/customer page. The
 // admin area lives in a sibling route group ((admin)) with its own shell and no
@@ -15,6 +16,7 @@ export default function StorefrontLayout({ children }: { children: ReactNode }) 
       <div className="flex-1">{children}</div>
       <Footer />
       <BackToTop />
+      <ChatWidget />
     </div>
   );
 }

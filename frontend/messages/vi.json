@@ -252,7 +252,19 @@
     "orderPaid": "Đơn #{orderId} đã thanh toán",
     "orderShipped": "Đơn #{orderId} đang được giao",
     "orderDelivered": "Đơn #{orderId} đã giao",
-    "orderRefunded": "Đơn #{orderId} đã được hoàn tiền"
+    "orderRefunded": "Đơn #{orderId} đã được hoàn tiền",
+    "chatReply": "Hỗ trợ đã trả lời tin nhắn của bạn"
+  },
+  "chat": {
+    "launcher": "Chat với hỗ trợ",
+    "close": "Đóng",
+    "title": "Hỗ trợ",
+    "placeholder": "Nhập tin nhắn…",
+    "send": "Gửi",
+    "empty": "Bắt đầu trò chuyện với đội hỗ trợ.",
+    "you": "Bạn",
+    "support": "Hỗ trợ",
+    "sendError": "Không gửi được tin nhắn. Vui lòng thử lại."
   },
   "admin": {
     "title": "GuB Admin",
