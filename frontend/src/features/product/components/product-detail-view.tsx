@@ -73,15 +73,13 @@ function DetailContent({ product }: { product: ProductDetail }) {
         )
       : undefined) ?? null;
 
-  // Images: all of them until a color is picked, then just that color's, sorted.
-  const displayImages = (
-    selectedColor === null
-      ? product.images
-      : product.images.filter((img) => img.color === selectedColor)
-  )
+  // Gallery shows ALL product images (sorted by position) — it never filters by the
+  // chosen color. Selecting a color only swaps the MAIN image to that color's shot (see
+  // handleSelectColor), so the thumbnails stay complete and clickable.
+  const galleryImages = product.images
     .slice()
     .sort((a, b) => a.position - b.position);
-  const mainImage = displayImages[activeImage] ?? displayImages[0];
+  const mainImage = galleryImages[activeImage] ?? galleryImages[0];
 
   // The price actually charged folds in the product-level sale, but only when it
   // undercuts the variant's own price (a sale never raises the price). Mirrors the
@@ -128,7 +126,15 @@ function DetailContent({ product }: { product: ProductDetail }) {
   function handleSelectColor(color: string) {
     setSelectedColor(color);
     setSelectedSize(null); // reset size — it may not exist for the new color
-    setActiveImage(0);
+    // Swap ONLY the main image to this color's shot; the gallery stays full. Fall back to
+    // the generic (color = null) image, else keep the current one (color has no own shot).
+    const colorIdx = galleryImages.findIndex((img) => img.color === color);
+    if (colorIdx >= 0) {
+      setActiveImage(colorIdx);
+    } else {
+      const genericIdx = galleryImages.findIndex((img) => img.color === null);
+      if (genericIdx >= 0) setActiveImage(genericIdx);
+    }
   }
 
   function handleAddToCart() {
@@ -138,7 +144,7 @@ function DetailContent({ product }: { product: ProductDetail }) {
       nameVi: product.nameVi,
       nameEn: product.nameEn,
       slug: product.slug,
-      imageUrl: displayImages[0]?.url ?? null,
+      imageUrl: mainImage?.url ?? null,
     });
     addToCart.mutate({ variantId: selectedVariant.id, quantity: 1 });
   }
@@ -160,9 +166,9 @@ function DetailContent({ product }: { product: ProductDetail }) {
           )}
         </div>
 
-        {displayImages.length > 1 ? (
+        {galleryImages.length > 1 ? (
           <div className="flex flex-wrap gap-2">
-            {displayImages.map((img, i) => (
+            {galleryImages.map((img, i) => (
               <button
                 key={img.id}
                 type="button"
