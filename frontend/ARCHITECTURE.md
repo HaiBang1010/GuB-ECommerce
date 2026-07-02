@@ -22,7 +22,7 @@ Code is organised **by domain feature**, not by technical layer. Each domain own
 src/
 ├── app/[locale]/                 # next-intl: /vi, /en — route groups are URL-transparent
 │   ├── (storefront)/             # home (banners · category grid · featured collections · product rows) · products/[slug] · collections/[slug] · cart · checkout · auth · account (orders/[id]{/pay,/confirmation} · vouchers · profile) + Header + Footer
-│   ├── (admin)/admin/            # orders · users · users/[id] · reviews · vouchers · sales · categories · collections · banners (admin shell)
+│   ├── (admin)/admin/            # orders · users · users/[id] · reviews · vouchers · sales · categories · collections · banners · analytics (admin shell)
 │   └── providers.tsx, layout.tsx # QueryClient + Supabase session bridge + <Toaster>
 ├── features/                     # domain-owned UI; each is {components,hooks,api}/ as needed
 │   ├── product/ category/ collection/ cart/ checkout/ voucher/  # storefront domains (voucher = preview at checkout)
@@ -119,8 +119,8 @@ producer (the single async path, backend §4.8); the frontend only reads + acks.
 ## 10. Admin (Phase 3)
 
 The admin area is a `[locale]/(admin)/admin/` route group with its own client `AdminLayout` (an admin
-topbar + a sidebar: **Orders · Users · Reviews · Vouchers · Sales · Categories · Collections · Banners** are
-wired, with **Analytics** still a "coming soon" placeholder) — separate from the `[locale]/(storefront)/` group that
+topbar + a sidebar: **Orders · Users · Reviews · Vouchers · Sales · Categories · Collections · Banners ·
+Analytics** are all wired as of Phase 5, §17) — separate from the `[locale]/(storefront)/` group that
 renders the storefront `Header`.
 Route groups don't affect the URL, so every customer route is unchanged.
 
@@ -350,3 +350,33 @@ shows a blank row.
 - **i18n:** new `Home.shopByCategory` + the `carousel` namespace (prev/next) and the admin `collection*` keys
   (vi/en); the category grid + collection rows reuse `Home.seeMore`, and the collection page reuses
   `Products.empty/error` — collection/category **titles come from the data**, so no new title keys.
+
+## 17. Admin analytics dashboard (Phase 5)
+
+The `/admin/analytics` dashboard (`features/admin/analytics/`) reads the backend's read-only aggregation
+API (ARCHITECTURE.md §4.17); the frontend only composes + renders (Recharts). It mirrors the other admin
+features: `api/analytics.ts` (typed off the OpenAPI `components['schemas']`), `hooks/use-analytics.ts`
+(TanStack Query, **auth-gated** `enabled: !authLoading && !!user`, `keepPreviousData` so range/limit
+changes don't flash), `components/analytics-view.tsx` + `analytics-charts.tsx`, and a thin route wrapper.
+The sidebar **Analytics** tab is now wired (`NAV_ITEMS` href flipped from the old `null` "coming soon").
+
+- **Sections.** Five KPI cards (net revenue · orders · AOV · units sold · new users) → a revenue **area
+  chart** → new-users **line** + orders-by-status **bar** → top-products / top-spenders **tables** →
+  sales-by-category **bar** + voucher-usage **table** → a low-stock **table**. Each section owns its
+  loading (`Skeleton`) / error / empty state via a shared `Panel`; charts sit in `ResponsiveContainer`.
+- **Date range.** 7/30/90-day preset buttons + two native `<input type="date">` (from/to); editing a date
+  drops out of the preset. Default 30 days. The low-stock panel has its own **debounced** threshold input
+  (`useDebounce`). Money is formatted with `formatPriceCents` (backend sends integer cents; no client math).
+- **Charts.** Recharts, **light theme only**, a small fixed accent + categorical palette in
+  `analytics-charts.tsx`. Product/category names pick the locale field (`nameVi`/`nameEn`); all labels go
+  through the new **`analytics`** next-intl namespace (vi/en), incl. localized order-status labels.
+- **Guarded like the rest.** The page lives in the `(admin)` group (client role guard + `middleware.ts`
+  session), and every `/admin/analytics/*` call is gated by the backend **RoleGuard** (401/403) — the real
+  gate. `apiFetch` attaches the Supabase JWT automatically.
+
+### Vercel Web Analytics (visitor metrics)
+
+`<Analytics/>` from `@vercel/analytics/next` is mounted once in the root `[locale]/layout.tsx` (§7). It
+renders its own client boundary (the server layout stays a server component) and is a **no-op locally** —
+it only collects data when **deployed on Vercel**, where the metrics live in the Vercel dashboard,
+**independent** of the DB-backed `/admin/analytics` charts. **Verify on deploy.**

@@ -27,8 +27,9 @@ src/modules/
 ├── review/        review tied to orderItemId, admin reply                        → schema: review
 ├── chat/          Conversation/ChatMessage, push via Supabase Realtime           → schema: chat
 ├── voucher/       Voucher, UserVoucher (wallet), apply at checkout               → schema: voucher
-│                  ActivityLog (audit / analytics)                                → schema: activity
-└── marketing/     Banner (home banners; admin CRUD, image = external URL)        → schema: marketing
+│                  ActivityLog (audit; empty stub — no writer yet, §4.17)         → schema: activity
+├── marketing/     Banner (home banners; admin CRUD, image = external URL)        → schema: marketing
+└── analytics/     admin dashboard aggregations (read-only orchestrator)          → owns NO schema
 ```
 
 Each module folder: `*.module.ts · *.controller.ts · *.service.ts · dto/ · *.service.spec.ts`.
@@ -70,9 +71,11 @@ voucher ─▶ iam      (grant-by-email + wallet: resolve the user via user.serv
 review ─▶ order     (verify the OrderItem belongs to user and order is DELIVERED)
 chat  ──▶ (Supabase Realtime, out-of-process)
 marketing ──▶ (none — Banner references no other module; storefront read + admin CRUD only)
+analytics ─▶ order · product · iam   (read-only aggregations, composed in-process; §4.17)
 ```
 
-No dependency cycles. `payment → order` is a one-way **synchronous in-process** edge:
+No dependency cycles. `analytics` is a **read-only sink**: it depends on `order`/`product`/`iam`
+but **nothing imports it**, so its edges can never close a cycle (§4.17). `payment → order` is a one-way **synchronous in-process** edge:
 `payment` reads the order and transitions it (`markPaid` on the webhook, `markRefunded`
 on an admin refund), but `order` **never** imports `payment` — which is exactly why the
 admin refund route lives in the payment module (§4.13). `voucher` is one-way too — it
@@ -440,6 +443,41 @@ all stay inside the `product` schema and the in-process boundary (§2.1, §4.3).
   `migrate deploy` (never `migrate dev`, §5.5): `20260701000000_add_category_image` (one nullable column)
   and `20260701000100_add_collection_home_fields` (`imageUrl` nullable + `featuredOnHome BOOLEAN NOT NULL
   DEFAULT false` + `homeSortOrder INTEGER NOT NULL DEFAULT 0`).
+
+### 4.17 Admin analytics dashboard — Phase 5
+
+The `analytics` module powers the admin dashboard (`/admin/analytics`, frontend §17). It is a
+**read-only orchestrator** and the cleanest expression of the schema-per-module rule: `AnalyticsService`
+**never injects `PrismaService`** and never touches another module's tables. Each aggregation query
+lives in the **owning** module's service (extending the `OrderService.getStatsForUser` /
+`ProductService.countActiveByCategory` groupBy precedent); analytics only **composes + enriches** across
+modules in-process — the same shape as `AdminUserService` (§4.9). It **owns no schema**, and **nothing
+imports `AnalyticsModule`**, so its edges (`analytics → order · product · iam`) can never close a cycle (§3).
+
+- **Endpoints** (`AnalyticsAdminController`, `@Controller('admin/analytics')`, RoleGuard ADMIN, all
+  read-only): `GET /summary` (KPIs + revenue/new-users time series + orders-by-status), `/top-spenders`,
+  `/top-products`, `/sales-by-category`, `/voucher-usage` (all take `?from&to`, default **last 30 days**,
+  `limit` on the two ranked lists) and `/low-stock` (`?threshold`, default 5 — a stock snapshot, no window).
+  A shared `AnalyticsRangeQueryDto.range()` resolves the window to inclusive **UTC day** bounds; every
+  endpoint has a typed `*-response.dto.ts` + Swagger (0 `any`).
+- **Owning-module aggregations added.** `OrderService` (schema `ordering`): `getRevenueRows`,
+  `getStatusCounts`, `getTopSpenderTotals`, `getProductSales` (folds `OrderItem`+`Order` — same schema —
+  by product, revenue = Σ `unitPriceCents`×`quantity` from the **snapshot** name, no product JOIN),
+  `getVoucherUsage` (groups the order's `voucherCode`/`discountCents` snapshot — **no VoucherModule
+  dependency**). `UserService`: `getSignupRows`. `ProductVariantService`: `getLowStockVariants` (names via
+  `ProductService.getActiveByIds`, the same product-table boundary). `AnalyticsService` buckets the time
+  series by UTC day and composes sales-by-category (`OrderItem.productId` → `ProductService.findManyByIds`
+  → `categoryId` → `CategoryService` names, an "uncategorized" fallback) + enriches top spenders
+  (`UserService.findManyByIds`).
+- **Revenue = net, keyed on `createdAt`.** `SPENT_STATUSES` (`PAID/PROCESSING/SHIPPED/DELIVERED`) is now
+  **exported** from `order.service.ts` so revenue and the admin user-detail total-spent (§4.9) share one
+  source of truth. Refunds are full-order only (§4.13), so a REFUNDED order contributes **0** — exclusion
+  *is* the net, no separate subtraction. There is **no `paidAt`** column (§5), so time series bucket on
+  `Order.createdAt`; a later refund therefore drops an order from its creation-day bucket (accepted for a
+  net-revenue view — a true gross-vs-refunds split would need `refundedAt`, out of scope).
+- **Deferred.** The `activity.ActivityLog` model is an **empty stub** (no writer anywhere in `src`), so the
+  Phase-5 "user-activity line chart" is **deferred** until an activity-logging write path exists. Visitor
+  metrics come from **Vercel Web Analytics** (frontend §17), external to this DB-backed dashboard.
 
 ## 5. Data model (Prisma)
 
