@@ -22,6 +22,7 @@ const NAV_ITEMS = [
   { key: 'collections', href: '/admin/collections' },
   { key: 'banners', href: '/admin/banners' },
   { key: 'analytics', href: '/admin/analytics' },
+  { key: 'chat', href: '/admin/chat' },
 ] as const;
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
