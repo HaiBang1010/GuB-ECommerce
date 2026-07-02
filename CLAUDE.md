@@ -18,7 +18,7 @@
 
 ## Architecture (MANDATORY)
 - **NestJS modular monolith — NO microservices.** One deploy, many modules.
-- Modules: `auth · product · cart · order · payment · notification · review · chat · voucher`.
+- Modules: `auth · product · cart · order · payment · notification · review · chat · voucher · marketing`, plus a read-only `analytics` module (admin dashboard aggregations; owns no schema).
 - Modules communicate THROUGH a service interface, called **in-process** — NO internal network calls.
 - Each module owns its **own Postgres schema** (`product.*`, `order.*`, ...). **No cross-schema JOINs** — if you need another module's data, call its service.
 - Exactly one async path: `order` pushes an event to the queue → `notification` consumes it.
