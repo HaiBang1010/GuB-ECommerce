@@ -465,5 +465,56 @@
     "bannerArchived": "Đã lưu trữ banner",
     "archiveBannerConfirm": "Lưu trữ banner này?",
     "bannerSaveError": "Không lưu được banner"
+  },
+  "analytics": {
+    "title": "Phân tích",
+    "range": {
+      "last7": "7 ngày",
+      "last30": "30 ngày",
+      "last90": "90 ngày",
+      "from": "Từ",
+      "to": "Đến"
+    },
+    "kpi": {
+      "netRevenue": "Doanh thu ròng",
+      "orders": "Đơn hàng",
+      "aov": "Giá trị đơn TB",
+      "unitsSold": "Sản phẩm đã bán",
+      "newUsers": "Người dùng mới"
+    },
+    "revenueTitle": "Doanh thu theo thời gian",
+    "newUsersTitle": "Người dùng mới theo thời gian",
+    "ordersByStatusTitle": "Đơn theo trạng thái",
+    "topProductsTitle": "Sản phẩm bán chạy",
+    "topSpendersTitle": "Khách chi nhiều nhất",
+    "salesByCategoryTitle": "Doanh thu theo danh mục",
+    "voucherUsageTitle": "Sử dụng voucher",
+    "lowStockTitle": "Sắp hết hàng",
+    "lowStockThreshold": "Ngưỡng",
+    "lowStockEmpty": "Mọi biến thể đều trên ngưỡng",
+    "error": "Không tải được dữ liệu",
+    "empty": "Không có dữ liệu trong khoảng này",
+    "table": {
+      "product": "Sản phẩm",
+      "units": "Số lượng",
+      "revenue": "Doanh thu",
+      "customer": "Khách hàng",
+      "orders": "Đơn",
+      "spent": "Đã chi",
+      "code": "Mã",
+      "discount": "Giảm giá",
+      "variant": "Biến thể",
+      "stock": "Tồn kho",
+      "sku": "SKU"
+    },
+    "status": {
+      "PENDING_PAYMENT": "Chờ thanh toán",
+      "PAID": "Đã thanh toán",
+      "PROCESSING": "Đang xử lý",
+      "SHIPPED": "Đã giao vận",
+      "DELIVERED": "Đã giao",
+      "CANCELLED": "Đã hủy",
+      "REFUNDED": "Đã hoàn tiền"
+    }
   }
 }

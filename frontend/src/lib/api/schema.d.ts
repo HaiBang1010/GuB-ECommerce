@@ -1276,6 +1276,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/analytics/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dashboard summary: KPIs + revenue/new-users time series + orders-by-status (?from&to) */
+        get: operations["AnalyticsAdminController_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/analytics/top-spenders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Top spenders by net paid total (?from&to&limit) */
+        get: operations["AnalyticsAdminController_topSpenders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/analytics/top-products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Best-selling products by revenue (?from&to&limit) */
+        get: operations["AnalyticsAdminController_topProducts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/analytics/sales-by-category": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Revenue + units rolled up per category (?from&to) */
+        get: operations["AnalyticsAdminController_salesByCategory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/analytics/voucher-usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Voucher redemptions on paid orders (?from&to) */
+        get: operations["AnalyticsAdminController_voucherUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/analytics/low-stock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Active variants at or below a stock threshold (?threshold) */
+        get: operations["AnalyticsAdminController_lowStock"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3143,6 +3245,159 @@ export interface components {
              * @default true
              */
             isActive: boolean;
+        };
+        AnalyticsKpiDto: {
+            /**
+             * @description Net revenue in integer cents.
+             * @example 1234500
+             */
+            netRevenueCents: number;
+            /**
+             * @description Paid order count in the window.
+             * @example 87
+             */
+            orderCount: number;
+            /**
+             * @description Average order value in integer cents.
+             * @example 14189
+             */
+            aovCents: number;
+            /**
+             * @description Units sold across paid orders.
+             * @example 213
+             */
+            unitsSold: number;
+            /**
+             * @description New user signups in the window.
+             * @example 24
+             */
+            newUsers: number;
+        };
+        RevenuePointDto: {
+            /**
+             * @description UTC day (YYYY-MM-DD).
+             * @example 2026-06-15
+             */
+            date: string;
+            /**
+             * @description Net revenue that day, integer cents.
+             * @example 45600
+             */
+            revenueCents: number;
+            /**
+             * @description Paid orders that day.
+             * @example 3
+             */
+            orderCount: number;
+        };
+        NewUsersPointDto: {
+            /**
+             * @description UTC day (YYYY-MM-DD).
+             * @example 2026-06-15
+             */
+            date: string;
+            /**
+             * @description Signups that day.
+             * @example 2
+             */
+            count: number;
+        };
+        OrdersByStatusPointDto: {
+            /**
+             * @example PAID
+             * @enum {string}
+             */
+            status: "PENDING_PAYMENT" | "PAID" | "PROCESSING" | "SHIPPED" | "DELIVERED" | "CANCELLED" | "REFUNDED";
+            /** @example 12 */
+            count: number;
+            /**
+             * @description Sum of totalCents for that status.
+             * @example 156700
+             */
+            totalCents: number;
+        };
+        AnalyticsSummaryResponseDto: {
+            kpi: components["schemas"]["AnalyticsKpiDto"];
+            revenue: components["schemas"]["RevenuePointDto"][];
+            newUsers: components["schemas"]["NewUsersPointDto"][];
+            ordersByStatus: components["schemas"]["OrdersByStatusPointDto"][];
+        };
+        TopSpenderDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9usr01 */
+            userId: string;
+            /** @example user@example.com */
+            email: string | null;
+            /** @example Nguyễn Văn A */
+            name: string | null;
+            /**
+             * @description Total spent in integer cents.
+             * @example 456700
+             */
+            totalSpentCents: number;
+            /** @example 6 */
+            orderCount: number;
+        };
+        TopProductDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9prd01 */
+            productId: string;
+            /** @example Áo thun cổ tròn */
+            nameVi: string;
+            /** @example Crew-neck T-shirt */
+            nameEn: string;
+            /** @example 48 */
+            unitsSold: number;
+            /**
+             * @description Revenue in integer cents.
+             * @example 96000
+             */
+            revenueCents: number;
+        };
+        SalesByCategoryDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9cat01 */
+            categoryId: string;
+            /** @example Áo */
+            nameVi: string;
+            /** @example Tops */
+            nameEn: string;
+            /** @example 120 */
+            unitsSold: number;
+            /**
+             * @description Revenue in integer cents.
+             * @example 240000
+             */
+            revenueCents: number;
+        };
+        VoucherUsageDto: {
+            /** @example SAVE10 */
+            voucherCode: string;
+            /**
+             * @description Paid orders that used this voucher.
+             * @example 8
+             */
+            orderCount: number;
+            /**
+             * @description Total discount in integer cents.
+             * @example 12000
+             */
+            discountCents: number;
+        };
+        LowStockVariantDto: {
+            /** @example clx1a2b3c4d5e6f7g8h9var01 */
+            variantId: string;
+            /** @example DEMO-GIAY-SNEAKER-CLASSIC-42-WHITE */
+            sku: string;
+            /** @example clx1a2b3c4d5e6f7g8h9prd01 */
+            productId: string;
+            /** @example Giày sneaker cổ điển */
+            nameVi: string;
+            /** @example Classic sneaker */
+            nameEn: string;
+            /** @example 42 */
+            size: string;
+            /** @example White */
+            color: string;
+            /** @example 2 */
+            stockQty: number;
         };
     };
     responses: never;
@@ -6777,6 +7032,236 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["BannerResponseDto"][];
                 };
+            };
+        };
+    };
+    AnalyticsAdminController_summary: {
+        parameters: {
+            query?: {
+                /** @description Inclusive start of the window (UTC day). Defaults to 30 days ago. */
+                from?: string;
+                /** @description Inclusive end of the window (UTC day). Defaults to today. */
+                to?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsSummaryResponseDto"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnalyticsAdminController_topSpenders: {
+        parameters: {
+            query?: {
+                /** @description Inclusive start of the window (UTC day). Defaults to 30 days ago. */
+                from?: string;
+                /** @description Inclusive end of the window (UTC day). Defaults to today. */
+                to?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopSpenderDto"][];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnalyticsAdminController_topProducts: {
+        parameters: {
+            query?: {
+                /** @description Inclusive start of the window (UTC day). Defaults to 30 days ago. */
+                from?: string;
+                /** @description Inclusive end of the window (UTC day). Defaults to today. */
+                to?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopProductDto"][];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnalyticsAdminController_salesByCategory: {
+        parameters: {
+            query?: {
+                /** @description Inclusive start of the window (UTC day). Defaults to 30 days ago. */
+                from?: string;
+                /** @description Inclusive end of the window (UTC day). Defaults to today. */
+                to?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalesByCategoryDto"][];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnalyticsAdminController_voucherUsage: {
+        parameters: {
+            query?: {
+                /** @description Inclusive start of the window (UTC day). Defaults to 30 days ago. */
+                from?: string;
+                /** @description Inclusive end of the window (UTC day). Defaults to today. */
+                to?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoucherUsageDto"][];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnalyticsAdminController_lowStock: {
+        parameters: {
+            query?: {
+                threshold?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LowStockVariantDto"][];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires ADMIN role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

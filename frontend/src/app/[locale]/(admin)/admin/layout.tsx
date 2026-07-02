@@ -11,8 +11,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-// Sidebar entries. Orders + Users + Reviews are wired; catalog/analytics are honest
-// "coming soon" placeholders (they land in later phases).
+// Sidebar entries. All wired as of Phase 5 (analytics is the last to land).
 const NAV_ITEMS = [
   { key: 'orders', href: '/admin/orders' },
   { key: 'users', href: '/admin/users' },
@@ -22,7 +21,7 @@ const NAV_ITEMS = [
   { key: 'categories', href: '/admin/categories' },
   { key: 'collections', href: '/admin/collections' },
   { key: 'banners', href: '/admin/banners' },
-  { key: 'analytics', href: null },
+  { key: 'analytics', href: '/admin/analytics' },
 ] as const;
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
@@ -101,30 +100,20 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         {/* Sidebar */}
         <aside className="w-48 shrink-0 border-r p-3">
           <nav className="flex flex-col gap-1">
-            {NAV_ITEMS.map((item) =>
-              item.href ? (
-                <Link
-                  key={item.key}
-                  href={item.href}
-                  className={cn(
-                    'rounded-md px-3 py-2 text-sm font-medium',
-                    pathname.startsWith(item.href)
-                      ? 'bg-muted'
-                      : 'text-muted-foreground hover:bg-muted/60',
-                  )}
-                >
-                  {t(item.key)}
-                </Link>
-              ) : (
-                <span
-                  key={item.key}
-                  className="text-muted-foreground/60 flex flex-col rounded-md px-3 py-2 text-sm"
-                >
-                  {t(item.key)}
-                  <span className="text-xs">{t('comingSoon')}</span>
-                </span>
-              ),
-            )}
+            {NAV_ITEMS.map((item) => (
+              <Link
+                key={item.key}
+                href={item.href}
+                className={cn(
+                  'rounded-md px-3 py-2 text-sm font-medium',
+                  pathname.startsWith(item.href)
+                    ? 'bg-muted'
+                    : 'text-muted-foreground hover:bg-muted/60',
+                )}
+              >
+                {t(item.key)}
+              </Link>
+            ))}
           </nav>
         </aside>
 
