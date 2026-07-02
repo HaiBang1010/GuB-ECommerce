@@ -13,6 +13,7 @@ type NotificationDelegate = {
   findUnique: jest.Mock;
   findMany: jest.Mock;
   count: jest.Mock;
+  create: jest.Mock;
   update: jest.Mock;
   updateMany: jest.Mock;
 };
@@ -34,6 +35,7 @@ describe('NotificationService', () => {
         findUnique: jest.fn(),
         findMany: jest.fn(),
         count: jest.fn(),
+        create: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn(),
       },
@@ -232,6 +234,31 @@ describe('NotificationService', () => {
     it('reports the number updated', async () => {
       prisma.notification.updateMany.mockResolvedValue({ count: 3 });
       await expect(service.markAllRead('u1')).resolves.toEqual({ updated: 3 });
+    });
+  });
+
+  describe('createInApp', () => {
+    it('creates an IN_APP notification with a structured payload (no email)', async () => {
+      const created = { id: 'n5' };
+      prisma.notification.create.mockResolvedValue(created);
+      await expect(
+        service.createInApp({
+          userId: 'u1',
+          type: 'CHAT_REPLY',
+          payload: { conversationId: 'c1' },
+        }),
+      ).resolves.toBe(created);
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: {
+          userId: 'u1',
+          type: 'CHAT_REPLY',
+          channel: Channel.IN_APP,
+          payload: { conversationId: 'c1' },
+        },
+      });
+      // Not the async path: no QStash, no email.
+      expect(qstash.publish).not.toHaveBeenCalled();
+      expect(resend.sendOrderStatusEmail).not.toHaveBeenCalled();
     });
   });
 });

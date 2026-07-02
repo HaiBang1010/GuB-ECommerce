@@ -2,6 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { Sender } from '@prisma/client';
 import { ChatService } from './chat.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationService } from '../notification/notification.service';
 import { UserService } from '../iam/user/user.service';
 
 // Boundary: the prisma mock exposes ONLY this module's own delegates
@@ -28,6 +29,7 @@ describe('ChatService', () => {
     $transaction: jest.Mock;
   };
   let users: { findManyByIds: jest.Mock; searchIdsByNameOrEmail: jest.Mock };
+  let notifications: { createInApp: jest.Mock };
   let service: ChatService;
 
   beforeEach(() => {
@@ -51,9 +53,11 @@ describe('ChatService', () => {
       findManyByIds: jest.fn().mockResolvedValue([]),
       searchIdsByNameOrEmail: jest.fn().mockResolvedValue([]),
     };
+    notifications = { createInApp: jest.fn().mockResolvedValue({ id: 'n1' }) };
     service = new ChatService(
       prisma as unknown as PrismaService,
       users as unknown as UserService,
+      notifications as unknown as NotificationService,
     );
   });
 
@@ -201,7 +205,7 @@ describe('ChatService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('sendAsAdmin persists an ADMIN message when the conversation exists', async () => {
+    it('sendAsAdmin persists an ADMIN message and notifies the customer', async () => {
       prisma.conversation.findUnique.mockResolvedValue({ id: 'c1', userId: 'u1' });
       const tx = txRun();
       const created = { id: 'm9', conversationId: 'c1', createdAt: new Date() };
@@ -210,6 +214,33 @@ describe('ChatService', () => {
       expect(tx.chatMessage.create).toHaveBeenCalledWith({
         data: { conversationId: 'c1', sender: Sender.ADMIN, body: 'sure' },
       });
+      // Offline path: the customer (conversation owner) gets an in-app notification.
+      expect(notifications.createInApp).toHaveBeenCalledWith({
+        userId: 'u1',
+        type: 'CHAT_REPLY',
+        payload: { conversationId: 'c1' },
+      });
+    });
+
+    it('sendAsAdmin still returns the message when the notification fails (best-effort)', async () => {
+      prisma.conversation.findUnique.mockResolvedValue({ id: 'c1', userId: 'u1' });
+      const tx = txRun();
+      const created = { id: 'm9', conversationId: 'c1', createdAt: new Date() };
+      tx.chatMessage.create.mockResolvedValue(created);
+      notifications.createInApp.mockRejectedValue(new Error('notify down'));
+      await expect(service.sendAsAdmin('c1', 'sure')).resolves.toBe(created);
+    });
+
+    it('sendAsUser does NOT notify (admin inbox unread badge covers that direction)', async () => {
+      prisma.conversation.findFirst.mockResolvedValue({ id: 'c1', userId: 'u1' });
+      const tx = txRun();
+      tx.chatMessage.create.mockResolvedValue({
+        id: 'm1',
+        conversationId: 'c1',
+        createdAt: new Date(),
+      });
+      await service.sendAsUser('u1', 'hello');
+      expect(notifications.createInApp).not.toHaveBeenCalled();
     });
   });
 

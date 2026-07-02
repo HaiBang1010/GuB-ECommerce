@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { NotificationModule } from '../notification/notification.module';
 import { ChatAdminController } from './chat-admin.controller';
 import { ChatController } from './chat.controller';
 import { ChatThrottlerGuard } from './chat-throttler.guard';
@@ -12,11 +13,16 @@ import { ChatService } from './chat.service';
  * identity for admin enrichment is resolved in-process via UserService (from the
  * global IamModule) — never a cross-schema JOIN. PrismaService is global too, so
  * this module imports neither. ThrottlerModule rate-limits the write endpoints (via
- * ChatThrottlerGuard, keyed on the authenticated user id). ChatService is exported
- * for the later offline-notification / realtime slices.
+ * ChatThrottlerGuard, keyed on the authenticated user id). NotificationModule is
+ * imported so an admin reply raises a synchronous in-app notification for the
+ * customer (offline path — chat → notification is one-way, no cycle). ChatService is
+ * exported for the later realtime slice.
  */
 @Module({
-  imports: [ThrottlerModule.forRoot([{ ttl: 60_000, limit: 30 }])],
+  imports: [
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 30 }]),
+    NotificationModule,
+  ],
   controllers: [ChatController, ChatAdminController],
   providers: [ChatService, ChatThrottlerGuard],
   exports: [ChatService],

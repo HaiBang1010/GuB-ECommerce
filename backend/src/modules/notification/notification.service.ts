@@ -165,4 +165,30 @@ export class NotificationService {
     });
     return { updated: result.count };
   }
+
+  // ---------------------------------------------------------------------------
+  // Generic in-app signal — NOT the order async path.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Create a single IN_APP notification for a user, synchronously in-process. Used
+   * by in-app-only signals that are NOT the order async path (e.g. a chat reply):
+   * no QStash, no email, so the "exactly one async path" invariant (ARCHITECTURE §2)
+   * stays intact. Structured `payload` + a language-neutral `type` — the frontend
+   * renders the text via i18n, never a stored string.
+   */
+  async createInApp(params: {
+    userId: string;
+    type: string;
+    payload?: Prisma.InputJsonValue;
+  }): Promise<Notification> {
+    return this.prisma.notification.create({
+      data: {
+        userId: params.userId,
+        type: params.type,
+        channel: Channel.IN_APP,
+        payload: params.payload,
+      },
+    });
+  }
 }

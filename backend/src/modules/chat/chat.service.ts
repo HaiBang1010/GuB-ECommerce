@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ChatMessage, Conversation, Prisma, Sender } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationService } from '../notification/notification.service';
 import { UserService } from '../iam/user/user.service';
 
 // A conversation plus its (chronological) message history — the customer's GET and
@@ -38,10 +39,15 @@ const HISTORY_LIMIT = 200;
  */
 @Injectable()
 export class ChatService {
+  private readonly logger = new Logger(ChatService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     // Resolves customer identity for admin enrichment / search (in-process, no JOIN).
     private readonly users: UserService,
+    // In-process, synchronous in-app notification (NOT the order async path) so an
+    // offline customer still sees an admin reply via the notification bell.
+    private readonly notifications: NotificationService,
   ) {}
 
   // One support thread per customer. `userId` is indexed (not unique), so we
@@ -146,10 +152,13 @@ export class ChatService {
     };
   }
 
-  // Admin reply, persisted first (404 when the conversation doesn't exist).
+  // Admin reply, persisted first (404 when the conversation doesn't exist). After
+  // the message commits, notify the customer (offline path — the bell) best-effort.
   async sendAsAdmin(conversationId: string, body: string): Promise<ChatMessage> {
-    await this.assertConversation(conversationId);
-    return this.appendMessage(conversationId, Sender.ADMIN, body);
+    const conversation = await this.assertConversation(conversationId);
+    const message = await this.appendMessage(conversationId, Sender.ADMIN, body);
+    await this.notifyCustomer(conversation.userId, conversationId);
+    return message;
   }
 
   // Admin acks incoming customer messages (idempotent; 404 when missing).
@@ -204,6 +213,26 @@ export class ChatService {
       });
       return message;
     });
+  }
+
+  // Tell the customer an admin replied — a synchronous in-app notification (the
+  // bell), so an offline customer still learns of the reply. Best-effort: a failure
+  // is logged and swallowed, never breaking the reply. (The reverse direction —
+  // customer→admin — is surfaced by the admin inbox unread badge, not a per-admin
+  // notification, so there is no "which admin / fan-out to all" ambiguity.)
+  private async notifyCustomer(
+    userId: string,
+    conversationId: string,
+  ): Promise<void> {
+    try {
+      await this.notifications.createInApp({
+        userId,
+        type: 'CHAT_REPLY',
+        payload: { conversationId },
+      });
+    } catch {
+      this.logger.warn(`Chat notification failed for user ${userId}.`);
+    }
   }
 
   // conversationId → unread (customer→admin) message count, for the admin list.
