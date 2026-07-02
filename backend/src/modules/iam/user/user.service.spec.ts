@@ -282,4 +282,23 @@ describe('UserService', () => {
       });
     });
   });
+
+  describe('getSignupRows', () => {
+    it('selects createdAt for users in the window (asc), no cross-schema work', async () => {
+      const range = {
+        from: new Date('2026-06-01T00:00:00.000Z'),
+        to: new Date('2026-06-30T23:59:59.999Z'),
+      };
+      prisma.user.findMany.mockResolvedValue([
+        { createdAt: new Date('2026-06-05T00:00:00.000Z') },
+      ]);
+      const rows = await service.getSignupRows(range);
+      expect(prisma.user.findMany).toHaveBeenCalledWith({
+        where: { createdAt: { gte: range.from, lte: range.to } },
+        select: { createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      expect(rows).toHaveLength(1);
+    });
+  });
 });

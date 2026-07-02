@@ -53,7 +53,7 @@ describe('OrderService', () => {
       count: jest.Mock;
       groupBy: jest.Mock;
     };
-    orderItem: { findUnique: jest.Mock };
+    orderItem: { findUnique: jest.Mock; findMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let cart: { getView: jest.Mock; clear: jest.Mock };
@@ -77,7 +77,7 @@ describe('OrderService', () => {
         count: jest.fn().mockResolvedValue(0),
         groupBy: jest.fn().mockResolvedValue([]),
       },
-      orderItem: { findUnique: jest.fn() },
+      orderItem: { findUnique: jest.fn(), findMany: jest.fn() },
       $transaction: jest.fn(),
     };
     cart = { getView: jest.fn(), clear: jest.fn() };
@@ -1006,6 +1006,88 @@ describe('OrderService', () => {
 
       await expect(service.releaseExpired(15)).resolves.toEqual({ released: 2 });
       expect(variants.releaseForOrder).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // The prisma mock exposes ONLY the `order`/`orderItem` delegates, so these
+  // aggregations provably stay within the `ordering` schema (a stray cross-schema
+  // query would throw "not a function").
+  describe('analytics aggregations', () => {
+    const range = {
+      from: new Date('2026-06-01T00:00:00.000Z'),
+      to: new Date('2026-06-30T23:59:59.999Z'),
+    };
+
+    it('getRevenueRows filters to paid statuses in the window (minimal select)', async () => {
+      prisma.order.findMany.mockResolvedValue([
+        { createdAt: new Date('2026-06-02T00:00:00.000Z'), totalCents: 1000 },
+      ]);
+      const rows = await service.getRevenueRows(range);
+      expect(prisma.order.findMany).toHaveBeenCalledWith({
+        where: {
+          status: { in: ['PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED'] },
+          createdAt: { gte: range.from, lte: range.to },
+        },
+        select: { createdAt: true, totalCents: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      expect(rows).toHaveLength(1);
+    });
+
+    it('getStatusCounts maps groupBy rows to {status,count,totalCents}', async () => {
+      prisma.order.groupBy.mockResolvedValue([
+        { status: 'PAID', _count: { _all: 3 }, _sum: { totalCents: 3000 } },
+        { status: 'CANCELLED', _count: { _all: 1 }, _sum: { totalCents: null } },
+      ]);
+      const res = await service.getStatusCounts(range);
+      expect(res).toEqual([
+        { status: 'PAID', count: 3, totalCents: 3000 },
+        { status: 'CANCELLED', count: 1, totalCents: 0 },
+      ]);
+    });
+
+    it('getTopSpenderTotals groups by userId, sums paid totals, orders desc + take', async () => {
+      prisma.order.groupBy.mockResolvedValue([
+        { userId: 'u1', _count: { _all: 2 }, _sum: { totalCents: 5000 } },
+      ]);
+      const res = await service.getTopSpenderTotals(range, 5);
+      expect(prisma.order.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          by: ['userId'],
+          where: {
+            status: { in: ['PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED'] },
+            createdAt: { gte: range.from, lte: range.to },
+          },
+          orderBy: { _sum: { totalCents: 'desc' } },
+          take: 5,
+        }),
+      );
+      expect(res).toEqual([
+        { userId: 'u1', totalSpentCents: 5000, orderCount: 2 },
+      ]);
+    });
+
+    it('getProductSales folds items by product (units + revenue = unit*qty)', async () => {
+      prisma.orderItem.findMany.mockResolvedValue([
+        { productId: 'p1', productNameVi: 'Áo', productNameEn: 'Shirt', quantity: 2, unitPriceCents: 1000 },
+        { productId: 'p1', productNameVi: 'Áo', productNameEn: 'Shirt', quantity: 1, unitPriceCents: 1000 },
+        { productId: 'p2', productNameVi: 'Quần', productNameEn: 'Pants', quantity: 3, unitPriceCents: 2000 },
+      ]);
+      const res = await service.getProductSales(range);
+      expect(prisma.orderItem.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            order: {
+              status: { in: ['PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED'] },
+              createdAt: { gte: range.from, lte: range.to },
+            },
+          },
+        }),
+      );
+      expect(res).toEqual([
+        { productId: 'p1', nameVi: 'Áo', nameEn: 'Shirt', unitsSold: 3, revenueCents: 3000 },
+        { productId: 'p2', nameVi: 'Quần', nameEn: 'Pants', unitsSold: 3, revenueCents: 6000 },
+      ]);
     });
   });
 });

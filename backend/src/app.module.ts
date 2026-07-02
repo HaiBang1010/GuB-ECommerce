@@ -10,6 +10,7 @@ import { ReviewModule } from './modules/review/review.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { VoucherModule } from './modules/voucher/voucher.module';
 import { MarketingModule } from './modules/marketing/marketing.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { MarketingModule } from './modules/marketing/marketing.module';
     NotificationModule,
     VoucherModule,
     MarketingModule,
+    AnalyticsModule,
   ],
 })
 export class AppModule {}

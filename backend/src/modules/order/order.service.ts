@@ -72,13 +72,18 @@ export type OrderStats = {
   byStatus: Record<OrderStatus, number>;
 };
 
-// Statuses that represent money actually collected from the customer.
-const SPENT_STATUSES: OrderStatus[] = [
+// Statuses that represent money actually collected from the customer. Exported so
+// the analytics module computes net revenue from the SAME list that drives the
+// admin user-detail total-spent — one source of truth, they can never drift.
+export const SPENT_STATUSES: OrderStatus[] = [
   OrderStatus.PAID,
   OrderStatus.PROCESSING,
   OrderStatus.SHIPPED,
   OrderStatus.DELIVERED,
 ];
+
+// A UTC date window for the analytics aggregations below.
+export type AnalyticsRange = { from: Date; to: Date };
 
 type OrderWithItems = Order & { items: OrderItem[] };
 
@@ -385,6 +390,122 @@ export class OrderService {
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
+  }
+
+  // ---- Analytics aggregations (admin dashboard) --------------------------------
+  // All read-only, all within the `ordering` schema. The analytics module composes
+  // these in-process and enriches ids via other modules' services (never a JOIN).
+
+  // Minimal paid-order rows in a window for the revenue / AOV time series. Bucketed
+  // by the caller on `createdAt` (there is no paidAt column — ARCHITECTURE §5). Only
+  // SPENT_STATUSES count, so a REFUNDED order contributes nothing (net revenue).
+  async getRevenueRows(
+    range: AnalyticsRange,
+  ): Promise<{ createdAt: Date; totalCents: number }[]> {
+    return this.prisma.order.findMany({
+      where: {
+        status: { in: SPENT_STATUSES },
+        createdAt: { gte: range.from, lte: range.to },
+      },
+      select: { createdAt: true, totalCents: true },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  // Order count + gross total per status in a window (drives the orders-by-status
+  // chart). One groupBy over the `ordering` schema.
+  async getStatusCounts(
+    range: AnalyticsRange,
+  ): Promise<{ status: OrderStatus; count: number; totalCents: number }[]> {
+    const groups = await this.prisma.order.groupBy({
+      by: ['status'],
+      where: { createdAt: { gte: range.from, lte: range.to } },
+      _count: { _all: true },
+      _sum: { totalCents: true },
+    });
+    return groups.map((g) => ({
+      status: g.status,
+      count: g._count._all,
+      totalCents: g._sum.totalCents ?? 0,
+    }));
+  }
+
+  // Top spenders by summed paid total in a window, highest first. Returns userIds +
+  // totals ONLY; the caller resolves names via UserService.findManyByIds (no JOIN).
+  async getTopSpenderTotals(
+    range: AnalyticsRange,
+    limit: number,
+  ): Promise<{ userId: string; totalSpentCents: number; orderCount: number }[]> {
+    const groups = await this.prisma.order.groupBy({
+      by: ['userId'],
+      where: {
+        status: { in: SPENT_STATUSES },
+        createdAt: { gte: range.from, lte: range.to },
+      },
+      _count: { _all: true },
+      _sum: { totalCents: true },
+      orderBy: { _sum: { totalCents: 'desc' } },
+      take: limit,
+    });
+    return groups.map((g) => ({
+      userId: g.userId,
+      totalSpentCents: g._sum.totalCents ?? 0,
+      orderCount: g._count._all,
+    }));
+  }
+
+  // Units sold + revenue per product from paid orders in a window. Reads OrderItem
+  // filtered by its parent Order (same `ordering` schema) and folds in JS — a
+  // groupBy can't multiply unitPriceCents*quantity. Names come from the item
+  // SNAPSHOT (§4.4), so no product JOIN. Reused by top-products AND sales-by-category
+  // (the caller maps productId → category via ProductService).
+  async getProductSales(range: AnalyticsRange): Promise<
+    {
+      productId: string;
+      nameVi: string;
+      nameEn: string;
+      unitsSold: number;
+      revenueCents: number;
+    }[]
+  > {
+    const items = await this.prisma.orderItem.findMany({
+      where: {
+        order: {
+          status: { in: SPENT_STATUSES },
+          createdAt: { gte: range.from, lte: range.to },
+        },
+      },
+      select: {
+        productId: true,
+        productNameVi: true,
+        productNameEn: true,
+        quantity: true,
+        unitPriceCents: true,
+      },
+    });
+    const byProduct = new Map<
+      string,
+      {
+        productId: string;
+        nameVi: string;
+        nameEn: string;
+        unitsSold: number;
+        revenueCents: number;
+      }
+    >();
+    for (const it of items) {
+      const cur = byProduct.get(it.productId) ?? {
+        productId: it.productId,
+        nameVi: it.productNameVi,
+        nameEn: it.productNameEn,
+        unitsSold: 0,
+        revenueCents: 0,
+      };
+      cur.unitsSold += it.quantity;
+      cur.revenueCents += it.unitPriceCents * it.quantity;
+      byProduct.set(it.productId, cur);
+    }
+    return [...byProduct.values()];
   }
 
   // Advance an order along the fulfillment state machine and append a timeline

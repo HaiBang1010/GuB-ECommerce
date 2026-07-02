@@ -179,6 +179,20 @@ export class UserService {
     return this.prisma.user.findMany({ where: { id: { in: ids } } });
   }
 
+  // Analytics (in-process): minimal signup rows in a UTC window for the "new users
+  // over time" chart + KPI. Own-schema read; the caller buckets by day. Includes
+  // archived users — a signup still happened even if the account was later archived.
+  async getSignupRows(range: {
+    from: Date;
+    to: Date;
+  }): Promise<{ createdAt: Date }[]> {
+    return this.prisma.user.findMany({
+      where: { createdAt: { gte: range.from, lte: range.to } },
+      select: { createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
   // Cross-module search (in-process): return the ids of users whose name or email
   // matches `q` (case-insensitive substring). Returns ids ONLY, so the caller
   // filters its own rows by userId — the iam schema is never JOINed from outside.
