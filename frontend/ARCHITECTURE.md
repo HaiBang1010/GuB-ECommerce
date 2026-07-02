@@ -21,16 +21,16 @@ Code is organised **by domain feature**, not by technical layer. Each domain own
 ```
 src/
 ├── app/[locale]/                 # next-intl: /vi, /en — route groups are URL-transparent
-│   ├── (storefront)/             # home (banners · category grid · featured collections · product rows) · products/[slug] · collections/[slug] · cart · checkout · auth · account (orders/[id]{/pay,/confirmation} · vouchers · profile) + Header + Footer
-│   ├── (admin)/admin/            # orders · users · users/[id] · reviews · vouchers · sales · categories · collections · banners · analytics (admin shell)
+│   ├── (storefront)/             # home (banners · category grid · featured collections · product rows) · products/[slug] · collections/[slug] · cart · checkout · auth · account (orders/[id]{/pay,/confirmation} · vouchers · profile) + Header + Footer + floating ChatWidget
+│   ├── (admin)/admin/            # orders · users · users/[id] · reviews · vouchers · sales · categories · collections · banners · analytics · chat (admin shell)
 │   └── providers.tsx, layout.tsx # QueryClient + Supabase session bridge + <Toaster>
 ├── features/                     # domain-owned UI; each is {components,hooks,api}/ as needed
 │   ├── product/ category/ collection/ cart/ checkout/ voucher/  # storefront domains (voucher = preview at checkout)
 │   ├── order/ review/            #   order (customer) + review (customer) — fetchers/hooks own the
 │   │                             #   canonical core types (e.g. OrderStatus in order/api/orders.ts)
-│   ├── notification/ auth/       #   notification bell + me.ts / is-admin
+│   ├── notification/ auth/ chat/ #   notification bell · me.ts / is-admin · customer chat widget (§18)
 │   └── admin/                    # ADMIN — split by area, separate from storefront domains
-│       ├── orders/ users/ reviews/ vouchers/ sales/  # each {components,hooks,api}/; the admin halves of
+│       ├── orders/ users/ reviews/ vouchers/ sales/ chat/  # each {components,hooks,api}/; the admin halves of
 │       │                            #   the split order/review fetchers + hooks live here; vouchers + sales are admin-only
 │       ├── components/           #   admin-shared: order-detail-dialog, pagination-bar
 │       └── hooks/                #   admin-shared: use-debounce
@@ -380,3 +380,54 @@ The sidebar **Analytics** tab is now wired (`NAV_ITEMS` href flipped from the ol
 renders its own client boundary (the server layout stays a server component) and is a **no-op locally** —
 it only collects data when **deployed on Vercel**, where the metrics live in the Vercel dashboard,
 **independent** of the DB-backed `/admin/analytics` charts. **Verify on deploy.**
+
+## 18. Realtime chat (Phase 6)
+
+Customer ↔ admin support chat. **Persist-first:** send/read always go through REST (Neon is the source of
+truth, backend §4.18); Realtime Broadcast is only a push layer, with polling as the fallback — so the UI is
+correct even if the socket never connects.
+
+### Customer chat widget (storefront)
+
+- **`features/chat/`** — `api/chat.ts` (`getChatThread` `GET /me/chat` · `sendChatMessage`
+  `POST /me/chat/messages` · `markChatRead` `POST /me/chat/read`, types from `schema.d.ts`),
+  `hooks/use-chat.ts` (`useChatThread` — auth-gated `enabled: !authLoading && !!user`, `refetchInterval:
+  60_000`; `useSendChatMessage` / `useMarkChatRead` invalidate `['chat','thread']`),
+  `hooks/use-chat-realtime.ts`, and `components/chat-widget.tsx`. A `stores/chat-ui.store.ts` (Zustand
+  `{ isOpen, open, close, toggle }`) holds the open/closed UI state.
+- **`ChatWidget`** is mounted once in the **storefront** layout (`(storefront)/layout.tsx`) — never in the
+  admin shell. It **self-gates**: `if (isLoading || !user || isAdmin(role)) return null`, so it renders only
+  for a logged-in **customer** (guests and admins never see it). A floating bubble (`fixed right-5 bottom-5`)
+  with an unread badge opens a panel (message list + `Textarea`, Enter-to-send / Shift+Enter newline,
+  `maxLength={2000}`); opening the panel marks incoming admin messages read (stable-`mutate` effect, no loop).
+  `BackToTop` was moved to `bottom-5 left-5` so the two don't overlap.
+- **Realtime (`useChatRealtime`)** subscribes to the customer's **private** channel `chat:user:<userId>`
+  (`{ config: { private: true } }`) after `supabase.realtime.setAuth(session.access_token)`; on a `broadcast`
+  `message` event it just **invalidates `['chat','thread']`** (pulls the persisted truth via REST — a missed
+  / duplicate / out-of-order event is harmless, the 60s poll also covers it) and removes the channel on
+  cleanup. No-op for guests. Locally (no Supabase project + RLS policy) it degrades to the poll; the RLS
+  SELECT policy that authorizes the channel is a **manual Supabase deploy step** (backend §4.18).
+  `providers.tsx` also re-runs `setAuth` on `onAuthStateChange` so a token refresh keeps the socket
+  authorized.
+- **Notification tie-in.** An admin reply raises a `CHAT_REPLY` in-app notification; the **notification bell**
+  renders it via the `notification.chatReply` message and, on click, **opens the chat widget**
+  (`useChatUiStore().open()`) instead of an order deep-link.
+
+### Admin inbox (`/admin/chat`) — poll-only, no realtime
+
+- **`features/admin/chat/`** — `api/chat.ts`
+  (`getAdminConversations` `GET /admin/chat/conversations?search&page&pageSize` · `getAdminConversation` ·
+  `adminReplyToConversation` · `markAdminConversationRead`), `hooks/use-admin-chat.ts` (auth-gated +
+  `keepPreviousData`; `useAdminConversations` `refetchInterval: 15_000`, `useAdminConversation`
+  `refetchInterval: 8_000`, mutations invalidate the conversation + list keys), and
+  `components/admin-chat-view.tsx`. A thin server wrapper at `(admin)/admin/chat/page.tsx` renders it; the
+  **Chat** sidebar tab is wired in the admin layout `NAV_ITEMS`.
+- **Split view** `grid md:grid-cols-[20rem_1fr]` (stacks on mobile): a left **conversation list** (debounced
+  search, a customer name/email cell with a `userId` fallback, `lastMessageAt`, an unread badge,
+  `PaginationBar`) and a right **thread panel** (history + a `Textarea` composer; opening a conversation with
+  unread marks the customer→admin messages read).
+- **Poll-only by design** — no Realtime channel on the admin side. The customer still gets live updates
+  because an admin reply **broadcasts server-side** (backend §4.18). There is intentionally **no per-admin
+  notification** for an incoming customer message; the admin sees new activity through the polled list's
+  unread count. **RolesGuard on every `/admin/chat/*` call is the real gate** (plus the `(admin)` client
+  shell + `middleware.ts`), not UI-only.

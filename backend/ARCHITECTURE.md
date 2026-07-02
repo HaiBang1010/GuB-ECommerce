@@ -25,7 +25,7 @@ src/modules/
 ├── payment/       Stripe PaymentIntent + idempotent webhook, StripeEvent ledger  → schema: payment
 ├── notification/  queue consumer → in-app + email (Resend)                       → schema: notification
 ├── review/        review tied to orderItemId, admin reply                        → schema: review
-├── chat/          Conversation/ChatMessage, push via Supabase Realtime           → schema: chat
+├── chat/          Conversation/ChatMessage · persist-first REST + Realtime Broadcast (§4.18)  → schema: chat
 ├── voucher/       Voucher, UserVoucher (wallet), apply at checkout               → schema: voucher
 │                  ActivityLog (audit; empty stub — no writer yet, §4.17)         → schema: activity
 ├── marketing/     Banner (home banners; admin CRUD, image = external URL)        → schema: marketing
@@ -69,7 +69,9 @@ payment ─▶ order    (createIntent reads the order; webhook markPaid; admin r
 voucher ─▶ cart     (preview reads the live cart subtotal server-side)
 voucher ─▶ iam      (grant-by-email + wallet: resolve the user via user.service)
 review ─▶ order     (verify the OrderItem belongs to user and order is DELIVERED)
-chat  ──▶ (Supabase Realtime, out-of-process)
+chat  ──▶ iam           (enrich the customer's identity for the admin inbox via user.service)
+chat  ──▶ notification  (an admin reply raises a synchronous in-app notification — one-way, no cycle)
+chat  ──(Supabase Realtime broadcast, out-of-process)──▶ customer widget
 marketing ──▶ (none — Banner references no other module; storefront read + admin CRUD only)
 analytics ─▶ order · product · iam   (read-only aggregations, composed in-process; §4.17)
 ```
@@ -81,7 +83,9 @@ on an admin refund), but `order` **never** imports `payment` — which is exactl
 admin refund route lives in the payment module (§4.13). `voucher` is one-way too — it
 resolves users/carts via `iam`/`cart` but **never** calls `order`, so the per-user
 redemption count lives on `UserVoucher` (in the `voucher` schema), not by querying
-`ordering` (§4.10).
+`ordering` (§4.10). `chat` is one-way too — it imports `notification`/`iam` (in-process) and
+broadcasts **out-of-process** to the customer, but **nothing imports `chat`** and it never calls
+`order`, so its edges can't close a cycle (§4.18).
 
 ## 4. Key flows
 
@@ -479,6 +483,84 @@ imports `AnalyticsModule`**, so its edges (`analytics → order · product · ia
   Phase-5 "user-activity line chart" is **deferred** until an activity-logging write path exists. Visitor
   metrics come from **Vercel Web Analytics** (frontend §17), external to this DB-backed dashboard.
 
+### 4.18 Realtime chat — persist-first + Broadcast push — Phase 6
+
+Customer ↔ admin support chat. The `chat` module owns the `chat` schema (`Conversation`, `ChatMessage`,
+enum `Sender`) and touches only `this.prisma.conversation`/`chatMessage` — cross-module customer identity
+is resolved **in-process via `UserService`** (never a cross-schema JOIN).
+
+- **Persist-first (Neon is the source of truth).** Every message is written to Neon over REST before
+  anything else. `appendMessage` creates the `ChatMessage` and bumps `Conversation.lastMessageAt` in **one
+  `$transaction`**, so the list's sort key never disagrees with the row. Realtime is only a push layer on
+  top — if it drops, the client refetch/poll is still correct (no message loss).
+- **One thread per customer.** `getOrCreateForUser` finds-or-creates by `userId` (indexed, not unique — a
+  unique constraint would need a migration; a concurrent double-create is a negligible race at this scale).
+  The customer endpoints carry **no conversation id in the path** (`GET /me/chat`, `POST /me/chat/messages`,
+  `POST /me/chat/read`, under `SupabaseAuthGuard`) — the thread is always the caller's own, so cross-user
+  access is structurally impossible.
+- **Admin inbox.** `GET /admin/chat/conversations` (paginated, `?search` by customer name/email) orders by
+  `lastMessageAt DESC NULLS LAST`, batch-resolves customers via `UserService.findManyByIds` (no N+1, no
+  JOIN) and counts unread (customer→admin) messages; `GET /admin/chat/conversations/:id` returns one thread
+  (404 when missing); `POST …/messages` replies; `POST …/read` acks. All under `SupabaseAuthGuard` +
+  `RolesGuard @Roles(ADMIN)` — the real gate (§8), not UI-only.
+- **An admin reply fans out two best-effort side-effects, after the message commits** (persist-first). Both
+  are wrapped so a failure is logged and swallowed — neither ever breaks the reply:
+  1. **In-app notification** (the bell) via `NotificationService.createInApp({ userId, type: 'CHAT_REPLY',
+     payload: { conversationId } })` — **synchronous in-process**, so an offline customer still learns of the
+     reply. This is **not** a second async path (the one async path stays order→QStash→notification, §4.8).
+     The reverse direction (customer→admin) is surfaced by the inbox **unread badge**, not a per-admin
+     notification — so there's no "which admin / fan-out to all" ambiguity.
+  2. **Broadcast** to the customer's live widget via `ChatRealtimeService` (below).
+- **`chat → notification` and `chat → iam` are one-way** (in-process). `chat` imports both but **nothing
+  imports `chat`**, and `chat` never calls `order`, so its edges can't close a cycle (§3).
+
+**`ChatRealtimeService` — server-side Supabase Realtime Broadcast.** A thin wrapper over the Broadcast
+**REST API** (`POST ${SUPABASE_URL}/realtime/v1/api/broadcast`, headers `apikey` + `Authorization: Bearer
+<service-role key>`; body `{ messages: [{ topic: 'chat:user:<userId>', event: 'message', payload,
+private: true }] }`) — **no Supabase SDK**, mirroring `QStashService`/`ResendService` to keep the dependency
+surface at $0. It **degrades gracefully**: `isConfigured()` checks `SUPABASE_URL` && `SUPABASE_SERVICE_ROLE_KEY`
+and `broadcastToUser` returns early when unset, so local dev works without the service-role key (the widget
+falls back to its 60s poll). It throws on a non-2xx so the caller can log; the caller wraps it best-effort.
+
+**Broadcast authorization is REAL security, not obscurity** (a deliberate decision):
+- The customer channel is **private** (`chat:user:<userId>`). Clients only **receive**; they never broadcast.
+- An **RLS SELECT policy on `realtime.messages`** authorizes each subscriber to their own channel only:
+  `topic = 'chat:user:' || auth.uid()`. `auth.uid()` comes from the client's verified Supabase JWT, so a
+  customer can subscribe **only** to their own channel — not a guessable cuid. The policy authorizes purely
+  from topic + JWT (no app-table lookup), which is why customer-side realtime needs **nothing in Neon**.
+- The **backend is the sole broadcaster**: it uses the **service-role key** (which bypasses Realtime RLS for
+  sending). Clients cannot broadcast, only listen — and only on their own channel.
+- **⚠️ The RLS policy is a MANUAL DEPLOY STEP, not a Prisma migration** — `realtime.messages` lives in the
+  **Supabase** DB, while our app tables live in **Neon**. Apply it once in the Supabase SQL editor on deploy:
+  ```sql
+  -- Supabase SQL editor (NOT a Prisma migration — realtime.messages is in Supabase, not Neon).
+  -- Let an authenticated user RECEIVE broadcasts only on their own private chat channel.
+  create policy "chat: receive own channel"
+    on realtime.messages for select
+    to authenticated
+    using ( topic = 'chat:user:' || auth.uid()::text );
+  ```
+- **Admin realtime = POLL, by design (no token-mint).** The admin inbox has **no channel** — it polls (15s
+  list / 8s open thread, frontend §18). No security tradeoff (REST + `RolesGuard` is the gate) and admin
+  support doesn't need sub-second latency. Giving admins realtime would require **minting a Supabase JWT**
+  for the admin plus an RLS `chat_admin` clause — extra machinery not worth it at $0. Recorded as an
+  optional **future upgrade**, deliberately skipped now.
+
+**Throttling.** Chat writes are rate-limited with **`@nestjs/throttler` (v6)**. `ChatThrottlerGuard` overrides
+`getTracker` to key on the **authenticated user id** (`req.user?.id`, IP only as a fallback) — not a shared
+IP/NAT — and the send + reply endpoints carry `@Throttle({ default: { limit: 5, ttl: 10_000 } })` (5 msgs /
+10s → 429). Reads are unthrottled so the poll fallback is never blocked. (`ThrottlerModule.forRoot([{ ttl:
+60_000, limit: 30 }])` sets the module default; the per-route decorator tightens the write paths.)
+
+**New env (backend-only, never sent to the browser, §8).** `SUPABASE_SERVICE_ROLE_KEY` — the broadcaster's
+key. **Optional locally** (realtime degrades to the client poll when unset); **required on deploy** for live
+Broadcast, alongside applying the RLS policy above.
+
+**Deferred to deploy (verify-on-deploy pile).** Full Broadcast e2e needs the **RLS policy applied in
+Supabase** + `SUPABASE_SERVICE_ROLE_KEY` set — it joins the QStash→email e2e and the two crons
+(`release-expired`, `grant-birthday-vouchers`) in the same "verify on deploy" set. Persistence, throttling,
+the notification bell, and the admin inbox are all verified locally.
+
 ## 5. Data model (Prisma)
 
 Full schema: [`prisma/schema.prisma`](./prisma/schema.prisma). It uses the `multiSchema`
@@ -575,7 +657,7 @@ minutes to keep the Render instance awake. (Keep-alive is UptimeRobot, **not** G
   - **Humans → `RoleGuard`** (Phase 2): `SupabaseAuthGuard` (verify JWT, upsert user) then `RolesGuard` + `@Roles(Role.ADMIN)`. Gates the catalog admin controllers and `/admin/orders`.
   - **Machines / cron → `AdminGuard`** (`common/guards/admin.guard.ts`): constant-time `x-admin-secret` vs `ADMIN_API_SECRET`, **fails closed** (500 if unset). Used for `/admin/jobs/*` (no Supabase session). **Retained on purpose — not dead code.**
 - Stripe secret key, Supabase service-role key, `ADMIN_API_SECRET`, `CLOUDINARY_API_SECRET`, and `DATABASE_URL` live only in backend env — never sent to the browser. Image uploads are signed server-side so the Cloudinary secret never reaches the client (§4.6).
-- Rate-limit review and chat write endpoints to mitigate spam. **(Phase 3: deferred for reviews — the purchased-only + `@@unique([userId,productId])` gate already bounds review-create spam; revisit with `@nestjs/throttler` when chat lands.)**
+- Rate-limit review and chat write endpoints to mitigate spam. **Chat: DONE (Phase 6)** — `@nestjs/throttler` (v6) with a `ChatThrottlerGuard` keyed on the **authenticated user id** (not a shared IP/NAT), applied to the customer-send + admin-reply endpoints (**5 messages / 10s** → 429); reads stay unthrottled so the client's poll fallback is never blocked (§4.18). **Reviews: still deferred** — the purchased-only + `@@unique([userId,productId])` gate already bounds review-create spam.
 - Never log card data or secrets.
 
 ## 9. API documentation (OpenAPI)
