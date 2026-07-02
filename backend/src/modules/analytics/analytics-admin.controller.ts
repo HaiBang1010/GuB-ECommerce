@@ -14,15 +14,23 @@ import { SupabaseAuthGuard } from '../iam/auth/supabase-auth.guard';
 import {
   AnalyticsService,
   AnalyticsSummary,
+  LowStockVariant,
+  SalesByCategory,
   TopProduct,
   TopSpender,
+  VoucherUsage,
 } from './analytics.service';
 import { AnalyticsRangeQueryDto } from './dto/analytics-range-query.dto';
 import { AnalyticsSummaryResponseDto } from './dto/analytics-summary-response.dto';
 import { TopSpenderDto } from './dto/top-spenders-response.dto';
 import { TopProductDto } from './dto/top-products-response.dto';
+import { SalesByCategoryDto } from './dto/sales-by-category-response.dto';
+import { VoucherUsageDto } from './dto/voucher-usage-response.dto';
+import { LowStockVariantDto } from './dto/low-stock-response.dto';
+import { LowStockQueryDto } from './dto/low-stock-query.dto';
 
 const DEFAULT_LIMIT = 10;
+const DEFAULT_LOW_STOCK_THRESHOLD = 5;
 
 // Admin analytics dashboard — Supabase JWT + ADMIN role (backend-enforced, not
 // UI-only). Read-only aggregations; no mutation surface.
@@ -58,5 +66,28 @@ export class AnalyticsAdminController {
   @Get('top-products')
   topProducts(@Query() query: AnalyticsRangeQueryDto): Promise<TopProduct[]> {
     return this.analytics.getTopProducts(query.range(), query.limit ?? DEFAULT_LIMIT);
+  }
+
+  @ApiOperation({ summary: 'Revenue + units rolled up per category (?from&to)' })
+  @ApiOkResponse({ type: [SalesByCategoryDto] })
+  @Get('sales-by-category')
+  salesByCategory(
+    @Query() query: AnalyticsRangeQueryDto,
+  ): Promise<SalesByCategory[]> {
+    return this.analytics.getSalesByCategory(query.range());
+  }
+
+  @ApiOperation({ summary: 'Voucher redemptions on paid orders (?from&to)' })
+  @ApiOkResponse({ type: [VoucherUsageDto] })
+  @Get('voucher-usage')
+  voucherUsage(@Query() query: AnalyticsRangeQueryDto): Promise<VoucherUsage[]> {
+    return this.analytics.getVoucherUsage(query.range());
+  }
+
+  @ApiOperation({ summary: 'Active variants at or below a stock threshold (?threshold)' })
+  @ApiOkResponse({ type: [LowStockVariantDto] })
+  @Get('low-stock')
+  lowStock(@Query() query: LowStockQueryDto): Promise<LowStockVariant[]> {
+    return this.analytics.getLowStock(query.threshold ?? DEFAULT_LOW_STOCK_THRESHOLD);
   }
 }

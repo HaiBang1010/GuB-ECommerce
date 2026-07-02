@@ -1089,5 +1089,27 @@ describe('OrderService', () => {
         { productId: 'p2', nameVi: 'Quần', nameEn: 'Pants', unitsSold: 3, revenueCents: 6000 },
       ]);
     });
+
+    it('getVoucherUsage groups paid orders by code (non-null), sums discount', async () => {
+      prisma.order.groupBy.mockResolvedValue([
+        { voucherCode: 'SAVE10', _count: { _all: 4 }, _sum: { discountCents: 4000 } },
+        { voucherCode: 'FREESHIP', _count: { _all: 1 }, _sum: { discountCents: null } },
+      ]);
+      const res = await service.getVoucherUsage(range);
+      expect(prisma.order.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          by: ['voucherCode'],
+          where: {
+            status: { in: ['PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED'] },
+            createdAt: { gte: range.from, lte: range.to },
+            voucherCode: { not: null },
+          },
+        }),
+      );
+      expect(res).toEqual([
+        { voucherCode: 'SAVE10', orderCount: 4, discountCents: 4000 },
+        { voucherCode: 'FREESHIP', orderCount: 1, discountCents: 0 },
+      ]);
+    });
   });
 });

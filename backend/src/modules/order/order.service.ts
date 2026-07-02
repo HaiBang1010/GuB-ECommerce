@@ -508,6 +508,30 @@ export class OrderService {
     return [...byProduct.values()];
   }
 
+  // Voucher redemptions on PAID orders in a window, grouped by the snapshotted
+  // `voucherCode` (§4.4). Reads the order snapshot only, so no VoucherModule call
+  // is needed — `discountCents` is the amount actually applied at checkout.
+  async getVoucherUsage(
+    range: AnalyticsRange,
+  ): Promise<{ voucherCode: string; orderCount: number; discountCents: number }[]> {
+    const groups = await this.prisma.order.groupBy({
+      by: ['voucherCode'],
+      where: {
+        status: { in: SPENT_STATUSES },
+        createdAt: { gte: range.from, lte: range.to },
+        voucherCode: { not: null },
+      },
+      _count: { _all: true },
+      _sum: { discountCents: true },
+    });
+    return groups.map((g) => ({
+      // The `not: null` filter guarantees a non-null code per group.
+      voucherCode: g.voucherCode as string,
+      orderCount: g._count._all,
+      discountCents: g._sum.discountCents ?? 0,
+    }));
+  }
+
   // Advance an order along the fulfillment state machine and append a timeline
   // entry. The conditional flip guards against a concurrent change.
   async updateStatus(

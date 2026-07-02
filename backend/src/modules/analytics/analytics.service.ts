@@ -2,6 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import { AnalyticsRange, OrderService } from '../order/order.service';
 import { UserService } from '../iam/user/user.service';
+import { ProductService } from '../product/product/product.service';
+import { CategoryService } from '../product/category/category.service';
+import { ProductVariantService } from '../product/variant/variant.service';
 
 // Runtime shapes returned to the controller. The *-response.dto.ts classes document
 // these for OpenAPI (same service-type / DTO split the rest of the codebase uses).
@@ -39,6 +42,28 @@ export type TopProduct = {
   unitsSold: number;
   revenueCents: number;
 };
+export type SalesByCategory = {
+  categoryId: string;
+  nameVi: string;
+  nameEn: string;
+  unitsSold: number;
+  revenueCents: number;
+};
+export type VoucherUsage = {
+  voucherCode: string;
+  orderCount: number;
+  discountCents: number;
+};
+export type LowStockVariant = {
+  variantId: string;
+  sku: string;
+  productId: string;
+  nameVi: string;
+  nameEn: string;
+  size: string;
+  color: string;
+  stockQty: number;
+};
 
 const DAY_MS = 86_400_000;
 
@@ -55,6 +80,11 @@ export class AnalyticsService {
     private readonly orders: OrderService,
     // UserService comes from the @Global IamModule.
     private readonly users: UserService,
+    // The product-module services (via ProductModule) for category naming +
+    // low-stock. All in-process — analytics never queries the `product` schema.
+    private readonly products: ProductService,
+    private readonly categories: CategoryService,
+    private readonly variants: ProductVariantService,
   ) {}
 
   // The dense list of UTC day keys "YYYY-MM-DD" across the (inclusive) window, so a
@@ -162,5 +192,54 @@ export class AnalyticsService {
     return [...sales]
       .sort((a, b) => b.revenueCents - a.revenueCents)
       .slice(0, limit);
+  }
+
+  // Revenue + units rolled up per category. Maps each sold product → its categoryId
+  // via ProductService (findManyByIds includes archived, so an archived product's
+  // historical sales still attribute to its category), then names the category via
+  // CategoryService. All in-process — no cross-schema JOIN.
+  async getSalesByCategory(range: AnalyticsRange): Promise<SalesByCategory[]> {
+    const sales = await this.orders.getProductSales(range);
+    if (sales.length === 0) return [];
+    const products = await this.products.findManyByIds(
+      sales.map((s) => s.productId),
+    );
+    const categoryIdByProduct = new Map(
+      products.map((p) => [p.id, p.categoryId]),
+    );
+    const categories = await this.categories.findAllForAdmin();
+    const categoryById = new Map(categories.map((c) => [c.id, c]));
+
+    const byCategory = new Map<string, SalesByCategory>();
+    for (const s of sales) {
+      const categoryId = categoryIdByProduct.get(s.productId) ?? 'uncategorized';
+      const cat = categoryById.get(categoryId);
+      const cur = byCategory.get(categoryId) ?? {
+        categoryId,
+        nameVi: cat?.nameVi ?? 'Uncategorized',
+        nameEn: cat?.nameEn ?? 'Uncategorized',
+        unitsSold: 0,
+        revenueCents: 0,
+      };
+      cur.unitsSold += s.unitsSold;
+      cur.revenueCents += s.revenueCents;
+      byCategory.set(categoryId, cur);
+    }
+    return [...byCategory.values()].sort(
+      (a, b) => b.revenueCents - a.revenueCents,
+    );
+  }
+
+  // Voucher redemptions on paid orders (from the order snapshot), biggest discount
+  // first. No VoucherModule dependency — the code + discount live on the order.
+  async getVoucherUsage(range: AnalyticsRange): Promise<VoucherUsage[]> {
+    const usage = await this.orders.getVoucherUsage(range);
+    return [...usage].sort((a, b) => b.discountCents - a.discountCents);
+  }
+
+  // Active variants at or below the stock threshold (lowest first) — an operational
+  // restock warning. Delegated to ProductVariantService (owns the product schema).
+  async getLowStock(threshold: number): Promise<LowStockVariant[]> {
+    return this.variants.getLowStockVariants(threshold);
   }
 }

@@ -2,6 +2,9 @@ import { OrderStatus } from '@prisma/client';
 import { AnalyticsService } from './analytics.service';
 import { OrderService } from '../order/order.service';
 import { UserService } from '../iam/user/user.service';
+import { ProductService } from '../product/product/product.service';
+import { CategoryService } from '../product/category/category.service';
+import { ProductVariantService } from '../product/variant/variant.service';
 
 // AnalyticsService is a pure orchestrator: it injects OTHER modules' services (never
 // Prisma). So the mocks here are the collaborating services — that structurally
@@ -9,12 +12,15 @@ import { UserService } from '../iam/user/user.service';
 describe('AnalyticsService', () => {
   let orders: {
     getRevenueRows: jest.Mock;
-    getSignupRows?: jest.Mock;
     getStatusCounts: jest.Mock;
     getProductSales: jest.Mock;
     getTopSpenderTotals: jest.Mock;
+    getVoucherUsage: jest.Mock;
   };
   let users: { getSignupRows: jest.Mock; findManyByIds: jest.Mock };
+  let products: { findManyByIds: jest.Mock };
+  let categories: { findAllForAdmin: jest.Mock };
+  let variants: { getLowStockVariants: jest.Mock };
   let service: AnalyticsService;
 
   const range = {
@@ -28,14 +34,21 @@ describe('AnalyticsService', () => {
       getStatusCounts: jest.fn().mockResolvedValue([]),
       getProductSales: jest.fn().mockResolvedValue([]),
       getTopSpenderTotals: jest.fn().mockResolvedValue([]),
+      getVoucherUsage: jest.fn().mockResolvedValue([]),
     };
     users = {
       getSignupRows: jest.fn().mockResolvedValue([]),
       findManyByIds: jest.fn().mockResolvedValue([]),
     };
+    products = { findManyByIds: jest.fn().mockResolvedValue([]) };
+    categories = { findAllForAdmin: jest.fn().mockResolvedValue([]) };
+    variants = { getLowStockVariants: jest.fn().mockResolvedValue([]) };
     service = new AnalyticsService(
       orders as unknown as OrderService,
       users as unknown as UserService,
+      products as unknown as ProductService,
+      categories as unknown as CategoryService,
+      variants as unknown as ProductVariantService,
     );
   });
 
@@ -126,6 +139,77 @@ describe('AnalyticsService', () => {
       const res = await service.getTopProducts(range, 2);
 
       expect(res.map((p) => p.productId)).toEqual(['p2', 'p3']);
+    });
+  });
+
+  describe('getSalesByCategory', () => {
+    it('maps products to categories, sums per category, sorts by revenue', async () => {
+      orders.getProductSales.mockResolvedValue([
+        { productId: 'p1', nameVi: 'a', nameEn: 'a', unitsSold: 2, revenueCents: 2000 },
+        { productId: 'p2', nameVi: 'b', nameEn: 'b', unitsSold: 1, revenueCents: 1000 },
+        { productId: 'p3', nameVi: 'c', nameEn: 'c', unitsSold: 5, revenueCents: 9000 },
+      ]);
+      // p1 + p2 in category c1; p3 in category c2.
+      products.findManyByIds.mockResolvedValue([
+        { id: 'p1', categoryId: 'c1' },
+        { id: 'p2', categoryId: 'c1' },
+        { id: 'p3', categoryId: 'c2' },
+      ]);
+      categories.findAllForAdmin.mockResolvedValue([
+        { id: 'c1', nameVi: 'Áo', nameEn: 'Tops' },
+        { id: 'c2', nameVi: 'Giày', nameEn: 'Shoes' },
+      ]);
+
+      const res = await service.getSalesByCategory(range);
+
+      // c2 (9000) before c1 (3000); c1 folds p1+p2.
+      expect(res).toEqual([
+        { categoryId: 'c2', nameVi: 'Giày', nameEn: 'Shoes', unitsSold: 5, revenueCents: 9000 },
+        { categoryId: 'c1', nameVi: 'Áo', nameEn: 'Tops', unitsSold: 3, revenueCents: 3000 },
+      ]);
+    });
+
+    it('buckets a product with no resolvable category under "uncategorized"', async () => {
+      orders.getProductSales.mockResolvedValue([
+        { productId: 'gone', nameVi: 'x', nameEn: 'x', unitsSold: 1, revenueCents: 500 },
+      ]);
+      products.findManyByIds.mockResolvedValue([]); // product not found
+      categories.findAllForAdmin.mockResolvedValue([]);
+
+      const res = await service.getSalesByCategory(range);
+
+      expect(res).toEqual([
+        { categoryId: 'uncategorized', nameVi: 'Uncategorized', nameEn: 'Uncategorized', unitsSold: 1, revenueCents: 500 },
+      ]);
+    });
+
+    it('returns [] with no product lookups when there are no sales', async () => {
+      orders.getProductSales.mockResolvedValue([]);
+      const res = await service.getSalesByCategory(range);
+      expect(res).toEqual([]);
+      expect(products.findManyByIds).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getVoucherUsage', () => {
+    it('passes through the order aggregation, sorted by discount desc', async () => {
+      orders.getVoucherUsage.mockResolvedValue([
+        { voucherCode: 'SMALL', orderCount: 5, discountCents: 1000 },
+        { voucherCode: 'BIG', orderCount: 2, discountCents: 8000 },
+      ]);
+      const res = await service.getVoucherUsage(range);
+      expect(res.map((v) => v.voucherCode)).toEqual(['BIG', 'SMALL']);
+    });
+  });
+
+  describe('getLowStock', () => {
+    it('delegates to the variant service with the threshold', async () => {
+      variants.getLowStockVariants.mockResolvedValue([
+        { variantId: 'v1', sku: 'S', productId: 'p1', nameVi: 'a', nameEn: 'a', size: 'M', color: 'Red', stockQty: 1 },
+      ]);
+      const res = await service.getLowStock(3);
+      expect(variants.getLowStockVariants).toHaveBeenCalledWith(3);
+      expect(res).toHaveLength(1);
     });
   });
 });

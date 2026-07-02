@@ -293,6 +293,52 @@ export class ProductVariantService {
   }
 
   // ---------------------------------------------------------------------------
+  // Analytics (admin dashboard) — read-only.
+  // ---------------------------------------------------------------------------
+
+  // Active variants at or below a stock threshold, lowest-stock first, for the
+  // admin low-stock warning. Product names are resolved through ProductService
+  // (getActiveByIds — the same product-table boundary as everywhere else, §4.3),
+  // which also drops variants whose product is archived / hidden (nothing to
+  // restock for an unsellable product).
+  async getLowStockVariants(threshold: number): Promise<
+    {
+      variantId: string;
+      sku: string;
+      productId: string;
+      nameVi: string;
+      nameEn: string;
+      size: string;
+      color: string;
+      stockQty: number;
+    }[]
+  > {
+    const variants = await this.prisma.productVariant.findMany({
+      where: { archivedAt: null, stockQty: { lte: threshold } },
+      orderBy: [{ stockQty: 'asc' }, { sku: 'asc' }],
+    });
+    if (variants.length === 0) return [];
+    const productIds = [...new Set(variants.map((v) => v.productId))];
+    const products = await this.productService.getActiveByIds(productIds);
+    const productById = new Map(products.map((p) => [p.id, p]));
+    return variants
+      .filter((v) => productById.has(v.productId))
+      .map((v) => {
+        const p = productById.get(v.productId)!;
+        return {
+          variantId: v.id,
+          sku: v.sku,
+          productId: v.productId,
+          nameVi: p.nameVi,
+          nameEn: p.nameEn,
+          size: v.size,
+          color: v.color,
+          stockQty: v.stockQty,
+        };
+      });
+  }
+
+  // ---------------------------------------------------------------------------
   // Internal helpers
   // ---------------------------------------------------------------------------
 

@@ -502,4 +502,49 @@ describe('ProductVariantService', () => {
       });
     });
   });
+
+  describe('getLowStockVariants', () => {
+    it('queries active variants ≤ threshold and enriches names via ProductService', async () => {
+      prisma.productVariant.findMany.mockResolvedValue([
+        makeVariant({ id: 'v1', productId: 'p1', sku: 'S1', stockQty: 1 }),
+        makeVariant({ id: 'v2', productId: 'p1', sku: 'S2', stockQty: 3 }),
+      ]);
+      productService.getActiveByIds.mockResolvedValue([
+        makeProduct({ id: 'p1', nameVi: 'Áo', nameEn: 'Shirt' }),
+      ]);
+
+      const res = await service.getLowStockVariants(5);
+
+      // Only active variants at/below the threshold, product table never queried directly.
+      expect(prisma.productVariant.findMany).toHaveBeenCalledWith({
+        where: { archivedAt: null, stockQty: { lte: 5 } },
+        orderBy: [{ stockQty: 'asc' }, { sku: 'asc' }],
+      });
+      expect(productService.getActiveByIds).toHaveBeenCalledWith(['p1']);
+      expect(res).toEqual([
+        { variantId: 'v1', sku: 'S1', productId: 'p1', nameVi: 'Áo', nameEn: 'Shirt', size: '42', color: 'Red', stockQty: 1 },
+        { variantId: 'v2', sku: 'S2', productId: 'p1', nameVi: 'Áo', nameEn: 'Shirt', size: '42', color: 'Red', stockQty: 3 },
+      ]);
+    });
+
+    it('drops variants whose product is archived/hidden (not returned by ProductService)', async () => {
+      prisma.productVariant.findMany.mockResolvedValue([
+        makeVariant({ id: 'v1', productId: 'pActive', stockQty: 0 }),
+        makeVariant({ id: 'v2', productId: 'pArchived', stockQty: 0 }),
+      ]);
+      productService.getActiveByIds.mockResolvedValue([
+        makeProduct({ id: 'pActive', nameVi: 'A', nameEn: 'A' }),
+      ]);
+
+      const res = await service.getLowStockVariants(5);
+      expect(res.map((r) => r.variantId)).toEqual(['v1']);
+    });
+
+    it('returns [] without a product lookup when nothing is low', async () => {
+      prisma.productVariant.findMany.mockResolvedValue([]);
+      const res = await service.getLowStockVariants(5);
+      expect(res).toEqual([]);
+      expect(productService.getActiveByIds).not.toHaveBeenCalled();
+    });
+  });
 });
