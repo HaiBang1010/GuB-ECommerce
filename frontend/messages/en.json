@@ -11,6 +11,9 @@
     "previous": "Previous",
     "next": "Next"
   },
+  "common": {
+    "backToTop": "Back to top"
+  },
   "banner": {
     "placeholder": "Banner",
     "previous": "Previous banner",

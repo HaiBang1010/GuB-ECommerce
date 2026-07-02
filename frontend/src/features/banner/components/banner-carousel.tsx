@@ -11,9 +11,10 @@ import { cn } from '@/lib/utils';
 
 const AUTOPLAY_MS = 5000;
 
-// Full-width home banner region. The aspect-ratio frame keeps the layout stable in
-// EVERY state (loading / empty / one / many) so the page never collapses or jumps —
-// even before any banner is created or when an image URL fails to load.
+// Full-width home banner region. The aspect-ratio frame keeps the layout stable in EVERY
+// state (loading / empty / one / many) so the page never collapses or jumps. Multiple
+// banners render as a single flex track shifted by -index*100% with a smooth transition,
+// so slides GLIDE horizontally (no hard swap) on autoplay / prev-next / dot click.
 export function BannerCarousel() {
   const t = useTranslations('banner');
   const { data, isPending } = useBanners();
@@ -51,12 +52,22 @@ export function BannerCarousel() {
     );
   }
 
-  const current = banners[Math.min(index, banners.length - 1)];
+  const current = Math.min(index, banners.length - 1);
   const multiple = banners.length > 1;
 
   return (
     <BannerFrame>
-      <BannerSlide banner={current} placeholderLabel={t('placeholder')} />
+      {/* Sliding track: one slide per banner, shifted by -current*100% (smooth). */}
+      <div
+        className="flex h-full transition-transform duration-500 ease-in-out"
+        style={{ transform: `translateX(-${current * 100}%)` }}
+      >
+        {banners.map((b) => (
+          <div key={b.id} className="h-full w-full shrink-0">
+            <BannerSlide banner={b} placeholderLabel={t('placeholder')} />
+          </div>
+        ))}
+      </div>
 
       {multiple ? (
         <>
@@ -77,17 +88,17 @@ export function BannerCarousel() {
             <ChevronRight className="size-5" />
           </CarouselButton>
 
-          <div className="absolute inset-x-0 bottom-3 flex justify-center gap-2">
+          <div className="absolute inset-x-0 bottom-3 z-10 flex justify-center gap-2">
             {banners.map((b, i) => (
               <button
                 key={b.id}
                 type="button"
                 aria-label={t('goTo', { n: i + 1 })}
-                aria-current={i === index}
+                aria-current={i === current}
                 onClick={() => setIndex(i)}
                 className={cn(
                   'h-2 rounded-full bg-white shadow transition-all',
-                  i === index ? 'w-6' : 'w-2 opacity-60 hover:opacity-100',
+                  i === current ? 'w-6' : 'w-2 opacity-60 hover:opacity-100',
                 )}
               />
             ))}
@@ -99,7 +110,8 @@ export function BannerCarousel() {
 }
 
 // One slide: the image (wrapped in a link when linkUrl is set), falling back to the
-// placeholder when the URL is empty or fails to load.
+// placeholder when the URL is empty or fails to load. Each slide owns its errored state —
+// all slides are mounted at once in the track, so there's nothing to reset on change.
 function BannerSlide({
   banner,
   placeholderLabel,
@@ -108,8 +120,6 @@ function BannerSlide({
   placeholderLabel: string;
 }) {
   const [errored, setErrored] = useState(false);
-  // Reset when the slide changes (carousel advanced to a different banner).
-  useEffect(() => setErrored(false), [banner.imageUrl]);
 
   const broken = errored || !banner.imageUrl;
   const content = broken ? (
@@ -170,7 +180,7 @@ function CarouselButton({
       aria-label={label}
       onClick={onClick}
       className={cn(
-        'absolute top-1/2 -translate-y-1/2 rounded-full bg-white/80 p-1.5 text-black shadow transition hover:bg-white',
+        'absolute top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/80 p-1.5 text-black shadow transition hover:bg-white',
         side === 'left' ? 'left-2' : 'right-2',
       )}
     >

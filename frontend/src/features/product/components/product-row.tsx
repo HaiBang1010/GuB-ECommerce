@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { ChevronRight } from 'lucide-react';
 
 import { Link } from '@/i18n/navigation';
 import { useProducts } from '@/features/product/hooks/use-products';
@@ -33,9 +34,10 @@ export function ProductRow({
         {seeMoreHref ? (
           <Link
             href={seeMoreHref}
-            className="text-muted-foreground hover:text-foreground text-sm"
+            className="text-muted-foreground hover:text-foreground group inline-flex items-center gap-1 text-sm"
           >
             {t('seeMore')}
+            <ChevronRight className="size-4 transition-transform group-hover:translate-x-0.5" />
           </Link>
         ) : null}
       </div>

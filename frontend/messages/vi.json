@@ -11,6 +11,9 @@
     "previous": "Trước",
     "next": "Sau"
   },
+  "common": {
+    "backToTop": "Lên đầu trang"
+  },
   "banner": {
     "placeholder": "Banner",
     "previous": "Banner trước",
